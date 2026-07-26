@@ -1,0 +1,20 @@
+[Unit]
+Description=fund_arb LOF/ETF 套利看板（常驻后端）
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/fund_arb
+# HOST=0.0.0.0 让服务对公网/局域网暴露；PORT 默认 8000
+Environment=HOST=0.0.0.0
+Environment=PORT=8000
+ExecStart=/usr/bin/python3 /opt/fund_arb/fund_arb.py
+Restart=always
+RestartSec=5
+# 缓存写入同目录；确保 /opt/fund_arb 对运行用户可写
+User=root
+StandardOutput=append:/opt/fund_arb/server.log
+StandardError=append:/opt/fund_arb/server.log
+
+[Install]
+WantedBy=multi-user.target
