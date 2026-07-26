@@ -17,3 +17,6 @@ services:
     startCommand: "python fund_arb.py"
     healthCheckPath: /
     # 程序会读取环境变量 PORT（Render 自动注入），无需手动指定
+    # Python 版本由仓库根目录 .python-version 固定为 3.13（与本地测试环境一致，避免跟随平台默认值漂移）
+    # 注意：此处不通过 envVars 设 PYTHON_VERSION，因为环境变量方式要求写完整版本号(如 3.13.5)，
+    # 只写次版本号会构建失败；用 .python-version 文件(可省略补丁号)更稳健。
