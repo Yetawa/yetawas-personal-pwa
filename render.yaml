@@ -1,0 +1,19 @@
+# Render 部署配置（免费版即可）
+# 在 Render 后台新建 "Web Service"，连接本仓库，Build & Start 用下面的命令。
+#
+# PWA 说明：manifest.json / sw.js / icon.svg 已内置在 fund_arb.py 中，
+# 由同一个 Python 服务自动托管（路由 /manifest.json、/sw.js、/icon.svg），
+# 同时服务提供 /（单基金看板）与 /ranking（基金溢价排行表）两个页面，
+# sw.js 已把两个页面都加入应用壳缓存。
+# 部署后无需任何额外配置即可使用「添加到主屏幕 / 离线看壳」能力。
+# 前提：必须通过 HTTPS 访问（Render 默认对 *.onrender.com 提供 HTTPS），
+# 浏览器/手机才会允许安装 PWA。
+services:
+  - type: web
+    name: fund-arb
+    runtime: python
+    plan: free
+    buildCommand: "echo ok"
+    startCommand: "python fund_arb.py"
+    healthCheckPath: /
+    # 程序会读取环境变量 PORT（Render 自动注入），无需手动指定

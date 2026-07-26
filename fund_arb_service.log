@@ -1,0 +1,274 @@
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 4719)
+Traceback (most recent call last):
+  File "C:\Users\USER\WorkBuddy\2026-07-25-17-33-05\fund_arb.py", line 2695, in do_GET
+    self._send(200, json.dumps(data, ensure_ascii=False))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\WorkBuddy\2026-07-25-17-33-05\fund_arb.py", line 2597, in _send
+    self.wfile.write(body)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\http\server.py", line 447, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\http\server.py", line 435, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "C:\Users\USER\WorkBuddy\2026-07-25-17-33-05\fund_arb.py", line 2697, in do_GET
+    self._send(200, json.dumps({"error": str(e), "date": date, "codes": codes}, ensure_ascii=False))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\WorkBuddy\2026-07-25-17-33-05\fund_arb.py", line 2594, in _send
+    self.end_headers()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\http\server.py", line 549, in end_headers
+    self.flush_headers()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\http\server.py", line 553, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\.workbuddy\binaries\python\versions\3.13.12\Lib\socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+----------------------------------------
+============================================================
+  LOF/ETF 套利看板已启动
+  在浏览器打开：http://localhost:8000  (HOST=127.0.0.1 PORT=8000)
+  按 Ctrl+C 停止
+============================================================
+>>> [162411] 华宝标普油气上游股票人民币A · 近10日 ｜ 标的=XOP ｜ 模式=index
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    [汇率] frankfurter 取到 280 天
+    [汇率] 新浪财经最新 USD/CNY = 6.7711
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (35, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (30, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [持仓] 160644 抓到 10 只重仓：美光科技(10.6%)、闪迪(10.5%)、建滔积层板(10.4%)、联想集团(9.3%)、建滔集团(8.9%)、美团-W(7.2%)、阿里巴巴-W(6.9%)、英伟达(5.7%)、台积电(5.0%)、超威半导体(3.5%)
+>>> [160644] 鹏华港美互联股票人民币 · 近10日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    [持仓] 160644 合成指数完成，覆盖 78.2%（10 只）
+    最近 10 个交易日 -> 命中 10 个
+    [持仓] 160644 合成指数完成，覆盖 78.2%（10 只）
+>>> [160644] 鹏华港美互联股票人民币 · 近5日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    最近 5 个交易日 -> 命中 5 个
+>>> [162411] 华宝标普油气上游股票人民币A · 近5日 ｜ 标的=XOP ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 5 个交易日 -> 命中 5 个
+>>> [160644] 鹏华港美互联股票人民币 · 近5日 ｜ 标的=KWEB+HKNET ｜ 模式=index
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    最近 5 个交易日 -> 命中 5 个
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：'NoneType' object has no attribute 'get'
+    标的候选 [(2, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：'NoneType' object has no attribute 'get'
+    标的候选 [(2, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+>>> [160644] 鹏华港美互联股票人民币 · 近5日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    最近 5 个交易日 -> 命中 5 个
+>>> [160644] 鹏华港美互联股票人民币 · 近3日 ｜ 标的=KWEB+HKNET ｜ 模式=index
+>>> [162411] 华宝标普油气上游股票人民币A · 近3日 ｜ 标的=XOP ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 3 个交易日 -> 命中 3 个
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    最近 3 个交易日 -> 命中 3 个
+>>> [162411] 华宝标普油气上游股票人民币A · 近10日 ｜ 标的=XOP ｜ 模式=index
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 近10日 ｜ 标的=XOP ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+>>> [501312] 华宝海外科技股票(QDII-LOF)A · 近10日 ｜ 标的=QQQ ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 2.2072)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 2.184)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 15 条，最新: ('2026-07-24', 684.23)
+    最近 10 个交易日 -> 命中 10 个
+>>> [160644] 鹏华港美互联股票人民币 · 近10日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    [持仓] 160644 合成指数完成，覆盖 78.2%（10 只）
+    最近 10 个交易日 -> 命中 10 个
+>>> [160644] 鹏华港美互联股票人民币 · 近10日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    最近 10 个交易日 -> 命中 10 个
+>>> [160644] 鹏华港美互联股票人民币 · 近10日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 近10日 ｜ 标的=XOP ｜ 模式=index
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 近10日 ｜ 标的=XOP ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+>>> [160644] 鹏华港美互联股票人民币 · 近10日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    [持仓] 160644 合成指数完成，覆盖 78.2%（10 只）
+    最近 10 个交易日 -> 命中 10 个
+>>> [160644] 鹏华港美互联股票人民币 · 近10日 ｜ 标的=KWEB+HKNET ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 1.7637)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.693)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [复合(KWEB+HKNET)] 36 条，最新: ('2026-07-24', 0.9696768432165752)
+    最近 10 个交易日 -> 命中 10 个
+>>> [164906] 交银中证海外中国互联网指数(LOF)A · 近10日 ｜ 标的=KWEB ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 0.9539)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.932)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 26.29)
+    最近 10 个交易日 -> 命中 10 个
+>>> [501312] 华宝海外科技股票(QDII-LOF)A · 近10日 ｜ 标的=QQQ ｜ 模式=auto
+    净值 30 条，最新: ('2026-07-23', 2.2072)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 2.184)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 15 条，最新: ('2026-07-24', 684.23)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 近10日 ｜ 标的=XOP ｜ 模式=index
+    净值 30 条，最新: ('2026-07-23', 0.9269)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 0.933)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)
+    标的 [stockanalysis.com] 30 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [161226] 国投瑞银白银期货(LOF)A · 近10日 ｜ 标的=SLV ｜ 模式=index
+    净值 30 条，最新: ('2026-07-24', 1.5971)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 30 条，最新: ('2026-07-24', 1.824)
+    汇率 281 天，最新: ('2026-07-26', 6.771100000000001)

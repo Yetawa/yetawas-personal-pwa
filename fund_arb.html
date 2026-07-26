@@ -1,0 +1,338 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon.svg">
+<title>LOF/ETF 套利数据看板</title>
+<style>
+:root{color-scheme:dark;
+  --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#c9d1d9; --muted:#8b949e; --title:#f0f6fc;
+  --input-bg:#0d1117; --input-text:#f0f6fc; --btn:#1f6feb; --btn-hover:#388bfd; --row-hover:#1c2128;
+  --th-bg:#1f6feb; --th-text:#fff; --pos:#ff5b5b; --neg:#2ecc71; --est:#f2a900; --code-bg:#0d1117; --code-text:#79c0ff;
+  --sb-warn-bg:#2a1416; --sb-warn-border:#ff4d4f55; --sb-warn-label:#d98b8b;
+  --sb-ok-bg:#13251a; --sb-ok-border:#52c41a55; --sb-ok-label:#7ec89a;
+  --sb-info-bg:#161b22; --sb-info-border:#30363d; --sb-info-label:#8b949e;
+}
+:root[data-theme="light"]{color-scheme:light;
+  --bg:#ffffff; --panel:#f5f7fa; --border:#e3e8ef; --text:#1f2933; --muted:#6b7280; --title:#111827;
+  --input-bg:#ffffff; --input-text:#111827; --btn:#2563eb; --btn-hover:#3b82f6; --row-hover:#f0f4f8;
+  --th-bg:#2563eb; --th-text:#ffffff; --pos:#dc2626; --neg:#16a34a; --est:#d97706; --code-bg:#f1f5f9; --code-text:#2563eb;
+  --sb-warn-bg:#fef2f2; --sb-warn-border:#fca5a5; --sb-warn-label:#b91c1c;
+  --sb-ok-bg:#f0fdf4; --sb-ok-border:#86efac; --sb-ok-label:#15803d;
+  --sb-info-bg:#f5f7fa; --sb-info-border:#e3e8ef; --sb-info-label:#6b7280;
+}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;transition:background .2s,color .2s}
+.wrap{max-width:1280px;margin:0 auto}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
+.titles{flex:1;min-width:0}
+h1{font-size:22px;margin:0 0 4px;color:var(--title)}
+.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.top-actions{display:flex;align-items:flex-start;gap:8px;flex:none}
+.theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
+a.theme-btn{text-decoration:none}
+.theme-btn:hover{border-color:var(--btn);color:var(--btn)}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;color:var(--muted)}
+.field input,.field textarea,.field select{background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--input-text);padding:8px 10px;font-size:14px}
+.field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--btn)}
+button{background:var(--btn);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;cursor:pointer;font-weight:600}
+button:hover{background:var(--btn-hover)}
+button:disabled{opacity:.6;cursor:wait}
+.fund-title{font-size:22px;font-weight:600;color:var(--title);margin-left:auto;padding-left:12px;white-space:nowrap}
+.fund-title small{color:var(--muted);font-size:13px;font-weight:400;margin-left:8px}
+.statusbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:var(--sb-info-bg);border:1px solid var(--sb-info-border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px}
+.statusbar.warn{border-color:var(--sb-warn-border);background:var(--sb-warn-bg)}
+.statusbar.ok{border-color:var(--sb-ok-border);background:var(--sb-ok-bg)}
+.statusbar.info{border-color:var(--sb-info-border);background:var(--sb-info-bg)}
+.status-item{display:flex;align-items:center;gap:6px}
+.status-label{color:var(--muted)}
+.statusbar.warn .status-label{color:var(--sb-warn-label)}
+.statusbar.ok .status-label{color:var(--sb-ok-label)}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.sitem{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.sitem .l{color:var(--muted);font-size:12px;margin-bottom:4px}
+.sitem .v{font-size:18px;font-weight:600;color:var(--title)}
+/* 回测精度面板：指标卡在上、说明脚注在下，整体更有序 */
+.vmetrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
+.vnote{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--muted);font-size:12px;line-height:1.7;text-align:left;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
+.vnote b{color:var(--text);font-weight:600}
+/* 排行表：名称列左对齐、代码超链接、可点击筛选的统计卡片 */
+.name{text-align:left}
+.codelink{color:var(--code-text);text-decoration:none;font-weight:600}
+.codelink:hover{text-decoration:underline}
+.sitem.clickable{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.sitem.clickable:hover{border-color:var(--btn)}
+.sitem.clickable.active{border-color:var(--btn);box-shadow:inset 0 0 0 2px var(--btn);background:var(--row-hover)}
+.pos{color:var(--pos);font-weight:600}
+.neg{color:var(--neg);font-weight:600}
+.est{color:var(--est);font-style:italic}
+.tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;table-layout:auto}
+th,td{border:1px solid var(--border);padding:8px 10px;text-align:right;vertical-align:middle;white-space:nowrap}
+th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0}
+td:first-child{text-align:left}
+.op-cell{width:64px;text-align:center;white-space:nowrap}
+.sig-cell{white-space:normal;min-width:104px;text-align:center;line-height:1.35}
+.ver{display:inline-block;margin-left:8px;font-size:12px;font-weight:600;color:var(--th-text);background:var(--th-bg);border-radius:999px;padding:1px 10px;vertical-align:middle}
+tbody tr:hover{background:var(--row-hover)}
+.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;white-space:nowrap}
+.note{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:14px;font-size:12px;line-height:1.7;color:var(--muted)}
+.note ul{margin:6px 0;padding-left:18px}.note li{margin:3px 0}
+#loading{color:var(--muted);padding:20px;text-align:center}
+#err{color:var(--pos);padding:14px}
+code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--code-text)}
+/* 响应式布局：窄屏（手机）自适应 */
+@media (max-width:760px){
+  body{padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
+  .topbar{flex-direction:column;align-items:stretch;gap:10px}
+  .top-actions{align-self:flex-end}
+  .theme-btn{align-self:flex-end}
+  .panel{flex-direction:column;align-items:stretch;gap:10px}
+  .field{width:100%}
+  .field input,.field textarea,.field select{width:100%}
+  button{width:100%}
+  .fund-title{margin-left:0;margin-top:2px;font-size:18px}
+  h1{font-size:18px}
+  .sub{font-size:12px}
+  .summary{grid-template-columns:repeat(2,1fr)}
+  .sitem .v{font-size:16px}
+  .statusbar{font-size:12px;gap:8px}
+  .tablebox{padding:4px}
+  th,td{padding:6px 8px;font-size:12px}
+}
+@media (max-width:420px){
+  .summary{grid-template-columns:1fr}
+}
+</style></head><body>
+<div class="wrap">
+<div class="topbar">
+  <div class="titles">
+    <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.2</span></h1>
+    <div class="sub">填基金代码 → 实时拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。默认近 10 个交易日，日期倒序（最新在顶端）。</div>
+  </div>
+  <div class="top-actions">
+    <a class="theme-btn" href="fund_arb_ranking.html" title="基金溢价排行表">排行表</a>
+    <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
+  <div class="field"><label>近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60"></div>
+  <div class="field"><label>标的ETF代码(可选)</label><input id="und" placeholder="如 XOP/QQQ/SPY" value=""></div>
+  <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
+  <div class="field"><label>估值模式</label><select id="mode">
+    <option value="auto">自动择优</option>
+    <option value="index">指数代理</option>
+    <option value="holdings">持仓估算</option>
+  </select></div>
+  <button id="btn" onclick="load()">查询</button>
+  <div id="fund-title" class="fund-title"></div>
+</div>
+
+<div id="statusbar" class="statusbar" style="display:none"></div>
+<div id="summary" class="summary"></div>
+<div id="validate" class="summary" style="display:none"></div>
+<div id="loading">加载中…</div>
+<div id="err"></div>
+<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>
+
+<div class="note">
+<b>套利要点</b>
+<ul>
+  <li><b>溢价</b> = (价格 − 净值) / 净值；<b>估值溢价</b> = (价格 − 估算净值) / 估算净值。<b>误差</b> = (估算净值 − 实际官方净值) / 实际官方净值 × 100%，表示估算与真实净值的偏差；最新一日净值待公布时显示「—」。红色=溢价/上涨，绿色=折价/下跌；黄色斜体=净值待公布(用估算)。</li>
+  <li><b>申购状态</b> 是套利前提：若显示 <b>暂停申购</b>，即使溢价再高也无法做「申购→卖出」套利；<b>限大额申购</b> 会受每日上限约束（见顶部状态条）。折价赎回套利则看赎回状态。</li>
+  <li>估算净值 = NAV(T-1) × [1 + w × (P − 1)]，其中 P = 标的(T)/标的(T-1) × 汇率(T)/汇率(T-1)，w 为仓位系数；w 默认 0.95，并已按各标的的历史回测自动校准到 4 位小数（更贴近真实传导比例）。QDII 净值 T+1 公布，受美股时差、汇率、跟踪误差影响，存在偏差，仅供参考，不构成投资建议。</li>
+</ul>
+</div>
+</div>
+<script>
+const BASE = (location.protocol==='file:') ? 'http://localhost:8000' : '';
+const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
+let currentMode="auto";
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  const icon=document.getElementById('themeIcon');
+  const lbl=document.getElementById('themeLbl');
+  if(icon) icon.textContent = (t==='light') ? '☀️' : '🌙';
+  if(lbl) lbl.textContent  = (t==='light') ? '日间' : '夜间';
+  try{ localStorage.setItem('arb_theme', t); }catch(e){}
+}
+function toggleTheme(){
+  const cur = (document.documentElement.getAttribute('data-theme')==='light') ? 'dark' : 'light';
+  applyTheme(cur);
+}
+function initTheme(){
+  let t='dark';
+  try{ t = localStorage.getItem('arb_theme') || 'dark'; }catch(e){}
+  applyTheme(t);
+}
+initTheme();
+function fmtNum(v,d=4){ return v==null?"—":Number(v).toFixed(d); }
+function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+v.toFixed(2)+"%"; }
+function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+async function load(){
+  const code=document.getElementById('code').value.trim();
+  const days=document.getElementById('days').value.trim();
+  const und=document.getElementById('und').value.trim();
+  const threshold=document.getElementById('threshold').value.trim();
+  currentMode=document.getElementById('mode').value.trim();
+  const btn=document.getElementById('btn');
+  btn.disabled=true; document.getElementById('loading').style.display='block';
+  document.getElementById('err').textContent=''; document.getElementById('tablebox').style.display='none';
+  document.getElementById('summary').innerHTML='';
+  document.getElementById('statusbar').style.display='none';
+  document.getElementById('fund-title').innerHTML='';
+  try{
+    let url=BASE+'/api/data?code='+encodeURIComponent(code)+'&days='+encodeURIComponent(days)
+          +'&threshold='+encodeURIComponent(threshold)+'&mode='+encodeURIComponent(currentMode);
+    if(und) url+='&underlying='+encodeURIComponent(und);
+    const r=await fetch(url); const d=await r.json();
+    if(d.error){ throw new Error(d.error); }
+    render(d);
+  }catch(e){
+    document.getElementById('err').textContent='加载失败：'+e.message;
+  }finally{
+    document.getElementById('loading').style.display='none';
+    btn.disabled=false;
+  }
+}
+
+function render(d){
+  const code=d.code, name=d.name||('基金'+code);
+  // 右侧大标题：基金名称 + 代码
+  document.getElementById('fund-title').innerHTML=esc(name)+' <small>'+esc(code)+'</small>';
+
+  // 交易状态条（申购状态、限购、赎回）—— 这是基金当前状态，不是每日变化数据
+  const c=d.control||{};
+  const st=c.subscribe_status||'';
+  const stCol=STATUS_COLORS[st]||'#8c8c8c';
+  const bar=document.getElementById('statusbar');
+  bar.style.display='flex';
+  let barClass='info', barHtml='';
+  if(st){
+    barClass = st==='暂停申购'?'warn':(st==='限大额申购'?'ok':'ok');
+    let hint='';
+    if(st==='暂停申购') hint='当前无法做「申购套利」，仅折价赎回套利可行（需看赎回状态）。';
+    else if(st==='限大额申购') hint='可做申购套利，但受每日上限约束。';
+    else if(st==='开放申购') hint='申购通道正常开放。';
+    barHtml='<div class="status-item"><span class="status-label">申购状态</span>'
+          +'<span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(st)+'</span></div>'
+          +'<div class="status-item"><span class="status-label">限购金额</span><span>'+(c.purchase_limit_text?esc(c.purchase_limit_text):'—')+'</span></div>'
+          +'<div class="status-item"><span class="status-label">赎回状态</span><span>'+esc(c.redeem_status||'—')+'</span></div>'
+          +'<div class="status-item"><span class="status-label">申购起点</span><span>'+(c.purchase_min!=null?esc(c.purchase_min+'元'):'—')+'</span></div>'
+          +'<div class="status-item" style="margin-left:auto;color:#8b949e">'+hint+'</div>';
+  }else{
+    barHtml='<div class="status-item">ℹ️ 申购状态获取失败（可能网络受限），请手动核对基金公告。</div>';
+  }
+  bar.className='statusbar '+barClass;
+  bar.innerHTML=barHtml;
+
+  // 摘要卡片（原油/油气基金才显示 XOP 收盘）
+  const s=d.summary||{};
+  const showOil = !!d.is_oil_gas;
+  const summ=[
+    ['最新场内价', fmtNum(s.latest_price,4)],
+    ['最新估值溢价', fmtPct(s.latest_premium), s.latest_premium>0?'pos':(s.latest_premium<0?'neg':'')],
+  ];
+  if(d.use_fx!==false){
+    summ.push(['最新 USD/CNY', fmtNum(s.latest_fx,4)]);
+  }
+  if(showOil){
+    summ.splice(2,0,['最新 XOP 收盘', fmtNum(s.latest_xop,2)]);
+  }
+  document.getElementById('summary').innerHTML=summ.map(it=>
+    '<div class="sitem"><div class="l">'+it[0]+'</div><div class="v '+(it[2]||'')+'">'+it[1]+'</div></div>'
+  ).join('');
+
+  // 表格：日期 价格 涨跌% 净值 净值涨跌幅 估算净值 估值溢价 误差 [汇率 汇率涨跌]
+  //       （原油/油气基金追加 XOP收盘、XOP溢价） 申购状态 限购金额 套利信号
+  const showFx = d.use_fx!==false;
+  const head=['日期','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
+  if(showFx) head.push('汇率','汇率涨跌');
+  if(showOil) head.push('XOP收盘','XOP溢价');
+  head.push('申购状态','限购金额','套利信号');
+  const limitTxt = c.purchase_limit!=null ? esc(c.purchase_limit+'元') : '—';
+  let rowsHtml=d.rows.map(r=>{
+    const navCell = r.real_nav!=null? fmtNum(r.real_nav,4)
+        : '<span class="est">'+fmtNum(r.est_nav,4)+'<br><small>净值待公布</small></span>';
+    const sigR = r.est_premium!=null? r.est_premium : r.premium;
+    const sigTxt = sigR==null?'—':(sigR>d.threshold?'溢价·可申购':(sigR<-d.threshold?'折价·可赎回':'平价'));
+    const sigC = sigR==null?'':(sigR>d.threshold?'pos':(sigR<-d.threshold?'neg':''));
+    let cells='<td>'+esc(r.date)+'</td>'
+      +'<td>'+fmtNum(r.price,4)+'</td>'
+      +'<td class="'+cls(r.price_change)+'">'+fmtPct(r.price_change,true)+'</td>'
+      +'<td>'+navCell+'</td>'
+      +'<td class="'+cls(r.nav_change)+'">'+fmtPct(r.nav_change,true)+'</td>'
+      +'<td>'+fmtNum(r.est_nav,4)+'</td>'
+      +'<td class="'+cls(r.est_premium)+'">'+fmtPct(r.est_premium,true)+'</td>'
+      +'<td class="'+cls(r.nav_err)+'">'+(r.nav_err!=null?fmtPct(r.nav_err,true):'—')+'</td>';
+    if(showFx){
+      cells += '<td>'+fmtNum(r.fx,4)+'</td>'
+             + '<td class="'+cls(r.fx_change)+'">'+fmtPct(r.fx_change,true)+'</td>';
+    }
+    if(showOil){
+      cells += '<td>'+fmtNum(r.xop,2)+'</td>'
+             + '<td class="'+cls(r.premium)+'">'+fmtPct(r.premium,true)+'</td>';
+    }
+    const stCol=STATUS_COLORS[c.subscribe_status||'']||'#8c8c8c';
+    cells += '<td><span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(c.subscribe_status||'—')+'</span></td>'
+           + '<td>'+limitTxt+'</td>'
+           + '<td class="'+sigC+'">'+sigTxt+'</td>';
+    return '<tr>'+cells+'</tr>';
+  }).join('');
+  document.getElementById('tbl').innerHTML='<tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr>'+rowsHtml;
+  document.getElementById('tablebox').style.display='block';
+  loadValidate(code);
+}
+
+async function loadValidate(code){
+  const box=document.getElementById('validate');
+  box.style.display='none'; box.innerHTML='';
+  try{
+    const r=await fetch(BASE+'/api/validate?code='+encodeURIComponent(code)+'&days=30&mode='+encodeURIComponent(currentMode));
+    const d=await r.json();
+    if(d.error) return;
+    let comp='';
+    if(d.idx_mae!=null && d.hld_mae!=null){
+      comp=' · 自动择优→'+(d.mode==='holdings'?'持仓':'指数')
+        +' · 指数MAE '+esc(d.idx_mae)+'% · 持仓MAE '+esc(d.hld_mae)+'%'
+        +(d.mode==='holdings' && d.coverage!=null?(' · 覆盖 '+Math.round(d.coverage*100)+'%'):'');
+    }else if(d.mode==='holdings'){
+      comp=' · 模式=持仓估算'+(d.coverage!=null?(' · 覆盖 '+Math.round(d.coverage*100)+'%'):'');
+    }else if(d.mode==='index'){
+      comp=' · 模式=指数代理';
+    }
+    box.innerHTML='<div class="vmetrics">'
+      +'<div class="sitem"><div class="l">估算精度 MAE</div><div class="v">±'+esc(d.mae)+'%</div></div>'
+      +'<div class="sitem"><div class="l">中位数偏差</div><div class="v '+(d.median>0?'pos':(d.median<0?'neg':''))+'">'+fmtPct(d.median,true)+'</div></div>'
+      +'<div class="sitem"><div class="l">RMSE</div><div class="v">'+esc(d.rmse)+'%</div></div>'
+      +'</div>'
+      +'<div class="vnote">基于 <b>'+esc(d.count)+'</b> 个交易日回测 · w=<b>'+esc(Number(d.weight).toFixed(4))+'</b> · 滞后窗口 lag=<b>'+esc(d.lag)+'</b> · 标的=<b>'+esc(d.underlying)+'</b>'+comp+' · MAE 越小说明估算越稳。</div>';
+    box.style.display='block';
+  }catch(e){}
+}
+document.getElementById('code').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
+document.getElementById('days').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
+document.getElementById('threshold').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
+// 支持从排行表点击代码跳转：?code=XXXX 预填并自动查询
+(function(){
+  try{
+    const p=new URLSearchParams(location.search);
+    const c=(p.get('code')||'').trim();
+    if(/^\d{6}$/.test(c)){ document.getElementById('code').value=c; }
+  }catch(e){}
+})();
+load();
+// 注册 Service Worker，支持「添加到主屏幕 / 离线看壳」
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err));
+  });
+}
+</script>
+</body></html>
