@@ -1,0 +1,13 @@
+# Python 字节码 / 日志 / 本地导出压缩包
+__pycache__/
+*.pyc
+*.log
+*.zip
+server.log
+fund_arb_service.log
+
+# 本地临时文件（部署后会由启动校准重新生成）
+# weights_cache.json / holdings_mode_cache.json 已作为种子提交，可保留
+
+# WorkBuddy 内部目录（记忆/agent 状态，不应进仓库）
+.workbuddy/
