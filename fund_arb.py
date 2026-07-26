@@ -92,7 +92,7 @@ RANKING_WATCHLIST = [
     "501012", "161040", "161812", "161125", "161128", "501018", "160723",
     "161129", "501225",
 ]
-RANKING_MAX_WORKERS = 4
+RANKING_MAX_WORKERS = 8  # 提高并行度：44 只基金冷计算/预热更快（东财等上游对并发容忍度高）
 
 # 排行默认清单：剔除 5 只联网查询始终无价格数据的异常基金
 # （164801 / 161113 / 167725 / 162804 / 160244，查询时恒报 "无价格数据"）
@@ -591,7 +591,22 @@ def composite_label(code):
 # ---------------------------------------------------------------------------
 # HTTP 工具
 # ---------------------------------------------------------------------------
-def http_get_json(url, referer=None, timeout=15, retries=5, sleep_base=1.0):
+# ---- 上游 HTTP 响应内存缓存（TTL）----
+# 美西实例跨洋抓东财/腾讯，单次 RTT 高且易抖动；把上游响应缓存 90s，
+# 可让重复请求（同基金反复看、排行内多基金共享标的）秒回，且精度无损
+# （日内净值/价格/汇率在 90s 内几乎不变）。
+_HTTP_CACHE = {}
+_HTTP_CACHE_LOCK = threading.Lock()
+_HTTP_CACHE_TTL = 90  # 秒
+
+
+def http_get_json(url, referer=None, timeout=10, retries=2, sleep_base=0.5):
+    key = (url, referer)
+    now = time.time()
+    with _HTTP_CACHE_LOCK:
+        hit = _HTTP_CACHE.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
     last_err = None
     for i in range(retries):
         try:
@@ -601,7 +616,10 @@ def http_get_json(url, referer=None, timeout=15, retries=5, sleep_base=1.0):
             if referer:
                 req.add_header("Referer", referer)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8", "ignore"))
+                val = json.loads(resp.read().decode("utf-8", "ignore"))
+                with _HTTP_CACHE_LOCK:
+                    _HTTP_CACHE[key] = (now + _HTTP_CACHE_TTL, val)
+                return val
         except Exception as e:
             last_err = e
             if i < retries - 1:
@@ -609,7 +627,13 @@ def http_get_json(url, referer=None, timeout=15, retries=5, sleep_base=1.0):
     raise last_err
 
 
-def http_get_text(url, referer=None, timeout=15, retries=3, encoding="utf-8"):
+def http_get_text(url, referer=None, timeout=10, retries=2, encoding="utf-8"):
+    key = (url, referer)
+    now = time.time()
+    with _HTTP_CACHE_LOCK:
+        hit = _HTTP_CACHE.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
     last_err = None
     for i in range(retries):
         try:
@@ -618,11 +642,14 @@ def http_get_text(url, referer=None, timeout=15, retries=3, encoding="utf-8"):
             if referer:
                 req.add_header("Referer", referer)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read().decode(encoding, "ignore")
+                val = resp.read().decode(encoding, "ignore")
+                with _HTTP_CACHE_LOCK:
+                    _HTTP_CACHE[key] = (now + _HTTP_CACHE_TTL, val)
+                return val
         except Exception as e:
             last_err = e
             if i < retries - 1:
-                time.sleep(1.0 + i * 0.5)
+                time.sleep(0.5 + i * 0.5)
     raise last_err
 
 
@@ -1821,8 +1848,11 @@ def compute_ranking(codes, target_date=None, threshold=THRESHOLD):
             if key not in explicit:
                 explicit.add(key)
                 explicit_unds.append(und)
-    for und in explicit_unds:
-        get_underlying_cached(und, 15)
+    # 并行预取去重后的标的行情（美股标的走 stockanalysis.com 跨境最慢，串行会拖垮冷启动；
+    # 并行后冷启动时间大幅下降，且 UND_CACHE 进程内永久缓存，预热后不再重抓）。
+    if explicit_unds:
+        with ThreadPoolExecutor(max_workers=min(RANKING_MAX_WORKERS, len(explicit_unds))) as _pe:
+            list(_pe.map(lambda u: get_underlying_cached(u, 15), explicit_unds))
     results = []
     with ThreadPoolExecutor(max_workers=RANKING_MAX_WORKERS) as exe:
         futures = {exe.submit(compute_one_rank, c, target_date, fx_map, threshold): c for c in codes}
@@ -2250,15 +2280,11 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 .codelist .cl-preview{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .codelist .cl-body{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
-/* 排行表格：表头锁定 + 精简名不撑列宽 */
-.rank-scroll{overflow:auto;max-height:74vh}
-.rank-scroll table{font-size:12px;table-layout:fixed;width:100%}
-.rank-scroll th,.rank-scroll td{padding:7px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 排行表格：表头锁定 + 横向滚动显示全部列（手机端不再截断中间列） */
+.rank-scroll{overflow:auto;max-height:74vh;-webkit-overflow-scrolling:touch}
+.rank-scroll table{font-size:12px;table-layout:auto;width:max-content;min-width:100%}
+.rank-scroll th,.rank-scroll td{padding:7px 8px;white-space:nowrap}
 .rank-scroll th{position:sticky;top:0;z-index:3}
-.rank-scroll th:nth-child(1),.rank-scroll td:nth-child(1){width:68px}
-.rank-scroll th:nth-child(2),.rank-scroll td:nth-child(2){width:96px}
-.rank-scroll th:nth-child(3),.rank-scroll td:nth-child(3){width:86px}
-.rank-scroll th:nth-child(13),.rank-scroll td:nth-child(13){width:100px}
 .summary2{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
 .rank-bar{background:var(--sb-info-bg);border:1px solid var(--sb-info-border);border-radius:10px;padding:12px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:13px}
 .rank-bar .k{color:var(--muted)}
@@ -2403,7 +2429,7 @@ function toast(msg){
   clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'), 1600);
 }
 
-function today(){ return new Date().toISOString().split('T')[0]; }
+function today(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
 function initDate(){
   const d=document.getElementById('rdate');
   let saved; try{ saved=localStorage.getItem('arb_ranking_date'); }catch(e){}
@@ -2656,10 +2682,21 @@ class Handler(BaseHTTPRequestHandler):
     _RL_LIMIT = 200    # 每个时间窗口内最大请求数
     _RL_WINDOW = 60     # 窗口长度（秒）
 
+    def _client_ip(self):
+        # 云平台（Render/Railway/CloudBase）请求经反向代理转发，self.client_address[0]
+        # 是代理边缘 IP；取 X-Forwarded-For 首段才是真实访客，限流才不会误伤全体或失效。
+        xff = self.headers.get("X-Forwarded-For")
+        if xff:
+            return xff.split(",")[0].strip()
+        return self.client_address[0]
+
     def _rate_ok(self):
         now = time.time()
-        ip = self.client_address[0]
+        ip = self._client_ip()
         with Handler._RL_LOCK:
+            # 防内存无限增长：IP 计数过多时整体清空（个人部署流量极低，清零影响可忽略）
+            if len(Handler._RL) > 5000:
+                Handler._RL.clear()
             buf = Handler._RL.get(ip)
             if buf is None:
                 buf = []
@@ -2669,6 +2706,25 @@ class Handler(BaseHTTPRequestHandler):
                 return False
             buf.append(now)
         return True
+
+    # ---- 计算结果内存缓存（TTL）----
+    # 让同一查询（同基金/同日期）在 TTL 内重复访问秒回，避免每次冷取数。
+    # 日内数据 120s 内几乎不变，精度无损。
+    _API_CACHE = {}
+    _API_CACHE_LOCK = threading.Lock()
+    _API_CACHE_TTL = 120  # 秒（单基金 /api/data、/api/validate 日内变化快，缓存 2 分钟）
+    _API_CACHE_TTL_RANK = 300  # 秒（排行官方溢价基于已公布净值，日内变化慢，缓存 5 分钟，延长热窗口）
+
+    def _cached(self, key, ttl, producer):
+        now = time.time()
+        with self._API_CACHE_LOCK:
+            hit = self._API_CACHE.get(key)
+            if hit and hit[0] > now:
+                return hit[1]
+        val = producer()  # 在锁外执行重计算，避免阻塞其它请求
+        with self._API_CACHE_LOCK:
+            self._API_CACHE[key] = (now + ttl, val)
+        return val
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -2719,8 +2775,11 @@ class Handler(BaseHTTPRequestHandler):
             mode = qs.get("mode", [""])[0] or None
             if mode not in ("auto", "holdings", "index"):
                 mode = None
+            cache_key = f"data|{code}|{days}|{threshold}|{start}|{end}|{underlying}|{mode}"
             try:
-                data = compute(code, days, start, end, underlying, threshold, mode)
+                data = self._cached(cache_key, Handler._API_CACHE_TTL,
+                                    lambda: compute(code, days, start, end, underlying, threshold, mode))
+                data = dict(data)
                 data["error"] = None
                 self._send(200, json.dumps(data, ensure_ascii=False))
             except Exception as e:
@@ -2744,8 +2803,10 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 threshold = 1.5
             threshold = max(0.1, min(10.0, threshold))
+            cache_key = f"rank|{date}|{threshold}|{','.join(codes)}"
             try:
-                data = compute_ranking(codes, date, threshold)
+                data = self._cached(cache_key, Handler._API_CACHE_TTL_RANK,
+                                    lambda: compute_ranking(codes, date, threshold))
                 self._send(200, json.dumps(data, ensure_ascii=False))
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "date": date, "codes": codes}, ensure_ascii=False))
@@ -2767,7 +2828,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/csv; charset=utf-8-sig")
             self.send_header("Content-Disposition", f'attachment; filename="arb_{code}.csv"')
-            self.send_header("Access-Control-Allow-Origin", "*")
+            # 与全局安全策略一致：补齐全套响应头，跨域仅放行本地/同源，不再用 * 放行任意站点
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+            origin = self.headers.get("Origin")
+            if origin and (re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or origin == "null"):
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
             self.end_headers()
             self.wfile.write(csv_text.encode("utf-8-sig"))
             return
@@ -2785,8 +2854,10 @@ class Handler(BaseHTTPRequestHandler):
             mode = qs.get("mode", [""])[0] or None
             if mode not in ("auto", "holdings", "index"):
                 mode = "auto" if code in HOLDINGS_MODE else "index"
+            cache_key = f"valid|{code}|{days}|{mode}"
             try:
-                data = backtest_nav_estimate(code, days, mode=mode)
+                data = self._cached(cache_key, Handler._API_CACHE_TTL,
+                                    lambda: backtest_nav_estimate(code, days, mode=mode))
                 self._send(200, json.dumps(data, ensure_ascii=False))
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "code": code}, ensure_ascii=False))
@@ -2813,6 +2884,31 @@ def main():
     _threading.Thread(target=calibrate_all_weights, daemon=True).start()
     # 加载持仓择优缓存（24h 持久化，避免每次重复抓取 10 只重仓行情）
     load_holdings_choice_cache()
+    # 预热 + 周期刷新：启动后先算默认基金与排行填满缓存；之后每 60s 重算一次，
+    # 使首页(/api/data 默认 162411)与排行页在实例常驻期间始终命中缓存、秒出。
+    # _prewarm_running 防止上一次排行重算未结束时又重叠启动（避免并发猛刷上游被限流）。
+    _prewarm_running = {"rank": False}
+    def _prewarm_loop():
+        while True:
+            # 默认基金（快）
+            try:
+                Handler._API_CACHE[f"data|162411|10|1.5|||None|None"] = (
+                    time.time() + Handler._API_CACHE_TTL, compute("162411", 10))
+            except Exception:
+                pass
+            # 排行（重，带重叠保护）
+            if not _prewarm_running["rank"]:
+                _prewarm_running["rank"] = True
+                try:
+                    _d = datetime.now().strftime("%Y-%m-%d")
+                    Handler._API_CACHE[f"rank|{_d}|1.5|{','.join(RANKING_WATCHLIST)}"] = (
+                        time.time() + Handler._API_CACHE_TTL_RANK, compute_ranking(RANKING_WATCHLIST))
+                except Exception:
+                    pass
+                finally:
+                    _prewarm_running["rank"] = False
+            time.sleep(60)
+    _threading.Thread(target=_prewarm_loop, daemon=True).start()
     url = f"http://localhost:{port}"
     print("=" * 60)
     print("  LOF/ETF 套利看板已启动")
