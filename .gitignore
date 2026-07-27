@@ -11,3 +11,15 @@ fund_arb_service.log
 
 # WorkBuddy 内部目录（记忆/agent 状态，不应进仓库）
 .workbuddy/
+
+# 本地调试/探针脚本与临时导出（不进仓库）
+_probe_sources.py
+bench_error.py
+_top_api.json
+d.json
+top_check.json
+rank_test.json
+
+# 推送锁状态文件（运行时生成，含当日推送占用标记，不应进仓库）
+.push_lock.json
+.push_lock.json.tmp
