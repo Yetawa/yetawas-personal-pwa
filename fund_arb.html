@@ -8,7 +8,7 @@
 :root{color-scheme:dark;
   --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#c9d1d9; --muted:#8b949e; --title:#f0f6fc;
   --input-bg:#0d1117; --input-text:#f0f6fc; --btn:#1f6feb; --btn-hover:#388bfd; --row-hover:#1c2128;
-  --th-bg:#1f6feb; --th-text:#fff; --pos:#ff5b5b; --neg:#2ecc71; --est:#f2a900; --code-bg:#0d1117; --code-text:#79c0ff;
+  --th-bg:#1f6feb; --th-text:#fff; --pos:#ff5b5b; --neg:#2ecc71; --est:#f2a900; --lock:#f0a020; --code-bg:#0d1117; --code-text:#79c0ff;
   --sb-warn-bg:#2a1416; --sb-warn-border:#ff4d4f55; --sb-warn-label:#d98b8b;
   --sb-ok-bg:#13251a; --sb-ok-border:#52c41a55; --sb-ok-label:#7ec89a;
   --sb-info-bg:#161b22; --sb-info-border:#30363d; --sb-info-label:#8b949e;
@@ -16,7 +16,7 @@
 :root[data-theme="light"]{color-scheme:light;
   --bg:#ffffff; --panel:#f5f7fa; --border:#e3e8ef; --text:#1f2933; --muted:#6b7280; --title:#111827;
   --input-bg:#ffffff; --input-text:#111827; --btn:#2563eb; --btn-hover:#3b82f6; --row-hover:#f0f4f8;
-  --th-bg:#2563eb; --th-text:#ffffff; --pos:#dc2626; --neg:#16a34a; --est:#d97706; --code-bg:#f1f5f9; --code-text:#2563eb;
+  --th-bg:#2563eb; --th-text:#ffffff; --pos:#dc2626; --neg:#16a34a; --est:#d97706; --lock:#b45309; --code-bg:#f1f5f9; --code-text:#2563eb;
   --sb-warn-bg:#fef2f2; --sb-warn-border:#fca5a5; --sb-warn-label:#b91c1c;
   --sb-ok-bg:#f0fdf4; --sb-ok-border:#86efac; --sb-ok-label:#15803d;
   --sb-info-bg:#f5f7fa; --sb-info-border:#e3e8ef; --sb-info-label:#6b7280;
@@ -69,6 +69,7 @@ button:disabled{opacity:.6;cursor:wait}
 .sitem.clickable.active{border-color:var(--btn);box-shadow:inset 0 0 0 2px var(--btn);background:var(--row-hover)}
 .pos{color:var(--pos);font-weight:600}
 .neg{color:var(--neg);font-weight:600}
+.lock{color:var(--lock);font-weight:600}
 .est{color:var(--est);font-style:italic}
 .tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px;table-layout:auto}
@@ -111,20 +112,21 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="wrap">
 <div class="topbar">
   <div class="titles">
-    <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.2</span></h1>
-    <div class="sub">填基金代码 → 实时拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。默认近 10 个交易日，日期倒序（最新在顶端）。</div>
+    <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.3</span></h1>
+    <div class="sub">填基金代码 → 实时拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
   </div>
   <div class="top-actions">
+    <a class="theme-btn" href="fund_arb_top.html" title="全市场 LOF TOP20 套利机会">TOP套利</a>
     <a class="theme-btn" href="fund_arb_ranking.html" title="基金溢价排行表">排行表</a>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
 
-<div class="tzline">🕐 当前北京时间：<b id="clock">—</b> ｜ 本页所有行情/净值/汇率日期均为 <b>北京时间（UTC+8）</b></div>
+<div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b><span id="btinline"></span></div>
 
 <div class="panel">
   <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
-  <div class="field"><label>近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60"></div>
+  <div class="field"><label>显示近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60" title="仅控制表格展示行数；估算/校准固定用 30 个交易日"></div>
   <div class="field"><label>标的ETF代码(可选)</label><input id="und" placeholder="如 XOP/QQQ/SPY" value=""></div>
   <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <div class="field"><label>估值模式</label><select id="mode">
@@ -144,11 +146,11 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>
 
 <div class="note">
-<b>套利要点</b>
+<b>说明</b>
 <ul>
-  <li><b>溢价</b> = (价格 − 净值) / 净值；<b>估值溢价</b> = (价格 − 估算净值) / 估算净值。<b>误差</b> = (估算净值 − 实际官方净值) / 实际官方净值 × 100%，表示估算与真实净值的偏差；最新一日净值待公布时显示「—」。红色=溢价/上涨，绿色=折价/下跌；黄色斜体=净值待公布(用估算)。</li>
-  <li><b>申购状态</b> 是套利前提：若显示 <b>暂停申购</b>，即使溢价再高也无法做「申购→卖出」套利；<b>限大额申购</b> 会受每日上限约束（见顶部状态条）。折价赎回套利则看赎回状态。</li>
-  <li>估算净值 = NAV(T-1) × [1 + w × (P − 1)]，其中 P = 标的(T)/标的(T-1) × 汇率(T)/汇率(T-1)，w 为仓位系数；w 默认 0.95，并已按各标的的历史回测自动校准到 4 位小数（更贴近真实传导比例）。QDII 净值 T+1 公布，受美股时差、汇率、跟踪误差影响，存在偏差，仅供参考，不构成投资建议。</li>
+  <li><b>官方溢价</b> = (价格 - 净值) / 净值；<b>估值溢价</b> = (价格 - 估算净值) / 估算净值；<b>误差</b> = (估算净值 - 官方净值) / 官方净值。红=溢价/涨，绿=折价/跌。</li>
+  <li>估算净值 = 锚定净值 × (标的_t / 标的_锚) × (汇率_t / 汇率_锚)，w 为仓位系数（按历史回测校准）。QDII 净值 T+1 公布，受时差/汇率/跟踪误差影响，仅供参考，非投资建议。</li>
+  <li>申购状态是套利前提：<b>暂停申购</b> 无法做「申购→卖出」；<b>限大额</b> 受每日上限约束。</li>
 </ul>
 </div>
 </div>
@@ -223,11 +225,12 @@ function render(d){
   bar.style.display='flex';
   let barClass='info', barHtml='';
   if(st){
-    barClass = st==='暂停申购'?'warn':(st==='限大额申购'?'ok':'ok');
+    barClass = (st==='开放申购'||st==='限大额申购')?'ok':'warn';
     let hint='';
     if(st==='暂停申购') hint='当前无法做「申购套利」，仅折价赎回套利可行（需看赎回状态）。';
     else if(st==='限大额申购') hint='可做申购套利，但受每日上限约束。';
-    else if(st==='开放申购') hint='申购通道正常开放。';
+    else if(st==='开放申购') hint='申购通道正常开放，可做「申购→卖出」溢价套利。';
+    else hint='该基金仅场内交易（无个人现金申赎），无法做申赎套利，只能二级市场买卖。';
     barHtml='<div class="status-item"><span class="status-label">申购状态</span>'
           +'<span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(st)+'</span></div>'
           +'<div class="status-item"><span class="status-label">限购金额</span><span>'+(c.purchase_limit_text?esc(c.purchase_limit_text):'—')+'</span></div>'
@@ -265,12 +268,19 @@ function render(d){
   if(showOil) head.push('XOP收盘','XOP溢价');
   head.push('申购状态','限购金额','套利信号');
   const limitTxt = c.purchase_limit!=null ? esc(c.purchase_limit+'元') : '—';
+  const stSub=c.subscribe_status||'', stRed=c.redeem_status||'';
+  const openSub=(stSub==='开放申购'||stSub==='限大额申购'), openRed=(stRed==='开放赎回');
+  const sigOf=p=>{
+    if(p==null) return ['—',''];
+    if(p>d.threshold) return openSub?['溢价·可申购套利','pos']:['溢价·仅场内','lock'];
+    if(p<-d.threshold) return openRed?['折价·可赎回套利','neg']:['折价·仅场内','lock'];
+    return ['平价(观察)',''];
+  };
   let rowsHtml=d.rows.map(r=>{
     const navCell = r.real_nav!=null? fmtNum(r.real_nav,4)
         : '<span class="est">'+fmtNum(r.est_nav,4)+'<br><small>净值待公布</small></span>';
     const sigR = r.est_premium!=null? r.est_premium : r.premium;
-    const sigTxt = sigR==null?'—':(sigR>d.threshold?'溢价·可申购':(sigR<-d.threshold?'折价·可赎回':'平价'));
-    const sigC = sigR==null?'':(sigR>d.threshold?'pos':(sigR<-d.threshold?'neg':''));
+    const [sigTxt,sigC]=sigOf(sigR);
     let cells='<td>'+esc(r.date)+'</td>'
       +'<td>'+fmtNum(r.price,4)+'</td>'
       +'<td class="'+cls(r.price_change)+'">'+fmtPct(r.price_change,true)+'</td>'
@@ -301,6 +311,7 @@ function render(d){
 async function loadValidate(code){
   const box=document.getElementById('validate');
   box.style.display='none'; box.innerHTML='';
+  const bt=document.getElementById('btinline'); if(bt) bt.innerHTML='';
   try{
     const r=await fetch(BASE+'/api/validate?code='+encodeURIComponent(code)+'&days=30&mode='+encodeURIComponent(currentMode));
     const d=await r.json();
@@ -319,8 +330,9 @@ async function loadValidate(code){
       +'<div class="sitem"><div class="l">估算精度 MAE</div><div class="v">±'+esc(d.mae)+'%</div></div>'
       +'<div class="sitem"><div class="l">中位数偏差</div><div class="v '+(d.median>0?'pos':(d.median<0?'neg':''))+'">'+fmtPct(d.median,true)+'</div></div>'
       +'<div class="sitem"><div class="l">RMSE</div><div class="v">'+esc(d.rmse)+'%</div></div>'
-      +'</div>'
-      +'<div class="vnote">基于 <b>'+esc(d.count)+'</b> 个交易日回测 · w=<b>'+esc(Number(d.weight).toFixed(4))+'</b> · 滞后窗口 lag=<b>'+esc(d.lag)+'</b> · 标的=<b>'+esc(d.underlying)+'</b>'+comp+' · MAE 越小说明估算越稳。</div>';
+      +'</div>';
+    // 回测参数说明并入顶部「北京时间」同一行，界面更整洁
+    if(bt) bt.innerHTML=' ｜ 基于 <b>'+esc(d.count)+'</b> 个交易日回测 · w=<b>'+esc(Number(d.weight).toFixed(4))+'</b> · 滞后窗口 lag=<b>'+esc(d.lag)+'</b> · 标的=<b>'+esc(d.underlying)+'</b>'+comp+' · MAE 越小说明估算越稳。';
     box.style.display='block';
   }catch(e){}
 }
@@ -335,19 +347,62 @@ document.getElementById('threshold').addEventListener('keydown',e=>{if(e.key==='
     if(/^\d{6}$/.test(c)){ document.getElementById('code').value=c; }
   }catch(e){}
 })();
-// 北京时间实时时钟：优先用后端返回的 server_ts 校准，否则按浏览器时区估算北京时
-let _clockBase = null;
+// 默认基金：无 ?code 时取「LOF / ETF 基金溢价排行表(网页2)」按当前默认排序的第 1 名。
+// 默认排序与网页2完全一致：① 申购状态(限大额>开放>暂停>其他) ② 估算溢价(或官方溢价)由高到低 ③ 成交额由大到小。
+// 拉取失败回退 162411。_BASE 兼容独立 HTML(file://) 与线上同源两种场景（make_standalone 会注入 BASE）。
+const _BASE = (typeof BASE !== 'undefined') ? BASE : '';
+function statusRankTop(st){
+  if(st==='限大额申购') return 0;
+  if(st==='开放申购') return 1;
+  if(st==='暂停申购') return 2;
+  return 3;
+}
+async function loadTopDefault(){
+  const input=document.getElementById('code');
+  input.value='';
+  document.getElementById('loading').style.display='block';
+  document.getElementById('fund-title').innerHTML='正在加载今日溢价排行表榜首基金…';
+  try{
+    const r=await fetch(_BASE+'/api/ranking?threshold=1.5');
+    const d=await r.json();
+    if(d.rows && d.rows.length){
+      const rows=d.rows.slice();
+      rows.sort((a,b)=>{
+        if(a.error && !b.error) return 1;
+        if(!a.error && b.error) return -1;
+        const s = statusRankTop(a.subscribe_status) - statusRankTop(b.subscribe_status);
+        if(s!==0) return s;
+        const ap = (a.est_premium!=null? a.est_premium : (a.premium!=null? a.premium : -Infinity));
+        const bp = (b.est_premium!=null? b.est_premium : (b.premium!=null? b.premium : -Infinity));
+        if(ap!==bp) return bp-ap;
+        const at = (a.turnover!=null? a.turnover : -Infinity);
+        const bt = (b.turnover!=null? b.turnover : -Infinity);
+        return bt-at;
+      });
+      if(rows.length) input.value=rows[0].code;
+    }
+  }catch(e){}
+  if(!input.value) input.value='162411';
+  load();
+}
+// 北京时间实时时钟：server_ts 为后端 UTC 秒。用它校准浏览器时钟漂移(_calib)，
+// 再用 Asia/Shanghai 显示——只转换一次时区，杜绝「+8h 后再 +8h」的双重偏移。
+let _calib = 0; // 真实 UTC 与浏览器本地时钟的偏差(ms)：真实 UTC 时刻 = Date.now() + _calib
 function syncClock(d){
-  if(d && d.server_ts){ _clockBase = (d.server_ts*1000) + 8*3600*1000 - Date.now(); tickClock(); }
+  if(d && d.server_ts){ _calib = d.server_ts*1000 - Date.now(); tickClock(); }
 }
 function tickClock(){
   const el=document.getElementById('clock'); if(!el) return;
-  const t = (_clockBase!=null) ? new Date(Date.now()+_clockBase)
-                               : new Date(Date.now() + (8*60 + new Date().getTimezoneOffset())*60000);
-  el.textContent = t.toLocaleString('zh-CN',{hour12:false, timeZone:'Asia/Shanghai'});
+  const now = new Date(Date.now() + _calib);
+  el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
 }
 setInterval(tickClock, 1000); tickClock();
-load();
+// 打开界面：带 ?code= 直接查该基金；否则默认加载 TOP20 套利榜第 1 名
+(function(){
+  const p=new URLSearchParams(location.search);
+  const c=(p.get('code')||'').trim();
+  if(/^\d{6}$/.test(c)){ load(); } else { loadTopDefault(); }
+})();
 // 注册 Service Worker，支持「添加到主屏幕 / 离线看壳」
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{

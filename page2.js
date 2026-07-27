@@ -117,7 +117,7 @@ function render(meta){
   s2.innerHTML=[
     '<div class="sitem"><div class="l">溢价 > '+meta.threshold+'%</div><div class="v pos">'+up+'</div></div>',
     '<div class="sitem"><div class="l">折价 < -'+meta.threshold+'%</div><div class="v neg">'+down+'</div></div>',
-    '<div class="sitem"><div class="l">可申购套利</div><div class="v">'+ok.filter(r=>r.subscribe_status&&r.subscribe_status!=='暂停申购'&&r.premium>meta.threshold).length+'</div></div>',
+    '<div class="sitem"><div class="l">可申购套利</div><div class="v">'+ok.filter(r=>['开放申购','限大额申购'].includes(r.subscribe_status)&&r.premium>meta.threshold).length+'</div></div>',
     '<div class="sitem"><div class="l">数据异常</div><div class="v">'+(rows.length-ok.length)+'</div></div>',
   ].join('');
   sortKey='premium'; sortDesc=true; sortRows('premium');
@@ -135,7 +135,7 @@ function renderBody(){
     if(r.error) return '<tr><td>'+esc(r.code)+'</td><td colspan="14" style="text-align:left;color:var(--muted)">'+esc(r.name)+' — '+esc(r.error)+'</td></tr>';
     const st=r.subscribe_status||''; const stCol=STATUS_COLORS[st]||'#8c8c8c';
     const limitTxt = r.purchase_limit!=null ? esc(r.purchase_limit+'元') : '—';
-    const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':'');
+    const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':((r.signal_cls==='premium_lock'||r.signal_cls==='discount_lock')?'lock':''));
     return '<tr>'
       +'<td>'+esc(r.code)+'</td>'
       +'<td>'+esc(r.name)+'</td>'

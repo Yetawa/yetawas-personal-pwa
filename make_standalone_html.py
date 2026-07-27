@@ -31,7 +31,10 @@ make_page(
         ("let url='/api/data?code='", "let url=BASE+'/api/data?code='"),
         ("fetch('/api/validate?code='", "fetch(BASE+'/api/validate?code='"),
     ],
-    [('href="/ranking"', 'href="fund_arb_ranking.html"')],
+    [
+        ('href="/top"', 'href="fund_arb_top.html"'),
+        ('href="/ranking"', 'href="fund_arb_ranking.html"'),
+    ],
 )
 
 # 界面二：基金溢价排行表
@@ -40,6 +43,19 @@ make_page(
     "fund_arb_ranking.html",
     [("const url='/api/ranking?date='", "const url=BASE+'/api/ranking?date='")],
     [
+        ('href="/top"', 'href="fund_arb_top.html"'),
+        ('href="/"', 'href="fund_arb.html"'),
+        ('href="/?code=', 'href="fund_arb.html?code='),
+    ],
+)
+
+# 界面三：全市场 LOF TOP20 套利榜
+make_page(
+    fund_arb.PAGE3_HTML,
+    "fund_arb_top.html",
+    [("const url='/api/top?date='", "const url=BASE+'/api/top?date='")],
+    [
+        ('href="/ranking"', 'href="fund_arb_ranking.html"'),
         ('href="/"', 'href="fund_arb.html"'),
         ('href="/?code=', 'href="fund_arb.html?code='),
     ],

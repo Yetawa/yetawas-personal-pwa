@@ -1,0 +1,229 @@
+============================================================
+  LOF/ETF 套利看板已启动
+  在浏览器打开：http://localhost:8000  (HOST=127.0.0.1 PORT=8000)
+  按 Ctrl+C 停止
+============================================================
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=auto
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    [汇率] frankfurter 取到 280 天
+    [汇率] frankfurter 取到 280 天
+    [汇率] 新浪财经最新 USD/CNY = 6.7710（兜底即期）
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    [汇率] 新浪财经最新 USD/CNY = 6.7710（兜底即期）
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (35, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    标的候选 [(1, '腾讯财经'), (35, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(2, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] 东财标的失败：Remote end closed connection without response
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(2, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    标的候选 [(1, '腾讯财经'), (15, 'stockanalysis.com')] -> 采用 stockanalysis.com
+    [兜底] stockanalysis标的失败：HTTP Error 400: Bad Request
+    标的候选 [(15, '新浪财经期货')] -> 采用 新浪财经期货
+    [持仓] 160644 抓到 10 只重仓：美光科技(10.6%)、闪迪(10.5%)、建滔积层板(10.4%)、联想集团(9.3%)、建滔集团(8.9%)、美团-W(7.2%)、阿里巴巴-W(6.9%)、英伟达(5.7%)、台积电(5.0%)、超威半导体(3.5%)
+    [GLD-EU] 东财小时线不可用，复合退化为纯 GLD
+    [GLD-EU] 东财小时线不可用，复合退化为纯 GLD
+    [GLD-EU] 东财小时线不可用，复合退化为纯 GLD
+    [持仓] 160644 合成指数完成，覆盖 78.2%（10 只）
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=auto
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [163116] 申万中证申万电子行业投资指数(LOF)A · 计算30日/显示10日 ｜ 标的=无 ｜ 模式=auto
+    净值 35 条，最新: ('2026-07-27', 2.0634)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 2.021)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [无标的] 0 条，最新: None
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [持仓] 160644 合成指数完成，覆盖 78.2%（10 只）
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=auto
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+    [警告] 基金信息页获取失败：HTTP Error 514: Frequency Capped
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+    [持仓] 160644 合成指数完成，覆盖 78.2%（10 只）
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
+    净值 35 条，最新: ('2026-07-24', 0.9195)
+    [兜底] 东财价格失败：Remote end closed connection without response
+    价格 [新浪财经] 35 条，最新: ('2026-07-27', 0.888)
+    汇率 281 天，最新: ('2026-07-27', 6.771)
+    标的 [stockanalysis.com] 35 条，最新: ('2026-07-24', 174.05)
+    最近 10 个交易日 -> 命中 10 个
+>>> [162411] 华宝标普油气上游股票人民币A · 计算30日/显示10日 ｜ 标的=XOP ｜ 模式=index
