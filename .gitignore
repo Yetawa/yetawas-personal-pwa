@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.log
 *.zip
+*.7z
 server.log
 fund_arb_service.log
 
