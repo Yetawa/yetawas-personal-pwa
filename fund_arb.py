@@ -1584,6 +1584,12 @@ def fmt_num(v, decimals=4):
 SUBSCRIBE_OPEN = ("开放申购", "限大额申购")   # 可现金申购（限大额仅受每日上限约束）
 REDEEM_OPEN = ("开放赎回",)                   # 可赎回
 
+# 纯债(纯债券)LOF 细分类型：不参与套利计算与统计（网页3剔除）。
+# 来源：东财 fundcode_search.js 的基金类型字段(type)，细分到「债券型-xxx / QDII-纯债 / 指数型-固收」。
+# 注意：债券型-混合一级 / 混合二级（含少量权益）、混合型-偏债、QDII-混合债 不算纯债，仍参与套利。
+PURE_BOND_TYPES = ("债券型-长债", "债券型-中短债", "债券型-利率债", "债券型-信用债",
+                   "QDII-纯债", "指数型-固收")
+
 
 def signal_for_premium(premium, threshold=THRESHOLD, subscribe_status="", redeem_status=""):
     """套利信号：综合溢价方向与申赎通道，避免「场内交易/暂停申购」却提示「可申购套利」。
@@ -2144,7 +2150,7 @@ def fetch_all_lof_codes():
     if not m:
         raise RuntimeError("基金代码表解析失败")
     arr = json.loads(m.group(0))
-    data = [(a[0], a[2]) for a in arr if _LOF_CODE_RE.match(a[0])]
+    data = [(a[0], a[2], (a[3] if len(a) > 3 else "")) for a in arr if _LOF_CODE_RE.match(a[0])]
     if data:
         _LOF_LIST_CACHE.update(ts=now, data=data)
     return data
@@ -2341,17 +2347,19 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     if not target_date:
         target_date = bj_now().strftime("%Y-%m-%d")
     lof = fetch_all_lof_codes()
-    quotes = fetch_lof_quotes([c for c, _ in lof])
+    quotes = fetch_lof_quotes([c for c, _, _ in lof])
     market = fetch_market_fund_table()
 
     # -- 粗筛：可交易 + 官方净值粗溢价过闸（留足余量，估算修正后再精判） --
     tradable = 0
     cands = []
-    for code, name in lof:
+    for code, name, ftype in lof:
         q = quotes.get(code)
         if not q or q["volume"] <= 0:
             continue        # 条件1：场内无行情/无成交
         tradable += 1
+        if ftype in PURE_BOND_TYPES:
+            continue        # 纯债 LOF：计入可交易统计，但不参与套利候选/精算/入榜（用户要求网页3剔除）
         mk = market.get(code)
         if not mk or not mk["nav"]:
             continue
@@ -3076,11 +3084,10 @@ function toast(msg){
   clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'), 1600);
 }
 
-function today(){ const d=new Date(); const off=(8*60+d.getTimezoneOffset())*60000; const b=new Date(d.getTime()+off); const p=n=>String(n).padStart(2,'0'); return b.getFullYear()+'-'+p(b.getMonth()+1)+'-'+p(b.getDate()); }
+function today(){ const s=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return s.replace(/\//g,'-'); }
 function initDate(){
   const d=document.getElementById('rdate');
-  let saved; try{ saved=localStorage.getItem('arb_ranking_date'); }catch(e){}
-  d.value = saved || today();
+  d.value = today();
 }
 
 document.getElementById('addCode').addEventListener('keydown',e=>{ if(e.key==='Enter') addCode(); });
@@ -3335,7 +3342,7 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 </div>
 <script>
 const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
-let currentRows=[], sortKey='abs_est', sortDesc=true;
+let currentRows=[], sortKey='abs_est', sortDesc=true, currentFilter=null, currentMeta=null, currentThreshold=1.5, currentDgate=-2;
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme', t);
   const icon=document.getElementById('themeIcon'); const lbl=document.getElementById('themeLbl');
@@ -3350,7 +3357,7 @@ function fmtNum(v,d=4){ return v==null?"—":Number(v).toFixed(d); }
 function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+v.toFixed(2)+"%"; }
 function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function today(){ const d=new Date(); const off=(8*60+d.getTimezoneOffset())*60000; const b=new Date(d.getTime()+off); const p=n=>String(n).padStart(2,'0'); return b.getFullYear()+'-'+p(b.getMonth()+1)+'-'+p(b.getDate()); }
+function today(){ const s=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return s.replace(/\//g,'-'); }
 
 async function load(){
   const date=document.getElementById('rdate').value;
@@ -3391,6 +3398,36 @@ function defaultSort(){
   });
   renderBody();
 }
+// 统计卡片：溢价套利/折价套利可点击筛选（与网页2一致）；再次点击或「清除筛选」取消
+function renderSummary(){
+  const meta=currentMeta; if(!meta) return;
+  const rows=currentRows;
+  const est=r=> r.est_premium!=null?r.est_premium:(r.premium!=null?r.premium:null);
+  const prem=rows.filter(r=>{const p=est(r); return p!=null && p>=meta.threshold;}).length;
+  const disc=rows.filter(r=>{const p=est(r); return p!=null && p<meta.dgate && r.redeem_status==='开放赎回';}).length;
+  const card=(lbl,val,cls,type)=>'<div class="sitem clickable'+(currentFilter===type?' active':'')+'" onclick="setFilter(\''+type+'\')" title="点击筛选符合条件的基金"><div class="l">'+lbl+'</div><div class="v '+cls+'">'+val+'</div></div>';
+  let html=[
+    card('溢价套利（≥'+meta.threshold+'%）', prem, 'pos', 'premium'),
+    card('折价套利（<'+meta.dgate+'%且可赎回）', disc, 'neg', 'discount'),
+    '<div class="sitem"><div class="l">入榜总数</div><div class="v">'+rows.length+'</div></div>',
+  ];
+  if(currentFilter){
+    html.push('<div class="sitem clickable active" onclick="setFilter(null)" title="清除筛选"><div class="l">清除筛选</div><div class="v">✕</div></div>');
+  }
+  document.getElementById('summary2').innerHTML=html.join('');
+}
+function applyFilter(r){
+  const est=r.est_premium!=null?r.est_premium:(r.premium!=null?r.premium:null);
+  if(est==null) return false;
+  if(currentFilter==='premium')  return est>=currentThreshold;
+  if(currentFilter==='discount') return est<currentDgate && r.redeem_status==='开放赎回';
+  return true;
+}
+function setFilter(type){
+  currentFilter = (currentFilter===type && type!==null) ? null : type;
+  renderSummary();
+  renderBody();
+}
 function sortRows(key){
   if(sortKey===key) sortDesc=!sortDesc; else { sortKey=key; sortDesc=true; }
   const isStr = ['code','name','date','nav_date','subscribe_status','redeem_status','signal'].includes(key);
@@ -3405,10 +3442,9 @@ function sortRows(key){
 }
 
 function render(meta){
+  currentMeta=meta;
   syncClock(meta);
   const rows=currentRows;
-  const prem=rows.filter(r=>{const p=r.est_premium!=null?r.est_premium:r.premium; return p!=null&&p>0;}).length;
-  const disc=rows.length-prem;
   const bar=document.getElementById('rankbar');
   bar.style.display='flex';
   bar.innerHTML='<div class="status-item"><span class="k">查询日期(北京)</span><span class="v">'+esc(meta.date)+'</span></div>'
@@ -3416,10 +3452,7 @@ function render(meta){
     +'<div class="status-item"><span class="k">场内可交易</span><span class="v">'+esc(meta.tradable)+' 只</span></div>'
     +'<div class="status-item"><span class="k">粗筛候选</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
     +'<div class="status-item"><span class="k">四条件过滤后入榜</span><span class="v">'+esc(meta.count)+' 只</span></div>';
-  document.getElementById('summary2').innerHTML=
-    '<div class="sitem"><div class="l">溢价套利（≥'+esc(meta.threshold)+'%）</div><div class="v pos">'+prem+'</div></div>'
-    +'<div class="sitem"><div class="l">折价套利（&lt;'+esc(meta.dgate)+'%且可赎回）</div><div class="v neg">'+disc+'</div></div>'
-    +'<div class="sitem"><div class="l">入榜总数</div><div class="v">'+rows.length+'</div></div>';
+  renderSummary();
   defaultSort();
 }
 
@@ -3432,7 +3465,8 @@ function renderBody(){
     {k:'redeem_status',l:'赎回状态'},{k:'signal',l:'套利信号'}
   ];
   const hHtml=head.map(h=> h.k? '<th style="cursor:pointer" onclick="sortRows(\''+h.k+'\')" title="点击排序">'+esc(h.l)+'</th>' : '<th>'+esc(h.l)+'</th>').join('');
-  const rowsHtml=currentRows.map((r,i)=>{
+  const rows = currentFilter ? currentRows.filter(applyFilter) : currentRows;
+  const rowsHtml=rows.map((r,i)=>{
     const st=r.subscribe_status||''; const stCol=STATUS_COLORS[st]||'#8c8c8c';
     const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':((r.signal_cls==='premium_lock'||r.signal_cls==='discount_lock')?'lock':''));
     const rdCol = (r.redeem_status==='开放赎回')?'#52c41a':'#ff4d4f';
@@ -3456,7 +3490,8 @@ function renderBody(){
       +'<td class="'+sigC+' sig-cell">'+esc(r.signal||'—')+'</td>'
       +'</tr>';
   }).join('');
-  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+(rowsHtml||'<tr><td colspan="17" style="text-align:center;color:var(--muted);padding:18px">当前没有满足全部四个条件的 LOF 基金</td></tr>');
+  const emptyMsg = currentFilter ? '当前筛选条件下没有符合条件的 LOF 基金' : '当前没有满足全部四个条件的 LOF 基金';
+  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+(rows.length? rowsHtml : '<tr><td colspan="17" style="text-align:center;color:var(--muted);padding:18px">'+emptyMsg+'</td></tr>');
   document.getElementById('tablebox').style.display='block';
 }
 
