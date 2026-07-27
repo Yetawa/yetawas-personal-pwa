@@ -575,11 +575,14 @@ def _build_composite_xop(code, n):
 
 
 def resolve_xop(code, und, n):
-    """取标的序列：若 code 配置为复合标的则返回合成序列，否则走原单标的逻辑。"""
+    """取标的序列：若 code 配置为复合标的则返回合成序列，否则走原单标的逻辑。
+    无标的（und 为 None）时返回空序列，供下游按普通基金处理。"""
     if code and code in COMPOSITE_UNDERLYING:
         res = _build_composite_xop(code, n)
         if res:
             return res
+    if und is None:
+        return {}, "无标的"
     return get_underlying_cached(und, n)
 
 
@@ -600,6 +603,11 @@ _HTTP_CACHE_LOCK = threading.Lock()
 _HTTP_CACHE_TTL = 90  # 秒
 
 
+def bj_now():
+    """北京时间（UTC+8，中国不实行夏令时）。返回 naive datetime 表示北京墙钟。"""
+    return datetime.fromtimestamp(time.time() + 8 * 3600)
+
+
 def http_get_json(url, referer=None, timeout=10, retries=2, sleep_base=0.5):
     key = (url, referer)
     now = time.time()
@@ -617,6 +625,8 @@ def http_get_json(url, referer=None, timeout=10, retries=2, sleep_base=0.5):
                 req.add_header("Referer", referer)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 val = json.loads(resp.read().decode("utf-8", "ignore"))
+                if val is None:
+                    raise ValueError("上游返回 null（无数据）")
                 with _HTTP_CACHE_LOCK:
                     _HTTP_CACHE[key] = (now + _HTTP_CACHE_TTL, val)
                 return val
@@ -704,7 +714,9 @@ def fetch_kline_eastmoney(secid, n=20):
                    f"&klt=101&fqt=0&end=20500101&lmt={n}"
                    f"&ut=fa5fd1943c7b386f172d6893dbfba10b")
             data = http_get_json(url, referer="https://quote.eastmoney.com/", timeout=15, retries=2)
-            klines = data.get("data", {}).get("klines", [])
+            if not isinstance(data, dict):
+                raise ValueError("东财返回非预期格式")
+            klines = (data.get("data") or {}).get("klines", [])
             if not klines:
                 continue
             out = []
@@ -725,7 +737,9 @@ def fetch_kline_tencent(symbol, n=20):
     url = (f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
            f"?param={symbol},day,,,{n},qfq")
     data = http_get_json(url)
-    node = data.get("data", {}).get(symbol)
+    if not isinstance(data, dict):
+        return []
+    node = (data.get("data") or {}).get(symbol)
     if not node:
         return []
     arr = node.get("qfqday") or node.get("day") or []
@@ -845,8 +859,8 @@ def fetch_price(em_sec, tx_sym, n=25):
             return rows, "腾讯财经(陈旧)"
     except Exception:
         pass
-    if last_err:
-        raise last_err
+    # 所有价格源均不可用（如场外基金无场内价、上游限流）：返回空序列，
+    # 由下游用净值日期兜底展示，避免整个查询崩溃。
     return [], "无数据"
 
 
@@ -1449,6 +1463,8 @@ def build_rows(price_map, nav_map, xop_map, fx_map, days=10, start="", end="",
     nav_dates = sorted(nav_map.keys())
     xop_dates = sorted(xop_map.keys())
     fx_dates = sorted(fx_map.keys())
+    # 价格缺失（如场外基金无场内价/上游限流）时，用净值日期兜底，保证有行可看
+    all_dates = sorted(price_map.keys()) or nav_dates
     # w/lag：优先使用调用方显式覆盖（持仓模式 w=1、lag=1），否则按标的校准值
     w = w_override if w_override is not None else (weight_for(und, code=code) if und else None)
     lag = lag_override if lag_override is not None else (lag_for(und, code=code) if und else 1)
@@ -1555,7 +1571,7 @@ def compute(code, days=10, start="", end="", underlying=None, threshold=THRESHOL
     w_use = weight_for(und, code=code) if und else None
     lag_use = lag_for(und, code=code) if und else 1
     use_fx_flag = und.get("use_fx", True) if und else True
-    seed_xop = merge_seed_xop(xop_map)
+    seed_xop = merge_seed_xop(xop_map) if und else 0
     seed_fx = merge_seed_fx(fx_map)
     if seed_xop or seed_fx:
         print("    [注意] 部分标的/汇率使用 seed 兜底（本机通常被实时数据覆盖）")
@@ -1618,6 +1634,9 @@ def compute(code, days=10, start="", end="", underlying=None, threshold=THRESHOL
         },
         "signal": {"text": sig_text, "cls": sig_cls},
         "seed_used": seed_xop or seed_fx,
+        "tz": "北京时间 (UTC+8)",
+        "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+        "server_ts": int(time.time()),
     }
 
 
@@ -1871,7 +1890,10 @@ def compute_ranking(codes, target_date=None, threshold=THRESHOLD):
             return (1, 0)
         return (0, -p)
     results.sort(key=sort_key)
-    return {"date": target_date, "threshold": threshold, "count": len(results), "rows": results}
+    return {"date": target_date, "threshold": threshold, "count": len(results), "rows": results,
+            "tz": "北京时间 (UTC+8)",
+            "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "server_ts": int(time.time())}
 
 
 def build_csv(rows, control, code, name, oil_gas=False, use_fx=True):
@@ -1930,6 +1952,8 @@ COMMON_CSS = r"""
 body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;transition:background .2s,color .2s}
 .wrap{max-width:1280px;margin:0 auto}
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
+.tzline{font-size:13px;color:var(--muted);background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin:6px 0 14px}
+.tzline b{color:var(--text)}
 .titles{flex:1;min-width:0}
 h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .sub{color:var(--muted);font-size:13px;margin-bottom:14px}
@@ -2034,6 +2058,8 @@ PAGE_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta 
   </div>
 </div>
 
+<div class="tzline">🕐 当前北京时间：<b id="clock">—</b> ｜ 本页所有行情/净值/汇率日期均为 <b>北京时间（UTC+8）</b></div>
+
 <div class="panel">
   <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
   <div class="field"><label>近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60"></div>
@@ -2119,6 +2145,10 @@ async function load(){
 
 function render(d){
   const code=d.code, name=d.name||('基金'+code);
+  // 友好提示：无数据（如代码非上市基金）时不留空白
+  document.getElementById('err').textContent = (!d.rows || d.rows.length===0)
+    ? '未查询到该基金的行情数据（代码可能非上市基金，或暂无可交易数据）。' : '';
+  syncClock(d);
   // 右侧大标题：基金名称 + 代码
   document.getElementById('fund-title').innerHTML=esc(name)+' <small>'+esc(code)+'</small>';
 
@@ -2167,7 +2197,7 @@ function render(d){
   // 表格：日期 价格 涨跌% 净值 净值涨跌幅 估算净值 估值溢价 误差 [汇率 汇率涨跌]
   //       （原油/油气基金追加 XOP收盘、XOP溢价） 申购状态 限购金额 套利信号
   const showFx = d.use_fx!==false;
-  const head=['日期','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
+  const head=['日期(北京)','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
   if(showFx) head.push('汇率','汇率涨跌');
   if(showOil) head.push('XOP收盘','XOP溢价');
   head.push('申购状态','限购金额','套利信号');
@@ -2242,6 +2272,18 @@ document.getElementById('threshold').addEventListener('keydown',e=>{if(e.key==='
     if(/^\d{6}$/.test(c)){ document.getElementById('code').value=c; }
   }catch(e){}
 })();
+// 北京时间实时时钟：优先用后端返回的 server_ts 校准，否则按浏览器时区估算北京时
+let _clockBase = null;
+function syncClock(d){
+  if(d && d.server_ts){ _clockBase = (d.server_ts*1000) + 8*3600*1000 - Date.now(); tickClock(); }
+}
+function tickClock(){
+  const el=document.getElementById('clock'); if(!el) return;
+  const t = (_clockBase!=null) ? new Date(Date.now()+_clockBase)
+                               : new Date(Date.now() + (8*60 + new Date().getTimezoneOffset())*60000);
+  el.textContent = t.toLocaleString('zh-CN',{hour12:false, timeZone:'Asia/Shanghai'});
+}
+setInterval(tickClock, 1000); tickClock();
 load();
 // 注册 Service Worker，支持「添加到主屏幕 / 离线看壳」
 if('serviceWorker' in navigator){
@@ -2321,8 +2363,10 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
   </div>
 </div>
 
+<div class="tzline">🕐 当前北京时间：<b id="clock">—</b> ｜ 本页所有行情/净值/汇率日期均为 <b>北京时间（UTC+8）</b></div>
+
 <div class="panel">
-  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
+  <div class="field"><label>查询日期(北京)</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <button id="btn" onclick="load()">查询排行</button>
   <details class="codelist" id="codelist">
@@ -2360,7 +2404,8 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 </div>
 </div>
 <script>
-const DEFAULT_WATCHLIST=["160140","164705","164824","501312","164906","160717","501300","160719","167301","161126","160632","161116","161831","160924","161124","164701","160639","163208","160216","164812","160143","161032","160225","160416","160922","161130","161127","161226","161725","160415","160644","501025","162719","501012","161040","161812","161125","161128","501018","160723","161129","501225"];
+const DEFAULT_WATCHLIST=["513310","501018","518850","161226","159501","513520","513290","513120","513130","159985","160644","159545","159516","515880","159819","511130","159201","588200","159509","161128","511380","562800","159552","561550","520870","159530","515030","159326","159218","513750","513690","515220","162411","160719","501312","161130","161129","161124","160216","161125","160723","501225","501025","501012","160140"];
+const LIST_VERSION="20250727";
 const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
 let currentRows=[], sortKey='premium', sortDesc=true, currentFilter=null, currentThreshold=1.5, currentMeta=null;
 
@@ -2393,12 +2438,15 @@ function refreshCodeListUI(){
 }
 function loadList(){
   let list;
-  try{ list = JSON.parse(localStorage.getItem('arb_ranking_list')); }catch(e){}
-  if(!Array.isArray(list) || list.length===0) list = DEFAULT_WATCHLIST;
+  try{
+    const ver = localStorage.getItem('arb_ranking_list_version');
+    if(ver === LIST_VERSION) list = JSON.parse(localStorage.getItem('arb_ranking_list'));
+  }catch(e){}
+  if(!Array.isArray(list) || list.length===0){ list = DEFAULT_WATCHLIST; saveList(); }
   setWatchlist(list);
   refreshCodeListUI();
 }
-function saveList(){ localStorage.setItem('arb_ranking_list', JSON.stringify(parseWatchlist())); }
+function saveList(){ localStorage.setItem('arb_ranking_list', JSON.stringify(parseWatchlist())); localStorage.setItem('arb_ranking_list_version', LIST_VERSION); }
 
 // 置顶（钉选）状态：localStorage 持久化，数组顺序即置顶排列顺序
 let pins=[];
@@ -2429,7 +2477,7 @@ function toast(msg){
   clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'), 1600);
 }
 
-function today(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+function today(){ const d=new Date(); const off=(8*60+d.getTimezoneOffset())*60000; const b=new Date(d.getTime()+off); const p=n=>String(n).padStart(2,'0'); return b.getFullYear()+'-'+p(b.getMonth()+1)+'-'+p(b.getDate()); }
 function initDate(){
   const d=document.getElementById('rdate');
   let saved; try{ saved=localStorage.getItem('arb_ranking_date'); }catch(e){}
@@ -2480,6 +2528,7 @@ function sortRows(key){
 }
 function render(meta){
   currentMeta=meta; currentThreshold=meta.threshold;
+  syncClock(meta);
   const rows=currentRows;
   const ok=rows.filter(r=>!r.error);
   const premium=ok.filter(r=>r.premium!=null);
@@ -2488,7 +2537,7 @@ function render(meta){
 
   const bar=document.getElementById('rankbar');
   bar.style.display='flex';
-  bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
+  bar.innerHTML='<div class="status-item"><span class="k">查询日期(北京)</span><span class="v">'+esc(meta.date)+'</span></div>'
     +'<div class="status-item"><span class="k">基金数</span><span class="v">'+rows.length+'</span></div>'
     +'<div class="status-item"><span class="k">成功</span><span class="v">'+ok.length+'</span></div>'
     +(maxPrem?'<div class="status-item"><span class="k">最高溢价</span><span class="v pos">'+fmtPct(maxPrem.premium)+' '+esc(maxPrem.name)+'</span></div>':'')
@@ -2536,7 +2585,7 @@ function setFilter(type){
 
 function renderBody(){
   const head=[
-    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
+    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期(北京)'},
     {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
     {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},
     {k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},{k:'signal',l:'套利信号'},{k:'',l:'操作'}
@@ -2576,6 +2625,18 @@ function renderBody(){
   document.getElementById('tablebox').style.display='block';
 }
 
+// 北京时间实时时钟：优先用后端返回的 server_ts 校准，否则按浏览器时区估算北京时
+let _clockBase = null;
+function syncClock(d){
+  if(d && d.server_ts){ _clockBase = (d.server_ts*1000) + 8*3600*1000 - Date.now(); tickClock(); }
+}
+function tickClock(){
+  const el=document.getElementById('clock'); if(!el) return;
+  const t = (_clockBase!=null) ? new Date(Date.now()+_clockBase)
+                               : new Date(Date.now() + (8*60 + new Date().getTimezoneOffset())*60000);
+  el.textContent = t.toLocaleString('zh-CN',{hour12:false, timeZone:'Asia/Shanghai'});
+}
+setInterval(tickClock, 1000); tickClock();
 loadList(); loadPins(); initDate(); load();
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err)); });

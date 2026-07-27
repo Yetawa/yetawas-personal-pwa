@@ -25,6 +25,8 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;transition:background .2s,color .2s}
 .wrap{max-width:1280px;margin:0 auto}
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
+.tzline{font-size:13px;color:var(--muted);background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin:6px 0 14px}
+.tzline b{color:var(--text)}
 .titles{flex:1;min-width:0}
 h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .sub{color:var(--muted);font-size:13px;margin-bottom:14px}
@@ -118,6 +120,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   </div>
 </div>
 
+<div class="tzline">🕐 当前北京时间：<b id="clock">—</b> ｜ 本页所有行情/净值/汇率日期均为 <b>北京时间（UTC+8）</b></div>
+
 <div class="panel">
   <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
   <div class="field"><label>近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60"></div>
@@ -204,6 +208,10 @@ async function load(){
 
 function render(d){
   const code=d.code, name=d.name||('基金'+code);
+  // 友好提示：无数据（如代码非上市基金）时不留空白
+  document.getElementById('err').textContent = (!d.rows || d.rows.length===0)
+    ? '未查询到该基金的行情数据（代码可能非上市基金，或暂无可交易数据）。' : '';
+  syncClock(d);
   // 右侧大标题：基金名称 + 代码
   document.getElementById('fund-title').innerHTML=esc(name)+' <small>'+esc(code)+'</small>';
 
@@ -252,7 +260,7 @@ function render(d){
   // 表格：日期 价格 涨跌% 净值 净值涨跌幅 估算净值 估值溢价 误差 [汇率 汇率涨跌]
   //       （原油/油气基金追加 XOP收盘、XOP溢价） 申购状态 限购金额 套利信号
   const showFx = d.use_fx!==false;
-  const head=['日期','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
+  const head=['日期(北京)','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
   if(showFx) head.push('汇率','汇率涨跌');
   if(showOil) head.push('XOP收盘','XOP溢价');
   head.push('申购状态','限购金额','套利信号');
@@ -327,6 +335,18 @@ document.getElementById('threshold').addEventListener('keydown',e=>{if(e.key==='
     if(/^\d{6}$/.test(c)){ document.getElementById('code').value=c; }
   }catch(e){}
 })();
+// 北京时间实时时钟：优先用后端返回的 server_ts 校准，否则按浏览器时区估算北京时
+let _clockBase = null;
+function syncClock(d){
+  if(d && d.server_ts){ _clockBase = (d.server_ts*1000) + 8*3600*1000 - Date.now(); tickClock(); }
+}
+function tickClock(){
+  const el=document.getElementById('clock'); if(!el) return;
+  const t = (_clockBase!=null) ? new Date(Date.now()+_clockBase)
+                               : new Date(Date.now() + (8*60 + new Date().getTimezoneOffset())*60000);
+  el.textContent = t.toLocaleString('zh-CN',{hour12:false, timeZone:'Asia/Shanghai'});
+}
+setInterval(tickClock, 1000); tickClock();
 load();
 // 注册 Service Worker，支持「添加到主屏幕 / 离线看壳」
 if('serviceWorker' in navigator){

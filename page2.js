@@ -1,5 +1,6 @@
 
-const DEFAULT_WATCHLIST=["160140","164705","164824","164801","501312","164906","160717","501300","160719","167301","161126","160632","161116","161831","160924","161124","164701","160639","163208","160216","164812","161113","167725","160143","162804","161032","160225","160416","160922","160244","161130","161127","161226","161725","160415","160644","501025","162719","501012","161040","161812","161125","161128","501018","160723","161129","501225"];
+const DEFAULT_WATCHLIST=["513310","501018","518850","161226","159501","513520","513290","513120","513130","159985","160644","159545","159516","515880","159819","511130","159201","588200","159509","161128","511380","562800","159552","561550","520870","159530","515030","159326","159218","513750","513690","515220","162411","160719","501312","161130","161129","161124","160216","161125","160723","501225","501025","501012","160140"];
+const LIST_VERSION="20250727";
 const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
 let currentRows=[], sortKey='premium', sortDesc=true;
 
@@ -25,11 +26,14 @@ function parseWatchlist(){
 function setWatchlist(arr){ document.getElementById('watchlist').value = arr.join('\n'); }
 function loadList(){
   let list;
-  try{ list = JSON.parse(localStorage.getItem('arb_ranking_list')); }catch(e){}
-  if(!Array.isArray(list) || list.length===0) list = DEFAULT_WATCHLIST;
+  try{
+    const ver = localStorage.getItem('arb_ranking_list_version');
+    if(ver === LIST_VERSION) list = JSON.parse(localStorage.getItem('arb_ranking_list'));
+  }catch(e){}
+  if(!Array.isArray(list) || list.length===0){ list = DEFAULT_WATCHLIST; saveList(); }
   setWatchlist(list);
 }
-function saveList(){ localStorage.setItem('arb_ranking_list', JSON.stringify(parseWatchlist())); }
+function saveList(){ localStorage.setItem('arb_ranking_list', JSON.stringify(parseWatchlist())); localStorage.setItem('arb_ranking_list_version', LIST_VERSION); }
 function addCode(){
   const inp=document.getElementById('addCode'); const c=inp.value.trim();
   if(!/^\d{6}$/.test(c)){ alert('请输入 6 位基金代码'); return; }
@@ -43,7 +47,7 @@ function removeCode(c){
 }
 function resetList(){ setWatchlist(DEFAULT_WATCHLIST); saveList(); load(); }
 
-function today(){ return new Date().toISOString().split('T')[0]; }
+function today(){ const d=new Date(); const off=(8*60+d.getTimezoneOffset())*60000; const b=new Date(d.getTime()+off); const p=n=>String(n).padStart(2,'0'); return b.getFullYear()+'-'+p(b.getMonth()+1)+'-'+p(b.getDate()); }
 function initDate(){
   const d=document.getElementById('rdate');
   let saved; try{ saved=localStorage.getItem('arb_ranking_date'); }catch(e){}
