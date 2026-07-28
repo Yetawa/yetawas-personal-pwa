@@ -2,12 +2,17 @@ name: keep-render-alive
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
-  workflow_dispatch:
+    - cron: "*/10 * * * *"   # 每 10 分钟 ping 一次，保活 Render 免费实例，避免 15min 无访问后 30-50s 唤醒
+  workflow_dispatch:         # 允许在 Actions 页面手动触发
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Render service
-        run: curl -fsS --max-time 25 https://fund-arb.onrender.com/ || true
+      - name: Ping Render service (keep alive + warm TOP 套利榜)
+        run: |
+          # 根路径即时保活（避免 15min 无访问后实例休眠唤醒）
+          curl -fsS --max-time 15 https://fund-arb.onrender.com/ || true
+          # 预热网页3 TOP 套利榜（全市场扫描较重，放宽超时确保缓存被填充；
+          # 即便偶尔超时，磁盘持久化缓存(#2)仍可秒回历史数据）
+          curl -fsS --max-time 120 https://fund-arb.onrender.com/api/top || true
