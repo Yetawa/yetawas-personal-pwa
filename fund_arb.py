@@ -7,8 +7,8 @@ LOF / ETF 基金套利数据看板（网页交互版）
   -> 浏览器打开后，填入基金代码，自动拉取并展示数据
 
 网页功能：
-  - 填写基金代码（如 162411）→ 实时刷新
-  - 可选填「标的 ETF 代码」（如 XOP / QQQ / SPY）用于估算净值；留空则按内置基金表自动匹配
+  - 填写基金代码（如 162411）→ 自动刷新
+  - 估算净值所用「标的 ETF」按内置基金表自动匹配（如华宝油气→XOP、纳指→QQQ、标普→SPY）
   - 默认近 10 个交易日，日期倒序（最新在顶端）
   - 表格含：汇率、价格、净值、标的收盘、溢价、估算净值、估值溢价、申购状态、限购金额、套利信号
 
@@ -2135,6 +2135,68 @@ _LOF_CODE_RE = re.compile(r"^(16\d{4}|50[0-6]\d{3})$")
 _LOF_LIST_CACHE = {"ts": 0.0, "data": None}          # 全市场 LOF 代码+名称（12h）
 _MARKET_TABLE_CACHE = {"ts": 0.0, "data": None}      # 东财场内基金表（10min）
 _SCALE_CACHE = {}                                     # {code: (ts, 规模亿元)}（24h）
+
+# ---- 磁盘持久化缓存（提速#2：休眠/重启后首个请求秒回旧数据，后台静默刷新）----
+# API 结果（轻量、高频写→去抖）与重数据源（场内表/LOF清单，低频写）分开落盘，
+# 避免每次 API 持久化都重写几十 MB 的场内表。_render 重启/免费实例休眠后文件仍在，
+# 启动时 _hydrate_from_disk 回填内存，首个请求即可秒回（含可能过期的旧数据）。
+CACHE_API_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_arb_cache_api.json")
+CACHE_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_arb_cache_data.json")
+_DISK_LOCK = threading.Lock()
+_REFRESH_LOCK = threading.Lock()
+_REFRESHING = set()          # 后台刷新去重：同一 key 只允许一个刷新线程
+_PERSIST_LAST = {"t": 0.0}  # API 持久化去抖时间戳
+
+
+def _persist_api():
+    """把 API 结果缓存落盘（去抖 30s，避免高频写）。"""
+    now = time.time()
+    if now - _PERSIST_LAST["t"] < 30.0:
+        return
+    _PERSIST_LAST["t"] = now
+    try:
+        with open(CACHE_API_FILE + ".tmp", "w", encoding="utf-8") as f:
+            json.dump({k: list(v) for k, v in Handler._API_CACHE.items()}, f, ensure_ascii=False)
+        os.replace(CACHE_API_FILE + ".tmp", CACHE_API_FILE)
+    except Exception as e:
+        print(f"    [缓存] API 持久化失败: {e}")
+
+
+def _persist_data():
+    """把重数据源缓存（场内表/LOF清单/流通市值）落盘；调用点均为低频更新，无需去抖。"""
+    try:
+        store = {"lof_list": _LOF_LIST_CACHE, "market_table": _MARKET_TABLE_CACHE,
+                 "float_caps": _FLOAT_CAP_CACHE}
+        with open(CACHE_DATA_FILE + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(store, f, ensure_ascii=False)
+        os.replace(CACHE_DATA_FILE + ".tmp", CACHE_DATA_FILE)
+    except Exception as e:
+        print(f"    [缓存] 数据源持久化失败: {e}")
+
+
+def _hydrate_from_disk():
+    """启动时从磁盘回填内存缓存（含可能过期的旧数据），使休眠/重启后首个请求秒回。"""
+    try:
+        if os.path.exists(CACHE_API_FILE):
+            with open(CACHE_API_FILE, "r", encoding="utf-8") as f:
+                api = json.load(f)
+            for k, v in api.items():
+                Handler._API_CACHE[k] = tuple(v) if isinstance(v, list) and len(v) == 2 else v
+        if os.path.exists(CACHE_DATA_FILE):
+            with open(CACHE_DATA_FILE, "r", encoding="utf-8") as f:
+                store = json.load(f)
+            ll = store.get("lof_list")
+            if isinstance(ll, dict) and ll.get("data"):
+                _LOF_LIST_CACHE["ts"], _LOF_LIST_CACHE["data"] = ll.get("ts", 0.0), ll["data"]
+            mt = store.get("market_table")
+            if isinstance(mt, dict) and mt.get("data"):
+                _MARKET_TABLE_CACHE["ts"], _MARKET_TABLE_CACHE["data"] = mt.get("ts", 0.0), mt["data"]
+            fc = store.get("float_caps")
+            if isinstance(fc, dict) and fc.get("data"):
+                _FLOAT_CAP_CACHE["ts"], _FLOAT_CAP_CACHE["data"] = fc.get("ts", 0.0), fc["data"]
+        print(f"    [缓存] 已从磁盘回填 {len(Handler._API_CACHE)} 条 API 结果（含可能过期的旧数据）")
+    except Exception as e:
+        print(f"    [缓存] 磁盘回填失败: {e}")
 TOP_DISCOUNT_GATE = -2.0    # 折价侧门槛：估算溢价 < -2% 且开放赎回
 TOP_MAX_CANDIDATES = 80     # 粗筛后进入精算的最大候选数
 
@@ -2153,6 +2215,7 @@ def fetch_all_lof_codes():
     data = [(a[0], a[2], (a[3] if len(a) > 3 else "")) for a in arr if _LOF_CODE_RE.match(a[0])]
     if data:
         _LOF_LIST_CACHE.update(ts=now, data=data)
+        _persist_data()
     return data
 
 
@@ -2282,11 +2345,25 @@ def fetch_market_fund_table():
             limit = None if v >= 1e9 else v             # 1e9+ = 不限购
         except (ValueError, TypeError, IndexError):
             pass
+        # 申购状态归一化：东财场内表 r[5] 原始值可能是 "限大额"（不带"申购"），
+        # 与 SUBSCRIBE_OPEN / F10 解析的 "限大额申购" 不一致，会导致限大额基金在
+        # TOP 榜终筛被整条剔除。此处按 F10 解析口径统一归一化。
+        raw_sub = (r[5] or "").strip()
+        if "暂停申购" in raw_sub:
+            sub = "暂停申购"
+        elif "限大额" in raw_sub or "限购" in raw_sub:
+            sub = "限大额申购"
+        elif "开放申购" in raw_sub:
+            sub = "开放申购"
+        else:
+            sub = raw_sub
+        # 赎回状态 r[6] 原始值已是 "开放赎回" 等规范表述，与 REDEEM_OPEN 一致，无需归一化
         out[r[0]] = {"nav": nav, "nav_date": nav_date,
-                     "subscribe": (r[5] or "").strip(), "redeem": (r[6] or "").strip(),
+                     "subscribe": sub, "redeem": (r[6] or "").strip(),
                      "limit": limit}
     if out:
         _MARKET_TABLE_CACHE.update(ts=now, data=out)
+        _persist_data()
     return out
 
 
@@ -2306,6 +2383,53 @@ def fetch_fund_scale(code):
         print(f"    [TOP榜] {code} 规模获取失败: {e}")
     _SCALE_CACHE[code] = (time.time(), scale)
     return scale
+
+
+# ---------------------------------------------------------------------------
+# 二级市场可交易规模（场内流通市值，亿元）：网页3 TOP 榜「条件2」筛选用。
+# 来源东财 push2 场内基金板 clist：f21 = 流通市值（元），全市场一次拉取；
+# 与「总规模(资产规模)」不同——LOF 大量份额在场外，场内可交易规模远小于总规模，
+# 套利必须看场内可交易规模。缓存 10 分钟。失败返回空字典（调用方回落单只 F10 总规模）。
+# ---------------------------------------------------------------------------
+_FLOAT_CAP_CACHE = {"ts": 0.0, "data": {}}      # push2 场内流通市值（10min 有效）
+_FLOAT_CAP_BACKOFF = {"until": 0.0}              # 限频退避：失败后背刺期内复用旧值、不重试
+
+def fetch_float_market_cap():
+    """全市场 LOF 二级市场可交易规模（场内流通市值，亿元）。
+    来源东财 push2 场内基金板 clist（f21=流通市值，元→亿元）；内存缓存 10 分钟。
+    鲁棒性：① 失败时进入 30 分钟退避，期间复用上一次成功值（可能为磁盘回填的旧值），
+    避免对东财连续高频重试而拉长限频窗口；② 规模数据变化慢，旧值对候选门/终筛足够。
+    仅当从未成功获取过（首跑且无磁盘回填）才返回空字典，由调用方回落 fetch_fund_scale。"""
+    now = time.time()
+    if _FLOAT_CAP_CACHE["data"] and now - _FLOAT_CAP_CACHE["ts"] < 600:
+        return _FLOAT_CAP_CACHE["data"]          # 新鲜数据，直接返回
+    if now < _FLOAT_CAP_BACKOFF["until"]:
+        return _FLOAT_CAP_CACHE["data"] or {}     # 退避期内：复用旧值，不重试
+    out = {}
+    try:
+        url = ("https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=20000&po=1&np=1"
+               "&fltt=2&invt=2&fid=f3&fs=b:MK0021,b:MK0022,b:MK0023,b:MK0024"
+               "&fields=f12,f21&ut=7eea3edcaed734bea9cbfc24409ed989")
+        txt = http_get_text(url, referer="https://quote.eastmoney.com/", timeout=60, retries=2)
+        j = json.loads(txt)
+        for it in (j.get("data") or {}).get("diff") or []:
+            code = it.get("f12")
+            v = it.get("f21")
+            if code and v not in (None, "", "-"):
+                try:
+                    out[code] = float(v) / 1e8   # 元 → 亿元
+                except (ValueError, TypeError):
+                    pass
+    except Exception as e:
+        print(f"    [TOP榜] 场内流通市值批量获取失败（退避30min，复用旧值）: {e}")
+    if out:
+        _FLOAT_CAP_CACHE.update(ts=now, data=out)
+        _FLOAT_CAP_BACKOFF["until"] = 0.0
+        _persist_data()                           # 落盘，使重启/限频窗口后仍可用旧值
+        return out
+    # 失败或空响应：进入退避，复用上一次好数据（可能为磁盘回填）
+    _FLOAT_CAP_BACKOFF["until"] = now + 1800
+    return _FLOAT_CAP_CACHE["data"] or {}
 
 
 # ---------------------------------------------------------------------------
@@ -2339,10 +2463,10 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
 
     同时满足：
       1. 当天在 A 股场内可交易（有实时行情且最近交易日成交量>0）；
-      2. 基金规模 > 1 亿元；
+      2. 二级市场可交易规模（场内流通市值）>= 1 亿元（非总规模）；
       3. 限购金额 > 1 元，或不限购（暂停申购视为限购 0 元，不满足）；
       4. 估算溢价率 >= threshold(默认1.5%)，或 估算溢价率 < dgate(默认-2%) 且开放(场内)赎回。
-    默认排序：① 申购状态（限大额申购 > 开放申购）② 估算溢价由高到低 ③ 成交额由大到小，取前 top_n 名；估算算法与排行表 compute_one_rank 完全一致。
+    筛选后【不】按筛选条件排序，而是用默认排序：① 申购状态（限大额申购 > 开放申购）② 估算溢价由高到低 ③ 成交额由大到小，取前 top_n 名；估算算法与排行表 compute_one_rank 完全一致。
     """
     if not target_date:
         target_date = bj_now().strftime("%Y-%m-%d")
@@ -2350,7 +2474,17 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     quotes = fetch_lof_quotes([c for c, _, _ in lof])
     market = fetch_market_fund_table()
 
-    # -- 粗筛：可交易 + 官方净值粗溢价过闸（留足余量，估算修正后再精判） --
+    # -- 粗筛：可交易 + 非纯债 + 有净值 + 二级市场流通规模 ≥ 1 亿元 即进入精算候选 --
+    # 注意：此处【不再】用官方净值溢价门槛预筛候选。原因：限大额/QDII 基金的
+    # 估算溢价常远高于官方溢价（净值滞后 T+1/T+2 + 标的当日波动），若按官方溢价
+    # 高低挑前 N 名，这类高估算溢价的套利目标会被漏选。实测案例：160216 国泰商品
+    # 官方 -1.14% 但估算 +2.86%、501312 华宝海外科技 官方 -1.35% 但估算 +1.92%、
+    # 161729 招商瑞利 官方 -0.35% 但估算 -2.29%，均因官方溢价小未进候选池。故对
+    # 所有可交易、非纯债、有净值的基金精算估算溢价，再由终筛四条件 + 排序取 TOP。
+    # 二级市场流通规模（场内流通市值，亿元）：东财 push2 全市场一次拉取，提前在此
+    # 做初筛（规模 < 1 亿直接剔除），避免对无套利流动性价值的迷你基做昂贵精算；
+    # push2 未覆盖（scale=None）的基金仍保留进候选，交给终筛的 F10 总规模兜底判断。
+    float_caps = fetch_float_market_cap()
     tradable = 0
     cands = []
     for code, name, ftype in lof:
@@ -2363,24 +2497,16 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         mk = market.get(code)
         if not mk or not mk["nav"]:
             continue
-        rough = (q["price"] - mk["nav"]) / mk["nav"] * 100
-        # 净值滞后（QDII T+1/T+2）时粗溢价失真，放宽余量避免漏筛
-        stale = (mk["nav_date"] or "") < target_date
-        margin = 1.5 if stale else 0.5
-        if rough >= threshold - margin or rough <= dgate + margin:
-            cands.append((code, abs(rough)))
-    cands.sort(key=lambda x: -x[1])
-    cands = [c for c, _ in cands[:TOP_MAX_CANDIDATES]]
+        sc = float_caps.get(code)
+        if sc is not None and sc < 1.0:
+            continue        # 二级市场流通规模 < 1 亿：过早剔除，减少不必要的精算开销
+        cands.append(code)
 
-    # -- 精算：复用排行表算法（估算溢价） + 并行抓规模 --
+    # -- 精算：复用排行表算法（估算溢价） --
     fx_map = fetch_fx()
-    scales = {}
     rows = []
     with ThreadPoolExecutor(max_workers=RANKING_MAX_WORKERS) as exe:
-        sc_futs = {exe.submit(fetch_fund_scale, c): c for c in cands}
         rk_futs = {exe.submit(compute_one_rank, c, target_date, fx_map, threshold): c for c in cands}
-        for f in as_completed(sc_futs):
-            scales[sc_futs[f]] = f.result() if not f.exception() else None
         for f in as_completed(rk_futs):
             c = rk_futs[f]
             try:
@@ -2403,15 +2529,17 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         sp = r.get("est_premium") if r.get("est_premium") is not None else r.get("premium")
         if sp is None:
             continue
-        scale = scales.get(code)
+        scale = float_caps.get(code)
+        if scale is None:
+            scale = fetch_fund_scale(code)   # 单只回落：push2 未覆盖/字段缺失时取总规模兜底
         r["scale"] = scale
         r["subscribe_status"] = subscribe
         r["redeem_status"] = redeem
         r["purchase_limit"] = limit
         r["purchase_limit_text"] = ("不限购" if (limit is None and subscribe in SUBSCRIBE_OPEN)
                                     else (f"{limit:g}元" if limit is not None else "—"))
-        # 条件2：规模 > 1 亿
-        if scale is None or scale <= 1.0:
+        # 条件2：二级市场可交易规模（场内流通市值）>= 1 亿元（非总规模）
+        if scale is None or scale < 1.0:
             continue
         # 条件3：限购金额 > 1 元或不限购（暂停申购 = 无法申购，视为不满足）
         if subscribe not in SUBSCRIBE_OPEN:
@@ -2512,6 +2640,9 @@ h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 a.theme-btn{text-decoration:none}
 .theme-btn:hover{border-color:var(--btn);color:var(--btn)}
+.stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
+.stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
+@keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
 .field{display:flex;flex-direction:column;gap:4px}
 .field label{font-size:12px;color:var(--muted)}
@@ -2602,11 +2733,12 @@ PAGE_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta 
 <div class="topbar">
   <div class="titles">
     <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.3</span></h1>
-    <div class="sub">填基金代码 → 实时拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
+    <div class="sub">填基金代码 → 拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
   </div>
   <div class="top-actions">
-    <a class="theme-btn" href="/top" title="全市场 LOF TOP20 套利机会">TOP套利</a>
     <a class="theme-btn" href="/ranking" title="基金溢价排行表">排行表</a>
+    <a class="theme-btn" href="/top" title="全市场 LOF TOP 套利机会">TOP套利</a>
+    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
@@ -2616,7 +2748,6 @@ PAGE_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta 
 <div class="panel">
   <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
   <div class="field"><label>显示近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60" title="仅控制表格展示行数；估算/校准固定用 30 个交易日"></div>
-  <div class="field"><label>标的ETF代码(可选)</label><input id="und" placeholder="如 XOP/QQQ/SPY" value=""></div>
   <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <div class="field"><label>估值模式</label><select id="mode">
     <option value="auto">自动择优</option>
@@ -2672,7 +2803,6 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;"
 async function load(){
   const code=document.getElementById('code').value.trim();
   const days=document.getElementById('days').value.trim();
-  const und=document.getElementById('und').value.trim();
   const threshold=document.getElementById('threshold').value.trim();
   currentMode=document.getElementById('mode').value.trim();
   const btn=document.getElementById('btn');
@@ -2684,7 +2814,6 @@ async function load(){
   try{
     let url='/api/data?code='+encodeURIComponent(code)+'&days='+encodeURIComponent(days)
           +'&threshold='+encodeURIComponent(threshold)+'&mode='+encodeURIComponent(currentMode);
-    if(und) url+='&underlying='+encodeURIComponent(und);
     const r=await fetch(url); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
     render(d);
@@ -2697,6 +2826,7 @@ async function load(){
 }
 
 function render(d){
+  document.getElementById('staleBadge').style.display=(d&&d.stale)?'inline-flex':'none';
   const code=d.code, name=d.name||('基金'+code);
   // 友好提示：无数据（如代码非上市基金）时不留空白
   document.getElementById('err').textContent = (!d.rows || d.rows.length===0)
@@ -2751,7 +2881,7 @@ function render(d){
   // 表格：日期 价格 涨跌% 净值 净值涨跌幅 估算净值 估值溢价 误差 [汇率 汇率涨跌]
   //       （原油/油气基金追加 XOP收盘、XOP溢价） 申购状态 限购金额 套利信号
   const showFx = d.use_fx!==false;
-  const head=['日期(北京)','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
+  const head=['日期','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
   if(showFx) head.push('汇率','汇率涨跌');
   if(showOil) head.push('XOP收盘','XOP溢价');
   head.push('申购状态','限购金额','套利信号');
@@ -2885,7 +3015,7 @@ function tickClock(){
   el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
 }
 setInterval(tickClock, 1000); tickClock();
-// 打开界面：带 ?code= 直接查该基金；否则默认加载 TOP20 套利榜第 1 名
+// 打开界面：带 ?code= 直接查该基金；否则默认加载 TOP 套利榜第 1 名
 (function(){
   const p=new URLSearchParams(location.search);
   const c=(p.get('code')||'').trim();
@@ -2961,11 +3091,11 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <div class="topbar">
   <div class="titles">
     <h1>LOF / ETF 基金溢价排行表 <span class="ver">V1.3</span></h1>
-    <div class="sub">多基金按单日官方溢价排序，支持更换日期、增删基金代码，数据实时拉取。</div>
   </div>
   <div class="top-actions">
-    <a class="theme-btn" href="/top" title="全市场 LOF TOP20 套利机会">TOP套利</a>
     <a class="theme-btn" href="/" title="返回单基金套利看板">套利看板</a>
+    <a class="theme-btn" href="/top" title="全市场 LOF TOP 套利机会">TOP套利</a>
+    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
@@ -2973,7 +3103,7 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
 
 <div class="panel">
-  <div class="field"><label>查询日期(北京)</label><input id="rdate" type="date"></div>
+  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <button id="btn" onclick="load()">查询排行</button>
   <details class="codelist" id="codelist">
@@ -2989,7 +3119,7 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
         <button onclick="addCode()">添加</button>
         <button onclick="saveList();toast('已保存设置')" style="background:var(--panel);color:var(--text);border:1px solid var(--border)">保存设置</button>
         <button onclick="resetList()" style="background:var(--panel);color:var(--text);border:1px solid var(--border)">恢复默认</button>
-        <span class="sort-hint">默认按官方溢价降序；点击表头可切换排序</span>
+        <span class="sort-hint">默认申购状态优先、溢价高者居前；点击表头可切换排序</span>
       </div>
     </div>
   </details>
@@ -3155,6 +3285,7 @@ function sortRows(key){
   renderBody();
 }
 function render(meta){
+  document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
   currentMeta=meta; currentThreshold=meta.threshold;
   syncClock(meta);
   const rows=currentRows;
@@ -3165,7 +3296,7 @@ function render(meta){
 
   const bar=document.getElementById('rankbar');
   bar.style.display='flex';
-  bar.innerHTML='<div class="status-item"><span class="k">查询日期(北京)</span><span class="v">'+esc(meta.date)+'</span></div>'
+  bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
     +'<div class="status-item"><span class="k">基金数</span><span class="v">'+rows.length+'</span></div>'
     +'<div class="status-item"><span class="k">成功</span><span class="v">'+ok.length+'</span></div>'
     +(maxPrem?'<div class="status-item"><span class="k">最高溢价</span><span class="v pos">'+fmtPct(maxPrem.premium)+' '+esc(maxPrem.name)+'</span></div>':'')
@@ -3213,7 +3344,7 @@ function setFilter(type){
 
 function renderBody(){
   const head=[
-    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期(北京)'},
+    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
     {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
     {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},{k:'turnover',l:'成交额(万元)'},
     {k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},{k:'signal',l:'套利信号'},{k:'',l:'操作'}
@@ -3282,7 +3413,7 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <meta name="theme-color" content="#0d1117">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon.svg">
-<title>LOF TOP20 套利榜</title>
+<title>LOF TOP 套利榜</title>
 <style>""" + COMMON_CSS + r"""
 .rank-scroll{overflow:auto;max-height:74vh;-webkit-overflow-scrolling:touch}
 .rank-scroll table{font-size:12px;table-layout:auto;width:max-content;min-width:100%}
@@ -3292,8 +3423,6 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 .rank-bar{background:var(--sb-info-bg);border:1px solid var(--sb-info-border);border-radius:10px;padding:12px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:13px}
 .rank-bar .k{color:var(--muted)}
 .rank-bar .v{font-weight:600;color:var(--title)}
-.cond{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted);line-height:1.8}
-.cond b{color:var(--text)}
 @media (max-width:760px){
   .summary2{grid-template-columns:repeat(2,1fr)}
   .rank-scroll{max-height:66vh}
@@ -3303,22 +3432,20 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <div class="wrap">
 <div class="topbar">
   <div class="titles">
-    <h1>LOF TOP20 套利榜 <span class="ver">V1.3</span></h1>
-    <div class="sub">全市场 LOF 自动扫描 → 四条件过滤 → 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小，取前 20 名。估算算法与排行表一致。</div>
+    <h1>LOF TOP 套利榜 <span class="ver">V1.3</span></h1>
   </div>
   <div class="top-actions">
     <a class="theme-btn" href="/" title="单基金套利看板">套利看板</a>
     <a class="theme-btn" href="/ranking" title="基金溢价排行表">排行表</a>
+    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
 
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
 
-<div class="cond">筛选条件（同时满足）：<b>① 当天 A 股场内可交易</b>（有行情且有成交）· <b>② 规模 &gt; 1 亿元</b> · <b>③ 限购 &gt; 1 元或不限购</b>（暂停申购不入选）· <b>④ 估算溢价 ≥ 溢价阈值</b> 或 <b>估算溢价 &lt; 折价阈值且开放赎回</b>。<br>默认排序：① <b>申购状态</b>（限大额申购 → 开放申购 靠前）② <b>估算溢价</b>由高到低 ③ <b>成交额(万元)</b>由大到小。该列反映流动性（来源腾讯当日行情字段[37]；盘前查看即为上一交易日全量成交）。</div>
-
 <div class="panel">
-  <div class="field"><label>查询日期(北京)</label><input id="rdate" type="date"></div>
+  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <div class="field"><label>折价阈值 %</label><input id="dgate" value="-2" type="number" step="0.1" min="-10" max="-0.1"></div>
   <button id="btn" onclick="load()">扫描全市场</button>
@@ -3334,9 +3461,12 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <div class="note">
 <b>说明</b>
 <ul>
-  <li><b>估算溢价</b> = (价格 - 估算净值) / 估算净值；估算净值算法与套利看板/排行表一致（QDII 按海外标的+汇率修正，国内基金取最近净值）。红=溢价，绿=折价。</li>
-  <li>「暂停申购」按限购 0 元处理，不满足条件③，即使深折价也不入榜（条件为同时满足）。</li>
-  <li>规模取东财 F10 最新报告期资产规模；限购金额取东财场内基金表当日数据。榜单仅供参考，非投资建议。</li>
+  <li>全市场 LOF 自动扫描 → 四条件过滤 → 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小。估算算法与排行表一致。</li>
+  <li><b>筛选条件（同时满足）</b>：① 当天 A 股场内可交易（有行情且有成交）· ② 规模 ≥ 1 亿元 · ③ 限购 &gt; 1 元或不限购（暂停申购不入选）· ④ 估算溢价 ≥ 溢价阈值 或 估算溢价 &lt; 折价阈值且开放赎回。</li>
+  <li><b>成交额</b>：默认排序第③位的成交额列反映流动性（来源腾讯当日行情字段[37]；盘前查看即为上一交易日全量成交）。</li>
+  <li><b>估算溢价</b> = (价格 - 估算净值) / 估算净值；QDII 按海外标的+汇率修正，国内基金取最近净值。红=溢价，绿=折价。</li>
+  <li>「暂停申购」不属于可申购状态（开放申购 / 限大额申购），不满足条件③，即使深折价也不入榜（条件为同时满足）。</li>
+  <li>二级市场可交易规模取东财场内流通市值（场内规模），门槛 ≥ 1 亿元；限购金额取东财场内基金表当日数据。榜单仅供参考，非投资建议。</li>
 </ul>
 </div>
 </div>
@@ -3442,12 +3572,13 @@ function sortRows(key){
 }
 
 function render(meta){
+  document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
   currentMeta=meta;
   syncClock(meta);
   const rows=currentRows;
   const bar=document.getElementById('rankbar');
   bar.style.display='flex';
-  bar.innerHTML='<div class="status-item"><span class="k">查询日期(北京)</span><span class="v">'+esc(meta.date)+'</span></div>'
+  bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
     +'<div class="status-item"><span class="k">全市场 LOF</span><span class="v">'+esc(meta.universe)+' 只</span></div>'
     +'<div class="status-item"><span class="k">场内可交易</span><span class="v">'+esc(meta.tradable)+' 只</span></div>'
     +'<div class="status-item"><span class="k">粗筛候选</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
@@ -3458,10 +3589,10 @@ function render(meta){
 
 function renderBody(){
   const head=[
-    {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期(北京)'},
+    {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
     {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
     {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},
-    {k:'scale',l:'规模(亿)'},{k:'turnover',l:'成交额(万元)'},{k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},
+    {k:'scale',l:'场内规模(亿)'},{k:'turnover',l:'成交额(万元)'},{k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},
     {k:'redeem_status',l:'赎回状态'},{k:'signal',l:'套利信号'}
   ];
   const hHtml=head.map(h=> h.k? '<th style="cursor:pointer" onclick="sortRows(\''+h.k+'\')" title="点击排序">'+esc(h.l)+'</th>' : '<th>'+esc(h.l)+'</th>').join('');
@@ -3519,7 +3650,7 @@ if('serviceWorker' in navigator){
 MANIFEST_JSON = r"""{
   "name": "LOF/ETF 基金套利数据看板",
   "short_name": "套利看板",
-  "description": "实时拉取 LOF/ETF 净值、价格、标的、汇率与申购状态，计算溢价率与套利信号。",
+  "description": "动态拉取 LOF/ETF 净值、价格、标的、汇率与申购状态，计算溢价率与套利信号。",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -3656,6 +3787,45 @@ class Handler(BaseHTTPRequestHandler):
             self._API_CACHE[key] = (now + ttl, val)
         return val
 
+    def _refresh_async(self, key, ttl, producer):
+        """后台异步重算并写回缓存（去重：同一 key 仅一个刷新线程在跑）。"""
+        with _REFRESH_LOCK:
+            if key in _REFRESHING:
+                return
+            _REFRESHING.add(key)
+        def _run():
+            try:
+                val = producer()
+                now = time.time()
+                with self._API_CACHE_LOCK:
+                    self._API_CACHE[key] = (now + ttl, val)
+                _persist_api()
+            except Exception as e:
+                print(f"    [缓存] 后台刷新失败 {key}: {e}")
+            finally:
+                with _REFRESH_LOCK:
+                    _REFRESHING.discard(key)
+        _threading.Thread(target=_run, daemon=True).start()
+
+    def _cached_or_stale(self, key, ttl, producer):
+        """同 _cached，但内存未命中（或已过期）时：若内存/磁盘尚有旧值，立即返回该旧值并
+        后台静默刷新（返回 (value, stale=True)）；完全无任何缓存时才同步计算（唯一慢路径，
+        此时不再后台刷新，避免重复计算）。配合磁盘持久化(#2)，休眠/重启后首个请求也能秒回历史数据。"""
+        now = time.time()
+        with self._API_CACHE_LOCK:
+            hit = self._API_CACHE.get(key)
+        if hit and hit[0] > now:
+            return hit[1], False
+        stale_val = hit[1] if hit else None
+        if stale_val is not None:
+            self._refresh_async(key, ttl, producer)   # 有旧值→后台静默刷新（去重）
+            return stale_val, True                    # 先返回旧数据，前端可据此提示“刷新中”
+        val = producer()                              # 真正冷启动：同步计算（不再后台刷新）
+        with self._API_CACHE_LOCK:
+            self._API_CACHE[key] = (now + ttl, val)
+        _persist_api()
+        return val, False
+
     def do_GET(self):
         parsed = urlparse(self.path)
         # 接口限流（静态资源与页面不限）
@@ -3700,9 +3870,10 @@ class Handler(BaseHTTPRequestHandler):
             dgate = max(-10.0, min(-0.1, dgate))
             cache_key = f"top|{date}|{threshold}|{dgate}"
             try:
-                data = self._cached(cache_key, Handler._API_CACHE_TTL_TOP,
-                                    lambda: compute_top_arbitrage(date, threshold, dgate))
-                self._send(200, json.dumps(data, ensure_ascii=False))
+                data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL_TOP,
+                                                    lambda: compute_top_arbitrage(date, threshold, dgate))
+                out = dict(data); out["stale"] = stale
+                self._send(200, json.dumps(out, ensure_ascii=False))
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
             return
@@ -3736,10 +3907,11 @@ class Handler(BaseHTTPRequestHandler):
                 mode = None
             cache_key = f"data|{code}|{days}|{threshold}|{start}|{end}|{underlying}|{mode}"
             try:
-                data = self._cached(cache_key, Handler._API_CACHE_TTL,
+                data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL,
                                     lambda: compute(code, display_days=days, start=start, end=end, underlying=underlying, threshold=threshold, mode=mode))
                 data = dict(data)
                 data["error"] = None
+                data["stale"] = stale
                 self._send(200, json.dumps(data, ensure_ascii=False))
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "code": code}, ensure_ascii=False))
@@ -3764,9 +3936,10 @@ class Handler(BaseHTTPRequestHandler):
             threshold = max(0.1, min(10.0, threshold))
             cache_key = f"rank|{date}|{threshold}|{','.join(codes)}"
             try:
-                data = self._cached(cache_key, Handler._API_CACHE_TTL_RANK,
+                data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL_RANK,
                                     lambda: compute_ranking(codes, date, threshold))
-                self._send(200, json.dumps(data, ensure_ascii=False))
+                out = dict(data); out["stale"] = stale
+                self._send(200, json.dumps(out, ensure_ascii=False))
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "date": date, "codes": codes}, ensure_ascii=False))
             return
@@ -4003,7 +4176,7 @@ def build_arb_push_text(target_date=None):
         scale = f"{r.get('scale'):.2f}亿" if isinstance(r.get('scale'), (int, float)) else "—"
         turn = f"{r.get('turnover'):.0f}万" if isinstance(r.get('turnover'), (int, float)) else "—"
         srcname = "网页2监控" if src == "ranking" else "网页3TOP"
-        lines.append(f"{i}. {r.get('code')} {r.get('name')}｜{typ}{est:+.2f}%｜{lim}｜规模{scale}｜成交{turn}｜{srcname}")
+        lines.append(f"{i}. {r.get('code')} {r.get('name')}｜{typ}{est:+.2f}%｜{lim}｜场内{scale}｜成交{turn}｜{srcname}")
     return "\n".join(lines)
 
 def build_arb_push(target_date=None):
@@ -4099,29 +4272,42 @@ def main():
     _threading.Thread(target=calibrate_all_weights, daemon=True).start()
     # 加载持仓择优缓存（24h 持久化，避免每次重复抓取 10 只重仓行情）
     load_holdings_choice_cache()
-    # 预热 + 周期刷新：启动后先算默认基金与排行填满缓存；之后每 60s 重算一次，
-    # 使首页(/api/data 默认 162411)与排行页在实例常驻期间始终命中缓存、秒出。
-    # _prewarm_running 防止上一次排行重算未结束时又重叠启动（避免并发猛刷上游被限流）。
-    _prewarm_running = {"rank": False}
+    # 磁盘持久化缓存(#2)：启动时回填内存，使休眠/重启后首个请求即可秒回历史数据
+    _hydrate_from_disk()
+    # 预热 + 周期刷新：网页3(TOP套利，全市场扫描最重)与排行页在实例常驻期间始终命中缓存、秒出。
+    # 默认基金 162411 不再主动预热（按需计算即可，结果同样会落盘）；
+    # _prewarm_running 防止上一次重算未结束时又重叠启动（避免并发猛刷上游被限流）。
+    _prewarm_running = {"rank": False, "top": False}
+    _prewarm_iter = {"n": 0}
     def _prewarm_loop():
         while True:
-            # 默认基金（快）
-            try:
-                Handler._API_CACHE[f"data|162411|10|1.5|||None|None"] = (
-                    time.time() + Handler._API_CACHE_TTL, compute("162411", 10))
-            except Exception:
-                pass
-            # 排行（重，带重叠保护）
+            # 排行（重，带重叠保护）— 每 300s
             if not _prewarm_running["rank"]:
                 _prewarm_running["rank"] = True
                 try:
                     _d = datetime.now().strftime("%Y-%m-%d")
                     Handler._API_CACHE[f"rank|{_d}|1.5|{','.join(RANKING_WATCHLIST)}"] = (
                         time.time() + Handler._API_CACHE_TTL_RANK, compute_ranking(RANKING_WATCHLIST))
+                    _persist_api()
                 except Exception:
                     pass
                 finally:
                     _prewarm_running["rank"] = False
+            # TOP 套利榜（最重：全市场扫描）— 每 600s（隔次），带重叠保护；
+            # 磁盘持久化(#2)保证即便本次扫描被上游限频/超时，历史结果仍可秒回。
+            if _prewarm_iter["n"] % 2 == 0 and not _prewarm_running["top"]:
+                _prewarm_running["top"] = True
+                try:
+                    _d = datetime.now().strftime("%Y-%m-%d")
+                    Handler._API_CACHE[f"top|{_d}|1.5|-2.0"] = (
+                        time.time() + Handler._API_CACHE_TTL_TOP,
+                        compute_top_arbitrage(_d, 1.5, -2.0))
+                    _persist_api()
+                except Exception:
+                    pass
+                finally:
+                    _prewarm_running["top"] = False
+            _prewarm_iter["n"] += 1
             # 本地每 60s 刷新（UI 追求实时）；云平台放宽到 300s，避免从单一出口 IP 高频打外部行情源被限流
             time.sleep(60 if host == '127.0.0.1' else 300)
     _threading.Thread(target=_prewarm_loop, daemon=True).start()

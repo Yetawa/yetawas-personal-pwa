@@ -34,6 +34,9 @@ h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 a.theme-btn{text-decoration:none}
 .theme-btn:hover{border-color:var(--btn);color:var(--btn)}
+.stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
+.stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
+@keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
 .field{display:flex;flex-direction:column;gap:4px}
 .field label{font-size:12px;color:var(--muted)}
@@ -113,11 +116,12 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="topbar">
   <div class="titles">
     <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.3</span></h1>
-    <div class="sub">填基金代码 → 实时拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
+    <div class="sub">填基金代码 → 拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
   </div>
   <div class="top-actions">
-    <a class="theme-btn" href="fund_arb_top.html" title="全市场 LOF TOP20 套利机会">TOP套利</a>
     <a class="theme-btn" href="fund_arb_ranking.html" title="基金溢价排行表">排行表</a>
+    <a class="theme-btn" href="fund_arb_top.html" title="全市场 LOF TOP 套利机会">TOP套利</a>
+    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
@@ -127,7 +131,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="panel">
   <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
   <div class="field"><label>显示近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60" title="仅控制表格展示行数；估算/校准固定用 30 个交易日"></div>
-  <div class="field"><label>标的ETF代码(可选)</label><input id="und" placeholder="如 XOP/QQQ/SPY" value=""></div>
   <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <div class="field"><label>估值模式</label><select id="mode">
     <option value="auto">自动择优</option>
@@ -184,7 +187,6 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;"
 async function load(){
   const code=document.getElementById('code').value.trim();
   const days=document.getElementById('days').value.trim();
-  const und=document.getElementById('und').value.trim();
   const threshold=document.getElementById('threshold').value.trim();
   currentMode=document.getElementById('mode').value.trim();
   const btn=document.getElementById('btn');
@@ -196,7 +198,6 @@ async function load(){
   try{
     let url=BASE+'/api/data?code='+encodeURIComponent(code)+'&days='+encodeURIComponent(days)
           +'&threshold='+encodeURIComponent(threshold)+'&mode='+encodeURIComponent(currentMode);
-    if(und) url+='&underlying='+encodeURIComponent(und);
     const r=await fetch(url); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
     render(d);
@@ -209,6 +210,7 @@ async function load(){
 }
 
 function render(d){
+  document.getElementById('staleBadge').style.display=(d&&d.stale)?'inline-flex':'none';
   const code=d.code, name=d.name||('基金'+code);
   // 友好提示：无数据（如代码非上市基金）时不留空白
   document.getElementById('err').textContent = (!d.rows || d.rows.length===0)
@@ -263,7 +265,7 @@ function render(d){
   // 表格：日期 价格 涨跌% 净值 净值涨跌幅 估算净值 估值溢价 误差 [汇率 汇率涨跌]
   //       （原油/油气基金追加 XOP收盘、XOP溢价） 申购状态 限购金额 套利信号
   const showFx = d.use_fx!==false;
-  const head=['日期(北京)','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
+  const head=['日期','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
   if(showFx) head.push('汇率','汇率涨跌');
   if(showOil) head.push('XOP收盘','XOP溢价');
   head.push('申购状态','限购金额','套利信号');
@@ -397,7 +399,7 @@ function tickClock(){
   el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
 }
 setInterval(tickClock, 1000); tickClock();
-// 打开界面：带 ?code= 直接查该基金；否则默认加载 TOP20 套利榜第 1 名
+// 打开界面：带 ?code= 直接查该基金；否则默认加载 TOP 套利榜第 1 名
 (function(){
   const p=new URLSearchParams(location.search);
   const c=(p.get('code')||'').trim();

@@ -34,6 +34,9 @@ h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 a.theme-btn{text-decoration:none}
 .theme-btn:hover{border-color:var(--btn);color:var(--btn)}
+.stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
+.stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
+@keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
 .field{display:flex;flex-direction:column;gap:4px}
 .field label{font-size:12px;color:var(--muted)}
@@ -160,11 +163,11 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="topbar">
   <div class="titles">
     <h1>LOF / ETF 基金溢价排行表 <span class="ver">V1.3</span></h1>
-    <div class="sub">多基金按单日官方溢价排序，支持更换日期、增删基金代码，数据实时拉取。</div>
   </div>
   <div class="top-actions">
-    <a class="theme-btn" href="fund_arb_top.html" title="全市场 LOF TOP20 套利机会">TOP套利</a>
     <a class="theme-btn" href="fund_arb.html" title="返回单基金套利看板">套利看板</a>
+    <a class="theme-btn" href="fund_arb_top.html" title="全市场 LOF TOP 套利机会">TOP套利</a>
+    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
@@ -172,7 +175,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
 
 <div class="panel">
-  <div class="field"><label>查询日期(北京)</label><input id="rdate" type="date"></div>
+  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <button id="btn" onclick="load()">查询排行</button>
   <details class="codelist" id="codelist">
@@ -188,7 +191,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
         <button onclick="addCode()">添加</button>
         <button onclick="saveList();toast('已保存设置')" style="background:var(--panel);color:var(--text);border:1px solid var(--border)">保存设置</button>
         <button onclick="resetList()" style="background:var(--panel);color:var(--text);border:1px solid var(--border)">恢复默认</button>
-        <span class="sort-hint">默认按官方溢价降序；点击表头可切换排序</span>
+        <span class="sort-hint">默认申购状态优先、溢价高者居前；点击表头可切换排序</span>
       </div>
     </div>
   </details>
@@ -355,6 +358,7 @@ function sortRows(key){
   renderBody();
 }
 function render(meta){
+  document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
   currentMeta=meta; currentThreshold=meta.threshold;
   syncClock(meta);
   const rows=currentRows;
@@ -365,7 +369,7 @@ function render(meta){
 
   const bar=document.getElementById('rankbar');
   bar.style.display='flex';
-  bar.innerHTML='<div class="status-item"><span class="k">查询日期(北京)</span><span class="v">'+esc(meta.date)+'</span></div>'
+  bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
     +'<div class="status-item"><span class="k">基金数</span><span class="v">'+rows.length+'</span></div>'
     +'<div class="status-item"><span class="k">成功</span><span class="v">'+ok.length+'</span></div>'
     +(maxPrem?'<div class="status-item"><span class="k">最高溢价</span><span class="v pos">'+fmtPct(maxPrem.premium)+' '+esc(maxPrem.name)+'</span></div>':'')
@@ -413,7 +417,7 @@ function setFilter(type){
 
 function renderBody(){
   const head=[
-    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期(北京)'},
+    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
     {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
     {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},{k:'turnover',l:'成交额(万元)'},
     {k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},{k:'signal',l:'套利信号'},{k:'',l:'操作'}

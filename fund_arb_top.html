@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#0d1117">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon.svg">
-<title>LOF TOP20 套利榜</title>
+<title>LOF TOP 套利榜</title>
 <style>
 :root{color-scheme:dark;
   --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#c9d1d9; --muted:#8b949e; --title:#f0f6fc;
@@ -34,6 +34,9 @@ h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 a.theme-btn{text-decoration:none}
 .theme-btn:hover{border-color:var(--btn);color:var(--btn)}
+.stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
+.stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
+@keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
 .field{display:flex;flex-direction:column;gap:4px}
 .field label{font-size:12px;color:var(--muted)}
@@ -117,8 +120,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 .rank-bar{background:var(--sb-info-bg);border:1px solid var(--sb-info-border);border-radius:10px;padding:12px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:13px}
 .rank-bar .k{color:var(--muted)}
 .rank-bar .v{font-weight:600;color:var(--title)}
-.cond{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted);line-height:1.8}
-.cond b{color:var(--text)}
 @media (max-width:760px){
   .summary2{grid-template-columns:repeat(2,1fr)}
   .rank-scroll{max-height:66vh}
@@ -128,22 +129,20 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="wrap">
 <div class="topbar">
   <div class="titles">
-    <h1>LOF TOP20 套利榜 <span class="ver">V1.3</span></h1>
-    <div class="sub">全市场 LOF 自动扫描 → 四条件过滤 → 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小，取前 20 名。估算算法与排行表一致。</div>
+    <h1>LOF TOP 套利榜 <span class="ver">V1.3</span></h1>
   </div>
   <div class="top-actions">
     <a class="theme-btn" href="fund_arb.html" title="单基金套利看板">套利看板</a>
     <a class="theme-btn" href="fund_arb_ranking.html" title="基金溢价排行表">排行表</a>
+    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
 
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
 
-<div class="cond">筛选条件（同时满足）：<b>① 当天 A 股场内可交易</b>（有行情且有成交）· <b>② 规模 &gt; 1 亿元</b> · <b>③ 限购 &gt; 1 元或不限购</b>（暂停申购不入选）· <b>④ 估算溢价 ≥ 溢价阈值</b> 或 <b>估算溢价 &lt; 折价阈值且开放赎回</b>。<br>默认排序：① <b>申购状态</b>（限大额申购 → 开放申购 靠前）② <b>估算溢价</b>由高到低 ③ <b>成交额(万元)</b>由大到小。该列反映流动性（来源腾讯当日行情字段[37]；盘前查看即为上一交易日全量成交）。</div>
-
 <div class="panel">
-  <div class="field"><label>查询日期(北京)</label><input id="rdate" type="date"></div>
+  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <div class="field"><label>折价阈值 %</label><input id="dgate" value="-2" type="number" step="0.1" min="-10" max="-0.1"></div>
   <button id="btn" onclick="load()">扫描全市场</button>
@@ -159,9 +158,12 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="note">
 <b>说明</b>
 <ul>
-  <li><b>估算溢价</b> = (价格 - 估算净值) / 估算净值；估算净值算法与套利看板/排行表一致（QDII 按海外标的+汇率修正，国内基金取最近净值）。红=溢价，绿=折价。</li>
-  <li>「暂停申购」按限购 0 元处理，不满足条件③，即使深折价也不入榜（条件为同时满足）。</li>
-  <li>规模取东财 F10 最新报告期资产规模；限购金额取东财场内基金表当日数据。榜单仅供参考，非投资建议。</li>
+  <li>全市场 LOF 自动扫描 → 四条件过滤 → 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小。估算算法与排行表一致。</li>
+  <li><b>筛选条件（同时满足）</b>：① 当天 A 股场内可交易（有行情且有成交）· ② 规模 ≥ 1 亿元 · ③ 限购 &gt; 1 元或不限购（暂停申购不入选）· ④ 估算溢价 ≥ 溢价阈值 或 估算溢价 &lt; 折价阈值且开放赎回。</li>
+  <li><b>成交额</b>：默认排序第③位的成交额列反映流动性（来源腾讯当日行情字段[37]；盘前查看即为上一交易日全量成交）。</li>
+  <li><b>估算溢价</b> = (价格 - 估算净值) / 估算净值；QDII 按海外标的+汇率修正，国内基金取最近净值。红=溢价，绿=折价。</li>
+  <li>「暂停申购」不属于可申购状态（开放申购 / 限大额申购），不满足条件③，即使深折价也不入榜（条件为同时满足）。</li>
+  <li>二级市场可交易规模取东财场内流通市值（场内规模），门槛 ≥ 1 亿元；限购金额取东财场内基金表当日数据。榜单仅供参考，非投资建议。</li>
 </ul>
 </div>
 </div>
@@ -268,12 +270,13 @@ function sortRows(key){
 }
 
 function render(meta){
+  document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
   currentMeta=meta;
   syncClock(meta);
   const rows=currentRows;
   const bar=document.getElementById('rankbar');
   bar.style.display='flex';
-  bar.innerHTML='<div class="status-item"><span class="k">查询日期(北京)</span><span class="v">'+esc(meta.date)+'</span></div>'
+  bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
     +'<div class="status-item"><span class="k">全市场 LOF</span><span class="v">'+esc(meta.universe)+' 只</span></div>'
     +'<div class="status-item"><span class="k">场内可交易</span><span class="v">'+esc(meta.tradable)+' 只</span></div>'
     +'<div class="status-item"><span class="k">粗筛候选</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
@@ -284,10 +287,10 @@ function render(meta){
 
 function renderBody(){
   const head=[
-    {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期(北京)'},
+    {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
     {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
     {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},
-    {k:'scale',l:'规模(亿)'},{k:'turnover',l:'成交额(万元)'},{k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},
+    {k:'scale',l:'场内规模(亿)'},{k:'turnover',l:'成交额(万元)'},{k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},
     {k:'redeem_status',l:'赎回状态'},{k:'signal',l:'套利信号'}
   ];
   const hHtml=head.map(h=> h.k? '<th style="cursor:pointer" onclick="sortRows(\''+h.k+'\')" title="点击排序">'+esc(h.l)+'</th>' : '<th>'+esc(h.l)+'</th>').join('');
