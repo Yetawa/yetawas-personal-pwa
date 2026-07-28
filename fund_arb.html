@@ -93,8 +93,10 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 @media (max-width:760px){
   body{padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
   .topbar{flex-direction:column;align-items:stretch;gap:10px}
-  .top-actions{align-self:flex-end}
-  .theme-btn{align-self:flex-end}
+  .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
+  .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
+  .theme-btn{align-self:flex-start}
+  body{overflow-x:hidden}
   .panel{flex-direction:column;align-items:stretch;gap:10px}
   .field{width:100%}
   .field input,.field textarea,.field select{width:100%}
@@ -142,6 +144,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 </div>
 
 <div id="statusbar" class="statusbar" style="display:none"></div>
+<div id="baseinfo" class="baseinfo" style="display:none;margin:8px 0;color:#8b949e;font-size:13px"></div>
 <div id="summary" class="summary"></div>
 <div id="validate" class="summary" style="display:none"></div>
 <div id="loading">加载中…</div>
@@ -244,9 +247,19 @@ function render(d){
   }
   bar.className='statusbar '+barClass;
   bar.innerHTML=barHtml;
+  // 摘要与估值基准块都要用 summary，先在此声明（避免 TDZ：估值基准块早于原声明处引用 s 会抛 ReferenceError）
+  const s=d.summary||{};
+
+  // 估值基准透明化（对标 haoetf「估值基准：SP500 7413.18 +0.02%」）：展示标的/模式/最新标的价
+  const baseEl=document.getElementById('baseinfo');
+  if(baseEl){
+    let bhtml='<b>估值基准</b>：'+esc(d.underlying_label||'—');
+    if(d.est_mode) bhtml+=' ｜ 模式：'+esc(d.est_mode);
+    if(s.latest_xop!=null) bhtml+=' ｜ 最新标的价：'+Number(s.latest_xop).toFixed(4);
+    baseEl.innerHTML=bhtml; baseEl.style.display='block';
+  }
 
   // 摘要卡片（原油/油气基金才显示 XOP 收盘）
-  const s=d.summary||{};
   const showOil = !!d.is_oil_gas;
   const summ=[
     ['最新场内价', fmtNum(s.latest_price,4)],

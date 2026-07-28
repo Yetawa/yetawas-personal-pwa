@@ -93,8 +93,10 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 @media (max-width:760px){
   body{padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
   .topbar{flex-direction:column;align-items:stretch;gap:10px}
-  .top-actions{align-self:flex-end}
-  .theme-btn{align-self:flex-end}
+  .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
+  .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
+  .theme-btn{align-self:flex-start}
+  body{overflow-x:hidden}
   .panel{flex-direction:column;align-items:stretch;gap:10px}
   .field{width:100%}
   .field input,.field textarea,.field select{width:100%}
@@ -272,6 +274,8 @@ function sortRows(key){
 function render(meta){
   document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
   currentMeta=meta;
+  // 同步查询阈值到全局，供点击筛选卡片时 applyFilter 使用（否则会沿用默认值 1.5/-2，与卡片标签不一致）
+  currentThreshold=meta.threshold; currentDgate=meta.dgate;
   syncClock(meta);
   const rows=currentRows;
   const bar=document.getElementById('rankbar');
@@ -289,7 +293,7 @@ function renderBody(){
   const head=[
     {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
     {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
-    {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},
+    {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},{k:'index_change',l:'指数涨跌'},
     {k:'scale',l:'场内规模(亿)'},{k:'turnover',l:'成交额(万元)'},{k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},
     {k:'redeem_status',l:'赎回状态'},{k:'signal',l:'套利信号'}
   ];
@@ -311,6 +315,7 @@ function renderBody(){
       +'<td class="'+cls(r.premium)+'">'+fmtPct(r.premium,true)+'</td>'
       +'<td>'+fmtNum(r.est_nav,4)+'</td>'
     +'<td class="'+cls(r.est_premium)+'">'+fmtPct(r.est_premium,true)+'</td>'
+    +'<td class="'+cls(r.index_change)+'">'+fmtPct(r.index_change,true)+'</td>'
     +'<td>'+(r.scale!=null? Number(r.scale).toFixed(2):'—')+'</td>'
       +'<td>'+(r.turnover!=null? Number(r.turnover).toLocaleString('zh-CN',{maximumFractionDigits:0}) : '—')+'</td>'
       +'<td><span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(st||'—')+'</span></td>'
@@ -320,7 +325,7 @@ function renderBody(){
       +'</tr>';
   }).join('');
   const emptyMsg = currentFilter ? '当前筛选条件下没有符合条件的 LOF 基金' : '当前没有满足全部四个条件的 LOF 基金';
-  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+(rows.length? rowsHtml : '<tr><td colspan="17" style="text-align:center;color:var(--muted);padding:18px">'+emptyMsg+'</td></tr>');
+  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+(rows.length? rowsHtml : '<tr><td colspan="18" style="text-align:center;color:var(--muted);padding:18px">'+emptyMsg+'</td></tr>');
   document.getElementById('tablebox').style.display='block';
 }
 
