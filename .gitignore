@@ -24,3 +24,9 @@ rank_test.json
 # 推送锁状态文件（运行时生成，含当日推送占用标记，不应进仓库）
 .push_lock.json
 .push_lock.json.tmp
+
+# 磁盘持久化缓存（运行时生成，休眠/重启后回填用；不进仓库，避免提交过期数据）
+fund_arb_cache_api.json
+fund_arb_cache_api.json.tmp
+fund_arb_cache_data.json
+fund_arb_cache_data.json.tmp
