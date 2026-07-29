@@ -694,6 +694,34 @@ _HTTP_CACHE = {}
 _HTTP_CACHE_LOCK = threading.Lock()
 _HTTP_CACHE_TTL = 90  # 秒
 
+# ---- 数据源熔断器 ----
+# 腾讯K线/东财K线等上游不稳定时（如腾讯持续501），每只基金都要先打一次坏源
+# 再兜底，44只×1.1s/只累计7-8s。熔断器在连续失败3次后ban 60s，期间直接跳过
+# 该源走兜底，单只从1.1s降到0.15s。源恢复后ban期过期自动重试。
+_CB_FAIL_THRESH = 3
+_CB_BAN_SECS = 60
+_TX_KLINE_CB = {"name": "腾讯K线", "fails": 0, "ban_until": 0.0, "lock": threading.Lock()}
+_EM_KLINE_CB = {"name": "东财K线", "fails": 0, "ban_until": 0.0, "lock": threading.Lock()}
+
+
+def _cb_banned(cb):
+    return time.time() < cb["ban_until"]
+
+
+def _cb_fail(cb):
+    with cb["lock"]:
+        cb["fails"] += 1
+        if cb["fails"] >= _CB_FAIL_THRESH and cb["ban_until"] < time.time():
+            cb["ban_until"] = time.time() + _CB_BAN_SECS
+            print(f"    [熔断] {cb['name']} 连续失败 {cb['fails']} 次，熔断 {_CB_BAN_SECS}s")
+
+
+def _cb_ok(cb):
+    with cb["lock"]:
+        if cb["fails"] or cb["ban_until"]:
+            cb["fails"] = 0
+            cb["ban_until"] = 0.0
+
 
 def bj_now():
     """北京时间（UTC+8，中国不实行夏令时）。返回 naive datetime 表示北京墙钟。"""
@@ -796,6 +824,8 @@ def fetch_nav(code, n=120):
 
 
 def fetch_kline_eastmoney(secid, n=20, klt=101):
+    if _cb_banned(_EM_KLINE_CB):
+        raise RuntimeError("东财K线熔断中")
     fields2 = "f51,f52,f53,f54,f55,f56,f57,f58"
     hosts = ["https://push2his.eastmoney.com", "https://push2delay.eastmoney.com"]
     last_err = None
@@ -805,7 +835,7 @@ def fetch_kline_eastmoney(secid, n=20, klt=101):
                    f"&fields1=f1,f2,f3,f4,f5,f6&fields2={fields2}"
                    f"&klt={klt}&fqt=0&end=20500101&lmt={n}"
                    f"&ut=fa5fd1943c7b386f172d6893dbfba10b")
-            data = http_get_json(url, referer="https://quote.eastmoney.com/", timeout=15, retries=2)
+            data = http_get_json(url, referer="https://quote.eastmoney.com/", timeout=8, retries=1)
             if not isinstance(data, dict):
                 raise ValueError("东财返回非预期格式")
             klines = (data.get("data") or {}).get("klines", [])
@@ -819,9 +849,11 @@ def fetch_kline_eastmoney(secid, n=20, klt=101):
                 except (IndexError, ValueError):
                     pass
             out.sort()
+            _cb_ok(_EM_KLINE_CB)
             return out, f"东财({host.split('.')[0]})"
         except Exception as e:
             last_err = e
+    _cb_fail(_EM_KLINE_CB)
     raise last_err or Exception("东财 K 线无数据")
 
 
@@ -881,13 +913,21 @@ def fetch_gld_eu_series(n=400):
 
 
 def fetch_kline_tencent(symbol, n=20):
+    if _cb_banned(_TX_KLINE_CB):
+        raise RuntimeError("腾讯K线熔断中")
     url = (f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
            f"?param={symbol},day,,,{n},qfq")
-    data = http_get_json(url)
+    try:
+        data = http_get_json(url, retries=1)
+    except Exception as e:
+        _cb_fail(_TX_KLINE_CB)
+        raise
     if not isinstance(data, dict):
+        _cb_fail(_TX_KLINE_CB)
         return []
     node = (data.get("data") or {}).get(symbol)
     if not node:
+        _cb_fail(_TX_KLINE_CB)
         return []
     arr = node.get("qfqday") or node.get("day") or []
     out = []
@@ -897,6 +937,7 @@ def fetch_kline_tencent(symbol, n=20):
         except (IndexError, ValueError):
             pass
     out.sort()
+    _cb_ok(_TX_KLINE_CB)
     return out
 
 
@@ -905,7 +946,7 @@ def fetch_kline_sina(symbol, n=25):
     url = (f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php"
            f"/CN_MarketData.getKLineData?symbol={symbol}&scale=240&ma=no&datalen={n}")
     try:
-        data = http_get_json(url, referer="https://finance.sina.com.cn/", timeout=15, retries=3)
+        data = http_get_json(url, referer="https://finance.sina.com.cn/", timeout=8, retries=2)
     except Exception:
         return []
     if not isinstance(data, list) or not data:
@@ -980,12 +1021,13 @@ def _series_is_fresh(rows, max_gap_days=60):
 def fetch_price(em_sec, tx_sym, n=25):
     """LOF/ETF 场内价格。多源优先：东财 → 新浪 → 腾讯，取第一个『新鲜』的序列。
     单源若返回陈旧/断层数据（如腾讯对部分基金给出 2020→2026 的坏 kline），
-    自动向下一个源回退，避免看板出现数据断层。"""
-    sources = [
-        ("东财", lambda: fetch_kline_eastmoney(em_sec, n)),
-        ("新浪财经", lambda: (fetch_kline_sina(tx_sym, n), "新浪财经")),
-        ("腾讯财经", lambda: (fetch_kline_tencent(tx_sym, n), "腾讯财经")),
-    ]
+    自动向下一个源回退，避免看板出现数据断层。被熔断的源直接跳过。"""
+    sources = []
+    if not _cb_banned(_EM_KLINE_CB):
+        sources.append(("东财", lambda: fetch_kline_eastmoney(em_sec, n)))
+    sources.append(("新浪财经", lambda: (fetch_kline_sina(tx_sym, n), "新浪财经")))
+    if not _cb_banned(_TX_KLINE_CB):
+        sources.append(("腾讯财经", lambda: (fetch_kline_tencent(tx_sym, n), "腾讯财经")))
     last_err = None
     for name, fn in sources:
         try:
@@ -1012,15 +1054,19 @@ def fetch_price(em_sec, tx_sym, n=25):
 
 
 def fetch_price_tencent(tx_sym, n=15):
-    """场内历史价：腾讯K线(主) → 新浪K线(兜底)。单源 501/限频时自动切换，避免网页2整页打不开。"""
-    try:
-        r = fetch_kline_tencent(tx_sym, n)
-        if r:
-            return r, "腾讯财经"
-    except Exception as e:
-        url = getattr(e, "url", "")
-        print(f"    [价格] 腾讯K线失败({tx_sym}) {url}: {e}")
-    print(f"    [价格] 腾讯K线无数据，改用新浪K线兜底({tx_sym})")
+    """场内历史价：腾讯K线(主) → 新浪K线(兜底)。单源 501/限频时自动切换，避免网页2整页打不开。
+    腾讯被熔断时直接走新浪，省去每只1.1s的白等。"""
+    if not _cb_banned(_TX_KLINE_CB):
+        try:
+            r = fetch_kline_tencent(tx_sym, n)
+            if r:
+                return r, "腾讯财经"
+        except Exception as e:
+            url = getattr(e, "url", "")
+            print(f"    [价格] 腾讯K线失败({tx_sym}) {url}: {e}")
+    else:
+        print(f"    [价格] 腾讯K线熔断中，直接走新浪({tx_sym})")
+    print(f"    [价格] 改用新浪K线({tx_sym})")
     try:
         s = fetch_kline_sina(tx_sym, n)
         if s:
@@ -1682,6 +1728,12 @@ REDEEM_OPEN = ("开放赎回",)                   # 可赎回
 PURE_BOND_TYPES = ("债券型-长债", "债券型-中短债", "债券型-利率债", "债券型-信用债",
                    "QDII-纯债", "指数型-固收")
 
+# 非债基（网页3 用户硬条件）：在 PURE_BOND_TYPES 纯债之上，进一步剔除所有含债/固收基金。
+# 规则：类型名含「债」字（债券型-*、混合型-偏债、QDII-混合债 等）一律剔除；
+#       另显式剔除指数型-固收 / 指数型-债券 这类不含「债」字的固定收益品种。
+def is_bond_fund(ftype):
+    return ("债" in (ftype or "")) or (ftype in ("指数型-固收", "指数型-债券"))
+
 
 def signal_for_premium(premium, threshold=THRESHOLD, subscribe_status="", redeem_status=""):
     """套利信号：综合溢价方向与申赎通道，避免「场内交易/暂停申购」却提示「可申购套利」。
@@ -2334,6 +2386,8 @@ def _hydrate_from_disk():
             with open(CACHE_API_FILE, "r", encoding="utf-8") as f:
                 api = json.load(f)
             for k, v in api.items():
+                if k.startswith("top|"):
+                    continue    # 跳过 TOP 榜旧缓存，强制重算（避免规模过滤修复前旧数据残留）
                 Handler._API_CACHE[k] = tuple(v) if isinstance(v, list) and len(v) == 2 else v
         if os.path.exists(CACHE_DATA_FILE):
             with open(CACHE_DATA_FILE, "r", encoding="utf-8") as f:
@@ -2348,7 +2402,8 @@ def _hydrate_from_disk():
             if isinstance(fc, dict) and fc.get("data"):
                 _FLOAT_CAP_CACHE["ts"], _FLOAT_CAP_CACHE["data"] = fc.get("ts", 0.0), fc["data"]
         # TOP 套利榜全量快照回填（冷启动秒回历史候选，无需等全市场重算）
-        if os.path.exists(TOP_SNAP_FILE):
+        # 注意：规模过滤修复后首次启动需强制重算，暂跳过旧快照回填
+        if False and os.path.exists(TOP_SNAP_FILE):
             try:
                 with open(TOP_SNAP_FILE, encoding="utf-8") as _tf:
                     _s = json.load(_tf)
@@ -2574,28 +2629,38 @@ def fetch_float_market_cap():
     if now < _FLOAT_CAP_BACKOFF["until"]:
         return _FLOAT_CAP_CACHE["data"] or {}     # 退避期内：复用旧值，不重试
     out = {}
-    try:
-        url = ("https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=20000&po=1&np=1"
-               "&fltt=2&invt=2&fid=f3&fs=b:MK0021,b:MK0022,b:MK0023,b:MK0024"
-               "&fields=f12,f21&ut=7eea3edcaed734bea9cbfc24409ed989")
-        txt = http_get_text(url, referer="https://quote.eastmoney.com/", timeout=25, retries=2)
-        j = json.loads(txt)
-        for it in (j.get("data") or {}).get("diff") or []:
-            code = it.get("f12")
-            v = it.get("f21")
-            if code and v not in (None, "", "-"):
-                try:
-                    out[code] = float(v) / 1e8   # 元 → 亿元
-                except (ValueError, TypeError):
-                    pass
-    except Exception as e:
-        print(f"    [TOP榜] 场内流通市值批量获取失败（退避30min，复用旧值）: {e}")
+    # 东财 LOF 场内基金板块：MK0025-0028（非 ETF 的 MK0021-0024）。
+    # 每个板块独立 try-except（一个板块失败不影响其他），分页拉取。
+    for mk in ("MK0025", "MK0026", "MK0027", "MK0028"):
+        try:
+            for pn in range(1, 10):
+                url = (f"https://push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1"
+                       f"&fltt=2&invt=2&fid=f3&fs=b:{mk}"
+                       f"&fields=f12,f21&ut=7eea3edcaed734bea9cbfc24409ed989")
+                txt = http_get_text(url, referer="https://quote.eastmoney.com/", timeout=20, retries=2)
+                j = json.loads(txt)
+                items = (j.get("data") or {}).get("diff") or []
+                if not items:
+                    break
+                for it in items:
+                    code = it.get("f12")
+                    v = it.get("f21")
+                    if code and v not in (None, "", "-"):
+                        try:
+                            out[code] = float(v) / 1e8   # 元 → 亿元
+                        except (ValueError, TypeError):
+                            pass
+                if len(items) < 100:
+                    break   # 最后一页
+        except Exception as e:
+            print(f"    [TOP榜] 场内流通市值 {mk} 获取失败（跳过此板块）: {e}")
     if out:
         _FLOAT_CAP_CACHE.update(ts=now, data=out)
         _FLOAT_CAP_BACKOFF["until"] = 0.0
         _persist_data()                           # 落盘，使重启/限频窗口后仍可用旧值
         return out
     # 失败或空响应：进入退避，复用上一次好数据（可能为磁盘回填）
+    print(f"    [TOP榜] 场内流通市值全部板块失败（退避30min，复用旧值）")
     _FLOAT_CAP_BACKOFF["until"] = now + 1800
     return _FLOAT_CAP_CACHE["data"] or {}
 
@@ -2630,7 +2695,7 @@ def fetch_turnover(codes):
 # 对齐 haoetf/palmmicro：用户请求只做 filter+sort，不再触发全市场网络扫描。
 TOP_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_arb_cache_top.json")
 _TOP_SNAPSHOT = {"ts": 0.0, "date": None, "universe": 0, "tradable": 0,
-                "candidates": 0, "rows": []}
+                "candidates": 0, "filter_trace": {}, "rows": []}
 _TOP_SNAP_LOCK = _threading.Lock()
 
 def _persist_top_snapshot():
@@ -2683,6 +2748,7 @@ def serve_top_from_snapshot(date, threshold, dgate, top_n=20):
         return {"date": date, "threshold": threshold, "dgate": dgate,
                 "universe": snap["universe"], "tradable": snap["tradable"],
                 "candidates": snap["candidates"], "count": len(rows), "rows": rows,
+                "filter_trace": snap.get("filter_trace", {}),
                 "tz": "北京时间 (UTC+8)", "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
                 "server_ts": int(time.time()), "snapshot": True}
     return compute_top_arbitrage(date, threshold, dgate, top_n)
@@ -2702,16 +2768,15 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         target_date = bj_now().strftime("%Y-%m-%d")
     lof = fetch_all_lof_codes()                      # 缓存 12h，几乎瞬时
     codes = [c for c, _, _ in lof]
-    # 前置取数并行：行情/场内表/流通市值/汇率同时发起，消除串行 60s 超时悬崖
-    # （场内表、流通市值各自有 10min 内存缓存+退避，暖实例直接命中；冷实例也只取 max 而非 sum）
-    with ThreadPoolExecutor(max_workers=4) as _fe:
+    # 前置取数：流通市值串行优先（push2 分页请求对并发敏感，与行情/场内表并行时容易超时失败），
+    # 其余三项（行情/场内表/汇率）并行发起。
+    float_caps = fetch_float_market_cap()
+    with ThreadPoolExecutor(max_workers=3) as _fe:
         f_q = _fe.submit(fetch_lof_quotes, codes)
         f_m = _fe.submit(fetch_market_fund_table)    # 已降超时至 25s
-        f_fc = _fe.submit(fetch_float_market_cap)     # 限频自动退避复用旧值
         f_fx = _fe.submit(fetch_fx)
         quotes = f_q.result()
         market = f_m.result()
-        float_caps = f_fc.result()
         fx_map = f_fx.result()
 
     # -- 粗筛：可交易 + 非纯债 + 有净值 + 二级市场流通规模 ≥ 1 亿元 即进入精算候选 --
@@ -2721,26 +2786,45 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     # 官方 -1.14% 但估算 +2.86%、501312 华宝海外科技 官方 -1.35% 但估算 +1.92%、
     # 161729 招商瑞利 官方 -0.35% 但估算 -2.29%，均因官方溢价小未进候选池。故对
     # 所有可交易、非纯债、有净值的基金精算估算溢价，再由终筛四条件 + 排序取 TOP。
-    # 二级市场流通规模（场内流通市值，亿元）：东财 push2 全市场一次拉取，提前在此
-    # 做初筛（规模 < 1 亿直接剔除），避免对无套利流动性价值的迷你基做昂贵精算；
-    # push2 未覆盖（scale=None）的基金仍保留进候选，交给终筛的 F10 总规模兜底判断。
-    float_caps = fetch_float_market_cap()
+    # 二级市场流通规模（场内流通市值，亿元）：东财 push2 LOF 板块(MK0025-0028)全市场拉取，
+    # 在此做初筛——push2 有规模且 < 1 亿直接剔除；push2 未覆盖(sc=None)的也剔除，
+    # 因为东财场内板块未收录 = 场内不活跃，二级市场规模大概率不达标（用户硬条件 > 1 亿）。
+    # 仅当 push2 整体失败（float_caps 为空字典）时，None 回退到终筛 F10 总规模兜底。
+    fc_available = bool(float_caps)   # push2 是否正常返回了数据
+    print(f"    [TOP榜] float_caps={len(float_caps)}只 fc_available={fc_available}", flush=True)
     tradable = 0
+    n_after_bond = 0
+    n_after_nav = 0
+    n_after_scale = 0
     cands = []
     for code, name, ftype in lof:
         q = quotes.get(code)
         if not q or q["volume"] <= 0:
             continue        # 条件1：场内无行情/无成交
         tradable += 1
-        if ftype in PURE_BOND_TYPES:
-            continue        # 纯债 LOF：计入可交易统计，但不参与套利候选/精算/入榜（用户要求网页3剔除）
+        if is_bond_fund(ftype):
+            continue        # 非债基：债基/含债/固收类型剔除（用户硬条件，不参与候选/精算/入榜）
+        n_after_bond += 1
         mk = market.get(code)
         if not mk or not mk["nav"]:
-            continue
+            continue        # 条件：有最新净值
+        n_after_nav += 1
         sc = float_caps.get(code)
         if sc is not None and sc < 1.0:
-            continue        # 二级市场流通规模 < 1 亿：过早剔除，减少不必要的精算开销
+            continue        # 二级市场规模 < 1 亿：剔除
+        if sc is None and fc_available:
+            continue        # push2 覆盖外(场内不活跃)→ 二级规模大概率不达 1 亿，剔除
+        n_after_scale += 1
         cands.append(code)
+    # 粗筛漏斗：逐阶段剔除数量，便于网页透明展示「为什么候选这么多/这么少」并核对规模过滤是否生效
+    filter_trace = {
+        "universe": len(lof),
+        "tradable": tradable,
+        "excluded_bond": tradable - n_after_bond,      # 非债基剔除
+        "excluded_no_nav": n_after_bond - n_after_nav,  # 无净值剔除
+        "excluded_scale": n_after_nav - n_after_scale,  # 二级规模<1亿/不明 剔除
+        "candidates": len(cands),                       # 进入精算的候选（非债基 + 规模≥1亿 + 有净值）
+    }
 
     # -- 精算：复用排行表算法（估算溢价） --
     rows = []
@@ -2792,12 +2876,13 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     # 填充全量快照（阈值前），使 /api/top 对任意 threshold/dgate 秒回；并落盘
     with _TOP_SNAP_LOCK:
         _TOP_SNAPSHOT.update(ts=time.time(), date=target_date, universe=len(lof),
-                             tradable=tradable, candidates=len(cands), rows=base_rows)
+                             tradable=tradable, candidates=len(cands),
+                             filter_trace=filter_trace, rows=base_rows)
     _persist_top_snapshot()
     out = _top_finalize(base_rows, threshold, dgate, top_n)
     return {"date": target_date, "threshold": threshold, "dgate": dgate,
             "universe": len(lof), "tradable": tradable, "candidates": len(cands),
-            "count": len(out), "rows": out,
+            "count": len(out), "rows": out, "filter_trace": filter_trace,
             "tz": "北京时间 (UTC+8)",
             "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
             "server_ts": int(time.time()), "snapshot": False}
@@ -3703,8 +3788,8 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <div class="note">
 <b>说明</b>
 <ul>
-  <li>全市场 LOF 自动扫描 → 四条件过滤 → 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小。估算算法与排行表一致。</li>
-  <li><b>筛选条件（同时满足）</b>：① 当天 A 股场内可交易（有行情且有成交）· ② 规模 ≥ 1 亿元 · ③ 限购 &gt; 1 元或不限购（暂停申购不入选）· ④ 估算溢价 ≥ 溢价阈值 或 估算溢价 &lt; 折价阈值且开放赎回。</li>
+  <li>全市场 LOF 自动扫描 → 粗筛（可交易+非债基+规模≥1亿+有净值）→ 精算估算溢价 → 终筛（申赎/限购/阈值）→ 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小。估算算法与排行表一致。</li>
+  <li><b>粗筛条件（同时满足）</b>：① 当天 A 股场内可交易（有行情且有成交）· ② 非债基（剔除债基/含债/固收类型）· ③ 二级市场可交易规模（东财场内流通市值）≥ 1 亿元 · ④ 有最新净值。终筛再加：⑤ 限购 &gt; 1 元或不限购（暂停申购不入选）· ⑥ 估算溢价 ≥ 溢价阈值 或 估算溢价 &lt; 折价阈值且开放赎回。</li>
   <li><b>成交额</b>：默认排序第③位的成交额列反映流动性（来源腾讯当日行情字段[37]；盘前查看即为上一交易日全量成交）。</li>
   <li><b>估算溢价</b> = (价格 - 估算净值) / 估算净值；QDII 按海外标的+汇率修正，国内基金取最近净值。红=溢价，绿=折价。</li>
   <li>「暂停申购」不属于可申购状态（开放申购 / 限大额申购），不满足条件③，即使深折价也不入榜（条件为同时满足）。</li>
@@ -3825,8 +3910,9 @@ function render(meta){
   bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
     +'<div class="status-item"><span class="k">全市场 LOF</span><span class="v">'+esc(meta.universe)+' 只</span></div>'
     +'<div class="status-item"><span class="k">场内可交易</span><span class="v">'+esc(meta.tradable)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">粗筛候选</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">四条件过滤后入榜</span><span class="v">'+esc(meta.count)+' 只</span></div>';
+    +'<div class="status-item"><span class="k">剔除债基</span><span class="v">'+esc((meta.filter_trace&&meta.filter_trace.excluded_bond)||0)+' 只</span></div>'
+    +'<div class="status-item"><span class="k">粗筛候选(非债基+规模≥1亿)</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
+    +'<div class="status-item"><span class="k">入榜</span><span class="v">'+esc(meta.count)+' 只</span></div>';
   renderSummary();
   defaultSort();
 }
@@ -3961,6 +4047,10 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        # HTML 页面禁用缓存：改完代码重启服务后，浏览器普通刷新即可拿到新版，
+        # 避免“本地 8000 端还是老版、需要硬刷新”的困扰（API 仍可被浏览器/中间层按需缓存）
+        if "text/html" in ctype:
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         # 安全响应头：防 MIME 嗅探 / 点击劫持 / referrer 泄露 / 非法嵌入
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")

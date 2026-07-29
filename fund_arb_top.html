@@ -160,8 +160,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="note">
 <b>说明</b>
 <ul>
-  <li>全市场 LOF 自动扫描 → 四条件过滤 → 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小。估算算法与排行表一致。</li>
-  <li><b>筛选条件（同时满足）</b>：① 当天 A 股场内可交易（有行情且有成交）· ② 规模 ≥ 1 亿元 · ③ 限购 &gt; 1 元或不限购（暂停申购不入选）· ④ 估算溢价 ≥ 溢价阈值 或 估算溢价 &lt; 折价阈值且开放赎回。</li>
+  <li>全市场 LOF 自动扫描 → 粗筛（可交易+非债基+规模≥1亿+有净值）→ 精算估算溢价 → 终筛（申赎/限购/阈值）→ 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小。估算算法与排行表一致。</li>
+  <li><b>粗筛条件（同时满足）</b>：① 当天 A 股场内可交易（有行情且有成交）· ② 非债基（剔除债基/含债/固收类型）· ③ 二级市场可交易规模（东财场内流通市值）≥ 1 亿元 · ④ 有最新净值。终筛再加：⑤ 限购 &gt; 1 元或不限购（暂停申购不入选）· ⑥ 估算溢价 ≥ 溢价阈值 或 估算溢价 &lt; 折价阈值且开放赎回。</li>
   <li><b>成交额</b>：默认排序第③位的成交额列反映流动性（来源腾讯当日行情字段[37]；盘前查看即为上一交易日全量成交）。</li>
   <li><b>估算溢价</b> = (价格 - 估算净值) / 估算净值；QDII 按海外标的+汇率修正，国内基金取最近净值。红=溢价，绿=折价。</li>
   <li>「暂停申购」不属于可申购状态（开放申购 / 限大额申购），不满足条件③，即使深折价也不入榜（条件为同时满足）。</li>
@@ -283,8 +283,9 @@ function render(meta){
   bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
     +'<div class="status-item"><span class="k">全市场 LOF</span><span class="v">'+esc(meta.universe)+' 只</span></div>'
     +'<div class="status-item"><span class="k">场内可交易</span><span class="v">'+esc(meta.tradable)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">粗筛候选</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">四条件过滤后入榜</span><span class="v">'+esc(meta.count)+' 只</span></div>';
+    +'<div class="status-item"><span class="k">剔除债基</span><span class="v">'+esc((meta.filter_trace&&meta.filter_trace.excluded_bond)||0)+' 只</span></div>'
+    +'<div class="status-item"><span class="k">粗筛候选(非债基+规模≥1亿)</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
+    +'<div class="status-item"><span class="k">入榜</span><span class="v">'+esc(meta.count)+' 只</span></div>';
   renderSummary();
   defaultSort();
 }
