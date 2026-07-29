@@ -129,7 +129,7 @@ UNDERLYING_MAP = {
     "161226": {"sina_futures": "AG0", "sa": "AG0", "use_fx": False},
     "160644": _u("KWEB"),
     "501025": _u("FXI"), "162719": _u("IEO"), "161125": _u("SPY"), "161128": _u("XLK"),
-    "501018": _u("USO"), "160723": _u("USO"), "161129": _u("USO"), "501225": _u("SOXX"),
+    "501018": _u("USO"), "161129": _u("USO"), "501225": _u("SOXX"),
     "164824": _u("INDA"),
 }
 
@@ -211,6 +211,21 @@ COMPOSITE_UNDERLYING = {
         {"sa": "GLD", "w": 0.836},
         {"sa": "SLV", "w": 0.084},
         {"sa": "USO", "w": 0.080},
+    ],
+    # 160723 嘉实原油(QDII-LOF)：业绩基准=WTI原油价格，主要投资于跟踪原油价格的公募基金(含ETF)。
+    # 采用参考站(haoetf)口径的「原油ETF篮子」：CRUD/USO/OILK/BNO/BRNT 等权加权，
+    # 截图实证估值误差 0.01~0.21%，远优于原单一 USO 映射（USO 单标有 contango 展期损耗偏离）。
+    # 权重为截图披露值(合计~93%)，代码第659行按 total_w 自动归一，无需手动归一到 1.0；
+    # 第6只ETF截图未披露，暂略。复合成分强制 w=1.0/lag=1（compute/compute_one_rank 已对
+    # COMPOSITE_UNDERLYING 统一处理），不再乘单一标的 weight_for/lag_for，避免估值失真。
+    # 注：CRUD/OILK/BRNT 为相对小众美股ETF，若价格源取不到，_composite_xop_uncached 会
+    # try/except 跳过该成分、剩余成分仍合成，不影响运行（仅略偏）。
+    "160723": [
+        {"sa": "CRUD", "w": 0.1887},
+        {"sa": "USO",  "w": 0.1878},
+        {"sa": "OILK", "w": 0.1854},
+        {"sa": "BNO",  "w": 0.1837},
+        {"sa": "BRNT", "w": 0.1855},
     ],
 }
 
@@ -1902,8 +1917,12 @@ def compute(code, days=30, display_days=None, start="", end="", underlying=None,
     print(f"    标的 [{xsrc}] {len(xop)} 条，最新: {sorted(xop.items())[-1] if xop else None}")
     xop_map = dict(xop)
     fx_map = fx
-    w_use = weight_for(und, code=code) if und else None
-    lag_use = lag_for(und, code=code) if und else 1
+    if code in COMPOSITE_UNDERLYING:
+        # 复合序列已按权重合成，下游 w/lag 须用 1.0/1（与 compute_one_rank 一致）
+        w_use, lag_use = 1.0, 1
+    else:
+        w_use = weight_for(und, code=code) if und else None
+        lag_use = lag_for(und, code=code) if und else 1
     use_fx_flag = und.get("use_fx", True) if und else True
     seed_xop = merge_seed_xop(xop_map) if und else 0
     seed_fx = merge_seed_fx(fx_map)
@@ -2109,8 +2128,14 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
                 xop_map, xsrc = resolve_xop(code, und, n)
                 merge_seed_xop(xop_map)
                 use_fx = und.get("use_fx", True)
-                w = weight_for(und, code=code)
-                lag = lag_for(und, code=code)
+                if code in COMPOSITE_UNDERLYING:
+                    # 复合序列(_build_composite_xop)已按权重合成归一化日收益累积，
+                    # 下游 w/lag 公式须用 w=1.0、lag=1，否则会再乘单一标的权重复调导致估值离谱
+                    w = 1.0
+                    lag = 1
+                else:
+                    w = weight_for(und, code=code)
+                    lag = lag_for(und, code=code)
             # 严格 T-1 对齐：以目标日 d 为 T，取 T-1 日官方净值作锚
             # FV(T) = NAV(T-1) × [1 + w × (P - 1)]
             # P = XOP(T)/XOP(T-1) × (FX(T)/FX(T-1) if use_fx else 1)
@@ -2792,6 +2817,21 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     # 仅当 push2 整体失败（float_caps 为空字典）时，None 回退到终筛 F10 总规模兜底。
     fc_available = bool(float_caps)   # push2 是否正常返回了数据
     print(f"    [TOP榜] float_caps={len(float_caps)}只 fc_available={fc_available}", flush=True)
+    # 粗筛前并发预取 push2 未覆盖基金的 F10 总规模：东财 LOF 板块(MK0025-0028)覆盖不全，
+    # 大量二级规模≥1亿 的 LOF 不在其中；若直接剔除会漏候选。用 F10 总规模兜底预取，
+    # 使粗筛规模判断更准确，同时避免这些基金进入精算拖慢（终筛亦可复用此结果）。
+    f10_scale = {}
+    pending = [c for c, _, _ in lof if c not in float_caps]
+    if pending:
+        print(f"    [TOP榜] 并发预取 {len(pending)} 只 push2 未覆盖基金的 F10 规模...", flush=True)
+        with ThreadPoolExecutor(max_workers=8) as _fe2:
+            _futs = {_fe2.submit(fetch_fund_scale, c): c for c in pending}
+            for _f in as_completed(_futs):
+                _c = _futs[_f]
+                try:
+                    f10_scale[_c] = _f.result()
+                except Exception:
+                    f10_scale[_c] = None
     tradable = 0
     n_after_bond = 0
     n_after_nav = 0
@@ -2809,11 +2849,12 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         if not mk or not mk["nav"]:
             continue        # 条件：有最新净值
         n_after_nav += 1
-        sc = float_caps.get(code)
-        if sc is not None and sc < 1.0:
-            continue        # 二级市场规模 < 1 亿：剔除
-        if sc is None and fc_available:
-            continue        # push2 覆盖外(场内不活跃)→ 二级规模大概率不达 1 亿，剔除
+        sc = float_caps.get(code) if code in float_caps else f10_scale.get(code)
+        if sc is None:
+            continue        # push2 与 F10 均无规模数据，无法判断，剔除
+        if sc < 1.0:
+            continue        # 二级/总规模 < 1 亿：剔除
+        # 注：push2 未覆盖的基金已用 F10 总规模兜底，不再一刀切剔除（覆盖不全会漏候选）
         n_after_scale += 1
         cands.append(code)
     # 粗筛漏斗：逐阶段剔除数量，便于网页透明展示「为什么候选这么多/这么少」并核对规模过滤是否生效
@@ -2856,7 +2897,9 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
             continue
         scale = float_caps.get(code)
         if scale is None:
-            scale = fetch_fund_scale(code)   # 单只回落：push2 未覆盖/字段缺失时取总规模兜底
+            scale = f10_scale.get(code)      # 复用粗筛预取的 F10 规模
+        if scale is None:
+            scale = fetch_fund_scale(code)   # 单只回落：仍缺失时再取总规模兜底
         r["scale"] = scale
         r["subscribe_status"] = subscribe
         r["redeem_status"] = redeem
