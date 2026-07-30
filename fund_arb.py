@@ -1970,7 +1970,10 @@ def compute(code, days=30, display_days=None, start="", end="", underlying=None,
                     print(f"    [今日行] K线未含当日，已用盘中实时价 {price_map[today]} 补 {today}")
             except Exception as e:
                 print(f"    [今日行] 实时价获取失败: {e}")
-        if today not in xop_map:
+        if today not in xop_map and code not in COMPOSITE_UNDERLYING:
+            # 复合篮子 xop 为归一化序列，而 und 是单一标的（如 DBC），其腾讯实时绝对价
+            # 与归一化序列量级错配；且复合篮子含美股/商品 ETF，日间≈隔夜收盘、无实时变动意义。
+            # 故跳过 live 微调，由 build_rows 用上一交易日 xop 推算今日净值（量级正确）。
             _lx = _live_xop_price(und)
             if _lx is not None:
                 xop_map[today] = _lx
@@ -2158,7 +2161,8 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
                 # 使估算净值随盘中变动（对标 haoetf「实时估值=最新估值+实时期货微调」）。
                 # 仅对"查看当日"生效；美股/商品标的日间实时价≈收盘，结果近似不变，安全。
                 xop_t_eff = xop_t
-                if d == bj_now().strftime("%Y-%m-%d") and und.get("tx"):
+                if d == bj_now().strftime("%Y-%m-%d") and und.get("tx") and code not in COMPOSITE_UNDERLYING:
+                    # 复合篮子 xop 为归一化序列，und 单一标的实时绝对价与之量级错配，跳过 live 微调
                     live = _live_xop_price(und)
                     if live and live > 0:
                         xop_t_eff = live
@@ -4449,8 +4453,14 @@ def _is_trading_day(d):
     return d.weekday() < 5
 
 def _is_limited_fund(r):
-    """是否限购：限大额申购，或存在有限购金额。"""
-    return (r.get("subscribe_status") == "限大额申购") or (r.get("purchase_limit") is not None)
+    """是否「完全买不到」：暂停申购，或可买金额=0（purchase_limit==0）。
+    限大额申购（仍有每日额度可买）仍可套利，照常推送，不在此列。"""
+    if r.get("subscribe_status") == "暂停申购":
+        return True
+    limit = r.get("purchase_limit")
+    if limit is not None and limit == 0:
+        return True
+    return False
 
 def _push_est(r):
     e = r.get("est_premium")
@@ -4498,6 +4508,10 @@ def build_arb_push_text(target_date=None):
         max_n = int(os.environ.get("FEISHU_PUSH_MAX", "5"))
     except ValueError:
         max_n = 5
+    # 完全限申购（暂停申购 / 可买金额=0）无法买入，默认从播报中剔除；
+    # 限大额申购（仍有每日额度）仍可套利，照常推送。
+    # 设 FEISHU_PUSH_EXCLUDE_LIMITED=0 可恢复「包含完全限购」
+    exclude_limited = os.environ.get("FEISHU_PUSH_EXCLUDE_LIMITED", "1") not in ("0", "false", "False")
     items = []   # (row, src)
     # 网页2：后台默认监控清单
     try:
@@ -4505,7 +4519,7 @@ def build_arb_push_text(target_date=None):
             if r.get("error"):
                 continue
             est = _push_est(r)
-            if abs(est) > threshold:
+            if abs(est) > threshold and not (exclude_limited and _is_limited_fund(r)):
                 items.append((r, "ranking"))
     except Exception as e:
         print(f"[Feishu] 网页2扫描失败: {e}")
@@ -4522,7 +4536,7 @@ def build_arb_push_text(target_date=None):
         scale_map = {r["code"]: r.get("scale") for r in r3_rows if r.get("scale") is not None}
         for r in r3_rows:
             est = _push_est(r)
-            if abs(est) > threshold:
+            if abs(est) > threshold and not (exclude_limited and _is_limited_fund(r)):
                 items.append((r, "top"))
     except Exception as e:
         print(f"[Feishu] 网页3扫描失败: {e}")
@@ -4540,6 +4554,8 @@ def build_arb_push_text(target_date=None):
                 pass
             max_row = None; max_abs = -1.0
             for r in (r3_rows or []):
+                if exclude_limited and _is_limited_fund(r):
+                    continue
                 e2 = _push_est(r)
                 if e2 is not None and abs(e2) > max_abs:
                     max_abs = abs(e2); max_row = r
@@ -4560,20 +4576,21 @@ def build_arb_push_text(target_date=None):
         else:
             seen[c] = (r, src)
     uniq = list(seen.values())
-    # 优先级：①网页2>网页3 ②溢价>折价 ③限购>不限购 ④估算溢价高>低
+    # 优先级：①网页2>网页3 ②溢价>折价 ③估算溢价高>低（限购已在上面剔除）
     uniq.sort(key=lambda it: (
         0 if it[1] == "ranking" else 1,
         0 if _push_est(it[0]) >= 0 else 1,
-        0 if _is_limited_fund(it[0]) else 1,
         -abs(_push_est(it[0])),
     ))
     pick = uniq[:max_n]
+    exclude_note = "（已剔除暂停申购）" if exclude_limited else ""
     lines = [f"🔔 LOF 套利机会播报（{target_date} 14:45）",
-             f"阈值 |估算溢价|>{threshold}% · 命中 {len(uniq)} 只，推送前 {len(pick)} 只：", ""]
+             f"阈值 |估算溢价|>{threshold}%{exclude_note} · 命中 {len(uniq)} 只，推送前 {len(pick)} 只：", ""]
     for i, (r, src) in enumerate(pick, 1):
         est = _push_est(r)
         typ = "溢价" if est >= 0 else "折价"
-        lim = "限购" if _is_limited_fund(r) else "不限购"
+        st = r.get("subscribe_status") or "开放申购"
+        lim = "限大额" if st == "限大额申购" else ("暂停申" if st == "暂停申购" else "开放")
         scale = f"{r.get('scale'):.2f}亿" if isinstance(r.get('scale'), (int, float)) else "—"
         turn = f"{r.get('turnover'):.0f}万" if isinstance(r.get('turnover'), (int, float)) else "—"
         srcname = "网页2监控" if src == "ranking" else "网页3TOP"
