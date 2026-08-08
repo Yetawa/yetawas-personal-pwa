@@ -3101,6 +3101,7 @@ PAGE_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta 
   <div class="top-actions">
     <a class="theme-btn" href="/ranking" title="基金溢价排行表">排行表</a>
     <a class="theme-btn" href="/top" title="全市场 LOF TOP 套利机会">TOP套利</a>
+    <a class="theme-btn" href="/pivot" title="口袋支点量化选股">口袋支点</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
@@ -3469,6 +3470,7 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
   <div class="top-actions">
     <a class="theme-btn" href="/" title="返回单基金套利看板">套利看板</a>
     <a class="theme-btn" href="/top" title="全市场 LOF TOP 套利机会">TOP套利</a>
+    <a class="theme-btn" href="/pivot" title="口袋支点量化选股">口袋支点</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
@@ -3811,6 +3813,7 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
   <div class="top-actions">
     <a class="theme-btn" href="/" title="单基金套利看板">套利看板</a>
     <a class="theme-btn" href="/ranking" title="基金溢价排行表">排行表</a>
+    <a class="theme-btn" href="/pivot" title="口袋支点量化选股">口袋支点</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
@@ -4079,6 +4082,16 @@ self.addEventListener('fetch',e=>{
 # ---------------------------------------------------------------------------
 # HTTP 服务
 # ---------------------------------------------------------------------------
+PAGE4_HTML = (
+    '<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="theme-color" content="#0d1117">\n<link rel="manifest" href="/manifest.json">\n<link rel="apple-touch-icon" href="/icon.svg">\n<title>口袋支点量化选股 V1.0</title>\n<style>'
+    + COMMON_CSS
+    + '</style></head><body>\n'
+    + '<div class="wrap">\n<div class="topbar">\n  <div class="titles">\n    <h1>口袋支点量化选股 <span class="ver">V1.0</span></h1>\n    <div class="sub">基于欧奈尔 CAN SLIM · 米勒维尼趋势模板/VCP · 斯泰恩超级强势股，全市场扫描口袋支点买点。每交易日 14:50（收盘前 10 分钟）自动更新。</div>\n  </div>\n  <div class="top-actions">\n    <a class="theme-btn" href="/" title="LOF/ETF 套利数据看板">套利看板</a>\n    <a class="theme-btn" href="/ranking" title="基金溢价排行表">排行表</a>\n    <a class="theme-btn" href="/top" title="全市场 LOF TOP 套利机会">TOP套利</a>\n    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>扫描中</span>\n    <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>\n  </div>\n</div>\n\n<div class="tzline">数据更新时间（北京时间）<b id="updated">—</b><span id="elapsedInfo"></span></div>\n\n<div class="panel">\n  <div class="field"><label>最低评分</label><input id="minScore" value="0" type="number" min="0" max="100" step="5"></div>\n  <div class="field"><label>最低 RS 评级</label><input id="minRs" value="0" type="number" min="0" max="99" step="5"></div>\n  <div class="field"><label>趋势模板下限</label><select id="minTt">\n    <option value="0">不限</option>\n    <option value="6">≥ 6 条</option>\n    <option value="7">≥ 7 条</option>\n    <option value="8">8 条全过</option>\n  </select></div>\n  <div class="field"><label>信号分级</label><select id="fGrade">\n    <option value="">全部</option>\n    <option value="S">S 级（全优）</option>\n    <option value="A">A 级（模板全过）</option>\n    <option value="B">B 级</option>\n    <option value="C">C 级（观察）</option>\n  </select></div>\n  <button id="btn" onclick="applyFilter()">筛选</button>\n  <button id="rescanBtn" onclick="rescan()" style="background:var(--panel);color:var(--title);border:1px solid var(--border)">立即重扫</button>\n  <div id="pick-count" class="fund-title"></div>\n</div>\n\n<div id="statusbar" class="statusbar" style="display:none"></div>\n<div id="summary" class="summary"></div>\n<div id="loading">加载中…</div>\n<div id="err"></div>\n<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>\n\n<div class="note">\n<b>方法论与用法</b>\n<ul>\n  <li><b>口袋支点</b>（Morales &amp; Kacher）：当日成交量 &gt; 过去 10 日所有<b>下跌日</b>的最大成交量，且收阳、实体阳线、收在振幅上半部、站上 50 日线、贴近 10 日线、未过度延伸、未跳空追高、非涨停 —— 共 13 条硬条件全过才算命中。</li>\n  <li><b>趋势模板 8 条</b>（Minervini 第二阶段）：现价 &gt; 150/200 日线、150 &gt; 200 日线、200 日线上行 1 个月、50 &gt; 150 &gt; 200 多头排列、现价 &gt; 50 日线、高于 52 周低点 30%、距 52 周高点 25% 内、RS ≥ 70。</li>\n  <li><b>评分权重</b>（2024-11~2026-07 全市场 32326 个信号回测标定）：趋势模板 40 + RS 22 + 支点质量 15 + VCP 10 + 距高点 8 + 行业 5。实证：趋势模板 8/8 超额 +2.22%，RS 80-90 超额 +2.05%，<b>大盘空头环境超额 -2.95%（择时优先级最高）</b>。</li>\n  <li><b>离场规则</b>：8% 硬止损（Minervini 铁律）+ 收盘跌破 50 日线离场，<b>不设固定止盈</b> —— 回测证明 25% 止盈会把最优组收益从 6.0% 砍到 4.5%。仓位按单笔 1% 风险预算反推。</li>\n  <li>大盘为<b>空仓/防御</b>时信号天然稀少，属纪律性表现，不是程序故障。本页为量化信号提示，不构成投资建议。</li>\n</ul>\n</div>\n</div>'
+    + '<script>'
+    + 'let RAW=null, POLL=null;\nconst GRADE_COLORS={"S":"#e6394a","A":"#fa8c16","B":"#1f6feb","C":"#8c8c8c"};\n\nfunction applyTheme(t){\n  document.documentElement.setAttribute(\'data-theme\', t);\n  const icon=document.getElementById(\'themeIcon\'), lbl=document.getElementById(\'themeLbl\');\n  if(icon) icon.textContent=(t===\'light\')?\'☀️\':\'🌙\';\n  if(lbl) lbl.textContent=(t===\'light\')?\'日间\':\'夜间\';\n  try{ localStorage.setItem(\'arb_theme\',t); }catch(e){}\n}\nfunction toggleTheme(){\n  applyTheme(document.documentElement.getAttribute(\'data-theme\')===\'light\'?\'dark\':\'light\');\n}\n(function(){ let t=\'dark\'; try{ t=localStorage.getItem(\'arb_theme\')||\'dark\'; }catch(e){} applyTheme(t); })();\n\nfunction esc(s){ return String(s==null?"":s).replace(/[&<>"\']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;","\'":"&#39;"}[c])); }\nfunction fmtPct(v,plus){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+Number(v).toFixed(2)+"%"; }\nfunction cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }\nfunction fmtAmt(w){ if(w==null)return "—"; return w>=10000?(w/10000).toFixed(2)+"亿":Math.round(w)+"万"; }\n\nasync function load(){\n  try{\n    const r=await fetch(\'/api/pivot?t=\'+Date.now());\n    const d=await r.json();\n    if(d.error) throw new Error(d.error);\n    RAW=d;\n    render(d);\n    // 扫描进行中 → 轮询进度\n    if(d.scanning){\n      document.getElementById(\'staleBadge\').style.display=\'inline-flex\';\n      if(!POLL) POLL=setInterval(load,4000);\n    }else{\n      document.getElementById(\'staleBadge\').style.display=\'none\';\n      if(POLL){ clearInterval(POLL); POLL=null; }\n    }\n  }catch(e){\n    document.getElementById(\'loading\').style.display=\'none\';\n    document.getElementById(\'err\').textContent=\'加载失败：\'+e.message;\n  }\n}\n\nfunction render(d){\n  document.getElementById(\'loading\').style.display=\'none\';\n  document.getElementById(\'err\').textContent=\'\';\n  document.getElementById(\'updated\').textContent=d.updated||\'—\';\n  const ei=document.getElementById(\'elapsedInfo\');\n  if(d.scanning){\n    const p=d.progress||{};\n    ei.textContent=\'\u3000｜\u3000正在扫描：\'+(p.phase||\'\')+\' \'+(p.done||0)+\'/\'+(p.total||0);\n  }else if(d.elapsed!=null){\n    ei.textContent=\'\u3000｜\u3000本次扫描耗时 \'+d.elapsed+\' 秒，覆盖 \'+((d.stats&&d.stats.universe)||0)+\' 只个股\';\n  }else{ ei.textContent=\'\'; }\n\n  // ---- 大盘状态条 ----\n  const m=d.market||{};\n  const bar=document.getElementById(\'statusbar\');\n  if(m.state){\n    const good=(m.state===\'进攻\'), bad=(m.state===\'空仓\'||m.state===\'防御\');\n    bar.className=\'statusbar \'+(good?\'ok\':(bad?\'warn\':\'info\'));\n    bar.style.display=\'flex\';\n    const col=good?\'#52c41a\':(bad?\'#ff4d4f\':\'#fa8c16\');\n    bar.innerHTML=\'<div class="status-item"><span class="status-label">大盘状态</span>\'\n      +\'<span class="badge" style="background:\'+col+\'22;color:\'+col+\';border:1px solid \'+col+\'55">\'+esc(m.state)+\'</span></div>\'\n      +\'<div class="status-item"><span class="status-label">市场健康度</span><span>\'+(m.score!=null?m.score:\'—\')+\' / 100</span></div>\'\n      +\'<div class="status-item"><span class="status-label">建议仓位上限</span><span>\'+(m.max_position!=null?m.max_position+\'%\':\'—\')+\'</span></div>\'\n      +\'<div class="status-item"><span class="status-label">25日分销日</span><span>\'+(m.dd_count!=null?m.dd_count+\' 个\':\'—\')+\'</span></div>\'\n      +\'<div class="status-item" style="margin-left:auto;color:var(--muted)">\'+esc(m.detail||\'\')+\'</div>\';\n  }else{ bar.style.display=\'none\'; }\n\n  // ---- 统计卡片（可点击筛选分级）----\n  const st=d.stats||{}, g=st.grade||{};\n  const cur=document.getElementById(\'fGrade\').value;\n  const cards=[[\'\',\'命中总数\',st.picks!=null?st.picks:0],\n               [\'S\',\'S 级（全优）\',g.S||0],[\'A\',\'A 级（模板全过）\',g.A||0],\n               [\'B\',\'B 级\',g.B||0],[\'C\',\'C 级（观察）\',g.C||0]];\n  document.getElementById(\'summary\').innerHTML=cards.map(function(x){\n    const on=(cur===x[0])?\' active\':\'\';\n    const c=GRADE_COLORS[x[0]];\n    return \'<div class="sitem clickable\'+on+\'" onclick="pickGrade(\\\'\'+x[0]+\'\\\')">\'\n      +\'<div class="l">\'+x[1]+\'</div><div class="v"\'+(c?\' style="color:\'+c+\'"\':\'\')+\'>\'+x[2]+\'</div></div>\';\n  }).join(\'\');\n\n  applyFilter();\n}\n\nfunction pickGrade(g){\n  document.getElementById(\'fGrade\').value=g;\n  render(RAW);\n}\n\nfunction applyFilter(){\n  if(!RAW) return;\n  const minScore=parseFloat(document.getElementById(\'minScore\').value)||0;\n  const minRs=parseFloat(document.getElementById(\'minRs\').value)||0;\n  const minTt=parseInt(document.getElementById(\'minTt\').value)||0;\n  const fg=document.getElementById(\'fGrade\').value;\n  const rows=(RAW.picks||[]).filter(function(p){\n    return p.score>=minScore && p.rs>=minRs && p.trend_pass>=minTt && (!fg||p.grade===fg);\n  });\n  document.getElementById(\'pick-count\').innerHTML=rows.length+\' 只 <small>符合当前条件</small>\';\n\n  if(!rows.length){\n    document.getElementById(\'tablebox\').style.display=\'none\';\n    document.getElementById(\'err\').textContent=(RAW.scanning\n      ? \'首次扫描进行中，请稍候（全市场约需 3-6 分钟）…\'\n      : \'当前条件下无命中。大盘走弱时信号稀少属正常，可放宽筛选条件。\');\n    return;\n  }\n  document.getElementById(\'err\').textContent=\'\';\n\n  let html=\'<thead><tr><th>名称/代码</th><th>级别</th><th>评分</th><th>RS</th><th>模板</th>\'\n    +\'<th>现价</th><th>涨跌</th><th>量能倍数</th><th>距52周高</th><th>止损</th><th>仓位</th><th>详情</th></tr></thead><tbody>\';\n  rows.forEach(function(p,i){\n    const gc=GRADE_COLORS[p.grade]||\'#8c8c8c\';\n    html+=\'<tr>\'\n      +\'<td class="name"><b>\'+esc(p.name)+\'</b> <a class="codelink" href="https://gu.qq.com/\'+esc(p.symbol)+\'" target="_blank" rel="noopener">\'+esc(p.code)+\'</a></td>\'\n      +\'<td><span class="badge" style="background:\'+gc+\'22;color:\'+gc+\';border:1px solid \'+gc+\'55">\'+esc(p.grade||\'—\')+\'</span></td>\'\n      +\'<td><b>\'+p.score+\'</b></td>\'\n      +\'<td>\'+p.rs+\'</td>\'\n      +\'<td>\'+p.trend_pass+\'/8</td>\'\n      +\'<td>\'+p.close+\'</td>\'\n      +\'<td class="\'+cls(p.chg_pct)+\'">\'+fmtPct(p.chg_pct,true)+\'</td>\'\n      +\'<td>\'+p.vol_x+\'×</td>\'\n      +\'<td class="\'+cls(p.off_high_pct)+\'">\'+fmtPct(p.off_high_pct,false)+\'</td>\'\n      +\'<td>\'+p.plan.stop+\'</td>\'\n      +\'<td>\'+p.plan.pos_pct+\'%</td>\'\n      +\'<td class="op-cell"><button style="padding:4px 10px;font-size:12px" onclick="toggleDetail(\'+i+\')">展开</button></td>\'\n      +\'</tr>\'\n      +\'<tr id="dt\'+i+\'" style="display:none"><td colspan="12" style="text-align:left;white-space:normal;padding:12px 14px;background:var(--row-hover)">\'\n      +detailHtml(p)+\'</td></tr>\';\n  });\n  document.getElementById(\'tbl\').innerHTML=html+\'</tbody>\';\n  document.getElementById(\'tablebox\').style.display=\'block\';\n  window.__rows=rows;\n}\n\nfunction detailHtml(p){\n  const tt=p.tt||{}, stine=p.stine||{}, pl=p.plan||{};\n  const mark=function(v){ return v?\'<span style="color:var(--neg)">✓</span>\':\'<span style="color:var(--muted)">✗</span>\'; };\n  let s=\'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">\';\n  // 趋势模板\n  s+=\'<div><b>Minervini 趋势模板 \'+p.trend_pass+\'/8</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\';\n  Object.keys(tt).forEach(function(k){ s+=mark(tt[k])+\' \'+esc(k)+\'<br>\'; });\n  s+=mark(p.rs>=70)+\' ⑧RS评级≥70（当前 \'+p.rs+\'）\';\n  s+=\'</div></div>\';\n  // 交易计划\n  s+=\'<div><b>交易计划（1% 风险预算）</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\'\n    +\'买入区间：<b>\'+pl.buy_low+\' ~ \'+pl.buy_high+\'</b><br>\'\n    +\'止损价：<b style="color:var(--pos)">\'+pl.stop+\'</b>（风险 \'+pl.risk_pct+\'%）<br>\'\n    +\'2R 目标：\'+pl.target2+\'\u30003R 目标：\'+pl.target3+\'<br>\'\n    +\'建议仓位：<b>\'+pl.pos_pct+\'%</b><br>\'\n    +\'离场：\'+esc(pl.exit_rule||\'\')\n    +\'</div></div>\';\n  // Stine + 关键指标\n  s+=\'<div><b>超级强势股（Stine）</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\';\n  Object.keys(stine).forEach(function(k){ s+=mark(stine[k])+\' \'+esc(k)+\'<br>\'; });\n  s+=\'</div></div>\';\n  s+=\'<div><b>关键指标</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\'\n    +\'支点质量：\'+p.pocket_quality+\' / 100<br>\'\n    +\'VCP：\'+(p.vcp?\'成立\':\'不成立\')+\'（\'+p.vcp_score+\' 分）<br>\'\n    +\'量能 / 50日均量：\'+p.vol_vs_ma50+\'×<br>\'\n    +\'距 52 周低点：+\'+p.up_from_low_pct+\'%<br>\'\n    +\'成交额：\'+fmtAmt(p.amount_wan)+\'\u3000换手：\'+p.turn_rate+\'%<br>\'\n    +\'流通市值：\'+p.float_mcap+\' 亿\'\n    +\'</div></div>\';\n  s+=\'</div>\';\n  if(p.reasons&&p.reasons.length){\n    s+=\'<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px">\'\n      +\'<b>入选理由</b>：\'+p.reasons.map(esc).join(\' ｜ \')+\'</div>\';\n  }\n  return s;\n}\n\nfunction toggleDetail(i){\n  const el=document.getElementById(\'dt\'+i);\n  if(el) el.style.display=(el.style.display===\'none\')?\'table-row\':\'none\';\n}\n\nasync function rescan(){\n  const b=document.getElementById(\'rescanBtn\');\n  b.disabled=true; b.textContent=\'已触发…\';\n  try{\n    await fetch(\'/api/pivot?force=1&t=\'+Date.now());\n    document.getElementById(\'staleBadge\').style.display=\'inline-flex\';\n    if(!POLL) POLL=setInterval(load,4000);\n  }catch(e){}\n  setTimeout(function(){ b.disabled=false; b.textContent=\'立即重扫\'; },3000);\n}\n\n[\'minScore\',\'minRs\'].forEach(function(id){\n  document.getElementById(id).addEventListener(\'keydown\',function(e){ if(e.key===\'Enter\') applyFilter(); });\n});\n[\'minTt\',\'fGrade\'].forEach(function(id){\n  document.getElementById(id).addEventListener(\'change\',applyFilter);\n});\n\nload();\nsetInterval(function(){ if(!POLL) load(); }, 60000);\n\nif(\'serviceWorker\' in navigator){\n  window.addEventListener(\'load\',function(){\n    navigator.serviceWorker.register(\'/sw.js\').catch(function(err){ console.log(\'SW 注册失败：\',err); });\n  });\n}'
+    + '</script>\n</body></html>'
+)
+
 class Handler(BaseHTTPRequestHandler):
     _DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -4231,6 +4244,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path in ("/top", "/top.html"):
             self._send(200, PAGE3_HTML, "text/html; charset=utf-8")
+            return
+        if parsed.path in ("/pivot", "/pivot.html"):
+            self._send(200, PAGE4_HTML, "text/html; charset=utf-8")
+            return
+        if parsed.path == "/api/pivot":
+            qs = parse_qs(parsed.query)
+            force = qs.get("force", ["0"])[0] in ("1", "true", "True")
+            try:
+                self._send(200, json.dumps(pivot_api_payload(force=force), ensure_ascii=False))
+            except Exception as e:
+                self._send(200, json.dumps({"error": str(e), "scanning": False, "picks": []}, ensure_ascii=False))
             return
         if parsed.path == "/api/top":
             qs = parse_qs(parsed.query)
@@ -4451,6 +4475,675 @@ class Handler(BaseHTTPRequestHandler):
 def _is_trading_day(d):
     """简易交易日判断：周一至周五（节假日未穷举，可按需扩展 HOLIDAYS 集合）。"""
     return d.weekday() < 5
+
+# ===========================================================================
+# 口袋支点量化选股引擎（纯标准库，无 numpy/pandas；源自 pivot_engine.py，内联复用
+# fund_arb 的 bj_now / http_get_text / _is_trading_day / _threading 等定义）
+# 理论：欧奈尔 CAN SLIM · 米勒维尼趋势模板/VCP · 斯泰恩超级强势股 · 莫拉尔斯口袋支点
+# 评分权重经 2024-11~2026-07 全市场 32326 信号回测标定；离场：8% 止损 + 破 MA50。
+# ===========================================================================
+# ---------------------------------------------------------------------------
+# 口袋支点量化选股引擎（纯标准库实现，无 numpy/pandas 依赖）
+#
+# 理论来源：
+#   [1] William J. O'Neil《笑傲股市》—— CAN SLIM / RS 相对强度评级
+#   [2] Gil Morales & Chris Kacher《像欧奈尔信徒一样交易 I/II》—— Pocket Pivot 口袋支点
+#   [3] Mark Minervini《股票魔法师 I/II》—— Trend Template 趋势模板 8 条 / VCP 波动收缩
+#   [4] Jesse C. Stine《100倍超级强势股》—— Superstock 超级强势股
+#
+# 评分权重按 2024-11~2026-07 全市场回测标定（32326 个信号，日期匹配基准）：
+#   趋势模板 8/8 → 超额 +2.22%（最强因子）| RS 80-90 → +2.05% | 大盘空头 → -2.95%
+# 离场规则：8% 硬止损 + 跌破 50 日线，不设固定止盈（过早止盈是最大收益杀手）
+# ---------------------------------------------------------------------------
+
+PIVOT_VERSION = "1.0"
+
+# 依赖（注入 fund_arb 后这些均已在文件顶部导入，此处仅为独立运行兜底）
+try:
+    json, time, threading, ThreadPoolExecutor, as_completed, bj_now   # noqa: F821
+except NameError:
+    import json, time, threading                                      # noqa: E401
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from datetime import datetime as _pv_dt, timedelta as _pv_td, timezone as _pv_tz
+
+    def bj_now():
+        return _pv_dt.now(_pv_tz(_pv_td(hours=8))).replace(tzinfo=None)
+
+# 全市场代码枚举区间（沪市主板 / 科创板 / 深市主板 / 创业板）
+PIVOT_CODE_RANGES = [
+    ("sh", 600000, 604000), ("sh", 605000, 605600), ("sh", 688000, 689000),
+    ("sz", 1, 4000), ("sz", 300000, 301900), ("sz", 302000, 302100),
+]
+
+PIVOT_CFG = dict(
+    kline_len=280,          # 每只股票拉取的日线根数（>252 用于 52 周计算）
+    max_workers=24,         # 抓取并发
+    min_price=3.0, max_price=400.0,
+    min_amount_wan=5000.0,  # 当日成交额下限（万元）
+    top_n=60,               # 网页展示条数上限
+    scan_hour=14, scan_minute=50,   # 收盘前 10 分钟自动扫描
+)
+
+# 口袋支点参数（Morales & Kacher 严格版）
+PIVOT_P = dict(
+    lookback=10, vol_ratio_min=1.00, vol_vs_ma50_min=1.10,
+    close_in_upper_pct=0.50, ma10_tolerance=-0.02, max_ext_above_ma10=0.075,
+    max_gap_up=0.05, max_daily_gain=0.095, base_window=50, base_max_depth=0.35,
+)
+# Minervini 趋势模板
+PIVOT_T = dict(rs_min=70, above_low_pct=0.30, below_high_pct=0.25, ma200_rising_days=22)
+# VCP 波动收缩
+PIVOT_V = dict(window=60, segments=3, contraction_ratio=0.75,
+               last_pullback_max=0.12, vol_dryup_ratio=0.80, atr_contraction=0.85)
+# 综合评分权重（回测标定）
+PIVOT_W = dict(trend_template=40, rs_rating=22, pocket_quality=15,
+               vcp_shape=10, near_high=8, sector=5)
+# 离场规则（回测标定：破 MA50 盈亏比 2.40 最优）
+PIVOT_E = dict(stop_loss_pct=0.08, trail_ma=50, risk_budget_pct=1.0)
+
+
+# ------------------------------------------------------------------ 基础工具
+def _pv_sma(xs, n):
+    """简单移动平均（O(len) 滑动窗口）。不足 n 根的位置返回 None。"""
+    out, s = [], 0.0
+    for i, x in enumerate(xs):
+        s += x
+        if i >= n:
+            s -= xs[i - n]
+        out.append(s / n if i >= n - 1 else None)
+    return out
+
+
+def _pv_atr(h, l, c, n):
+    """平均真实波幅。"""
+    tr = []
+    for i in range(len(c)):
+        pc = c[i - 1] if i > 0 else c[0]
+        tr.append(max(h[i] - l[i], abs(h[i] - pc), abs(l[i] - pc)))
+    return _pv_sma(tr, n)
+
+
+def _pv_slope_up(a, days):
+    """序列末端在 days 个交易日内是否上行（末值 > 起值 且 线性回归斜率 > 0）。"""
+    if len(a) < days + 1:
+        return False
+    seg = a[-days - 1:]
+    if any(x is None for x in seg):
+        return False
+    m = len(seg)
+    xm = (m - 1) / 2.0
+    ym = sum(seg) / m
+    num = sum((i - xm) * (seg[i] - ym) for i in range(m))
+    den = sum((i - xm) ** 2 for i in range(m))
+    k = num / den if den > 0 else 0.0
+    return bool(seg[-1] > seg[0] and k > 0)
+
+
+def _pv_clip(x, lo, hi):
+    return lo if x < lo else (hi if x > hi else x)
+
+
+def _pv_f(v, d=0.0):
+    """None / 非法值 → 默认值。"""
+    return d if v is None else v
+
+
+# ------------------------------------------------------------------ 指标计算
+def pivot_compute(o, h, l, c, v):
+    """输入某只股票的 OHLCV（时间升序），输出全部指标与信号。需 >=150 根 K 线。"""
+    n = len(c)
+    if n < 150:
+        return None
+
+    P, T, V = PIVOT_P, PIVOT_T, PIVOT_V
+    ma5, ma10 = _pv_sma(c, 5), _pv_sma(c, 10)
+    ma50 = _pv_sma(c, 50)
+    ma150 = _pv_sma(c, min(150, n))
+    ma200 = _pv_sma(c, 200) if n >= 200 else _pv_sma(c, n - 1)
+    vma5, vma50 = _pv_sma(v, 5), _pv_sma(v, 50)
+    atr10, atr50 = _pv_atr(h, l, c, 10), _pv_atr(h, l, c, 50)
+
+    t = n - 1
+    px, prev = c[t], c[t - 1]
+    m50, m150, m200 = _pv_f(ma50[t]), _pv_f(ma150[t]), _pv_f(ma200[t])
+    m10 = _pv_f(ma10[t])
+    v50 = _pv_f(vma50[t])
+
+    win52 = min(250, n)
+    hi52, lo52 = max(h[-win52:]), min(l[-win52:])
+    off_high = (px - hi52) / hi52 if hi52 > 0 else -1.0
+    up_from_low = (px / lo52 - 1.0) if lo52 > 0 else 0.0
+
+    # ---------- 1. 口袋支点 ----------
+    lb = P["lookback"]
+    seg_c, seg_pc, seg_v = c[t - lb:t], c[t - lb - 1:t - 1], v[t - lb:t]
+    dn = [seg_v[i] for i in range(len(seg_c)) if seg_c[i] < seg_pc[i]]
+    if dn:
+        max_down_vol, n_down = max(dn), len(dn)
+    else:
+        # 10 日内无下跌日 → 极强势，用区间最小量作基准（原著：此时放量即可）
+        max_down_vol, n_down = (min(seg_v) if seg_v else 0.0), 0
+
+    vol_x = v[t] / max_down_vol if max_down_vol > 0 else 0.0
+    rng = h[t] - l[t]
+    close_pos = (c[t] - l[t]) / rng if rng > 1e-9 else 1.0
+    day_gain = px / prev - 1.0 if prev > 0 else 0.0
+    gap = (o[t] - prev) / prev if prev > 0 else 0.0
+    ext_ma10 = (px - m10) / m10 if m10 > 0 else 0.0
+    vol_vs_ma50 = v[t] / v50 if v50 > 0 else 0.0
+
+    bw = min(P["base_window"], n - 1)
+    base_hi, base_lo = max(h[t - bw:t + 1]), min(l[t - bw:t + 1])
+    base_depth = (base_hi - base_lo) / base_hi if base_hi > 0 else 1.0
+
+    checks = {
+        "量能超越10日最大下跌量": vol_x >= P["vol_ratio_min"],
+        "收阳线": px > prev,
+        "实体阳线": px > o[t],
+        "收在振幅上半部": close_pos >= P["close_in_upper_pct"],
+        "量能≥50日均量×1.1": vol_vs_ma50 >= P["vol_vs_ma50_min"],
+        "贴近或站上10日线": ext_ma10 >= P["ma10_tolerance"],
+        "未过度延伸": ext_ma10 <= P["max_ext_above_ma10"],
+        "未高开追高": gap <= P["max_gap_up"],
+        "站上50日线": px > m50 if m50 > 0 else False,
+        "50日线上行": _pv_slope_up(ma50, 10),
+        "10日线>50日线": m10 > m50 if (m10 > 0 and m50 > 0) else False,
+        "非涨停不可买": day_gain < P["max_daily_gain"],
+        "基底未破坏": base_depth <= P["base_max_depth"],
+    }
+    is_pocket = all(checks.values())
+    pp_fail = [k for k, ok in checks.items() if not ok]
+
+    q = (_pv_clip((vol_x - 1.0) / 2.0, 0, 1) * 40
+         + _pv_clip((close_pos - 0.5) / 0.5, 0, 1) * 20
+         + (1 - _pv_clip(abs(ext_ma10) / 0.06, 0, 1)) * 20
+         + _pv_clip((vol_vs_ma50 - 1.0) / 1.5, 0, 1) * 20)
+
+    # ---------- 2. Minervini 趋势模板（第 8 条 RS 需全市场排名后回填）----------
+    tt = {
+        "①现价>150日&200日线": px > m150 > 0 and px > m200 > 0,
+        "②150日线>200日线": m150 > m200 > 0,
+        "③200日线上行1个月": _pv_slope_up(ma200, T["ma200_rising_days"]),
+        "④50日>150日>200日": m50 > m150 > m200 > 0,
+        "⑤现价>50日线": px > m50 > 0,
+        "⑥高于52周低点30%": up_from_low >= T["above_low_pct"],
+        "⑦距52周高点25%内": off_high >= -T["below_high_pct"],
+    }
+    tt_partial = sum(1 for x in tt.values() if x)
+
+    # ---------- 3. VCP 波动收缩 ----------
+    w = min(V["window"], n - 1)
+    seg = w // V["segments"]
+    contractions = []
+    for i in range(V["segments"]):
+        s0 = t - w + i * seg
+        hh, ll = max(h[s0:s0 + seg + 1]), min(l[s0:s0 + seg + 1])
+        contractions.append((hh - ll) / hh if hh > 0 else 1.0)
+    shrink_ok = all(contractions[i + 1] <= contractions[i] * V["contraction_ratio"]
+                    for i in range(len(contractions) - 1))
+    last_pb = contractions[-1]
+    vol_dry = (_pv_f(vma5[t]) / v50) if v50 > 0 else 9.9
+    atr_ratio = (_pv_f(atr10[t]) / _pv_f(atr50[t], 1)) if _pv_f(atr50[t]) > 0 else 9.9
+    is_vcp = bool(shrink_ok and last_pb <= V["last_pullback_max"]
+                  and vol_dry <= V["vol_dryup_ratio"] and atr_ratio <= V["atr_contraction"])
+    vcp_score = ((40 if shrink_ok else 0)
+                 + (1 - _pv_clip(last_pb / 0.20, 0, 1)) * 25
+                 + (1 - _pv_clip(vol_dry / 1.2, 0, 1)) * 20
+                 + (1 - _pv_clip(atr_ratio / 1.2, 0, 1)) * 15)
+
+    # ---------- 4. 超级强势股（Stine）----------
+    bw2 = min(250, n - 1)
+    hi_bw = max(h[t - bw2:t])
+    wk_vol_x = (sum(v[t - 4:t + 1]) / 5.0) / v50 if v50 > 0 else 0.0
+    stine = {
+        "突破年线级平台": px >= hi_bw * 0.92,
+        "距52周低点涨幅达标": 0.30 <= up_from_low <= 3.00,
+        "30周(150日)线上行": _pv_slope_up(ma150, 20),
+        "周线放量": wk_vol_x >= 1.0,
+    }
+
+    # ---------- 5. RS 原始值（IBD 加权，供全市场排名）----------
+    tot, wsum = 0.0, 0.0
+    for lag, wt in ((63, 0.40), (126, 0.20), (189, 0.20), (252, 0.20)):
+        if n > lag and c[-lag - 1] > 0:
+            tot += wt * (c[-1] / c[-lag - 1])
+            wsum += wt
+    rs_raw = (tot / wsum) if wsum > 0 else None
+
+    return dict(
+        close=round(px, 2), open=round(o[t], 2), high=round(h[t], 2), low=round(l[t], 2),
+        volume=v[t], prev_close=round(prev, 2), chg_pct=round(day_gain * 100, 2),
+        ma10=round(m10, 2), ma50=round(m50, 2), ma150=round(m150, 2), ma200=round(m200, 2),
+        hi52=round(hi52, 2), lo52=round(lo52, 2),
+        off_high_pct=round(off_high * 100, 2), up_from_low_pct=round(up_from_low * 100, 2),
+        pocket=is_pocket, pocket_quality=round(q, 1), pocket_fail=pp_fail,
+        vol_x=round(vol_x, 2), vol_vs_ma50=round(vol_vs_ma50, 2), n_down_days=n_down,
+        close_pos=round(close_pos, 2), ext_ma10_pct=round(ext_ma10 * 100, 2),
+        gap_pct=round(gap * 100, 2), base_depth_pct=round(base_depth * 100, 1),
+        tt=tt, tt_partial=tt_partial,
+        vcp=is_vcp, vcp_score=round(vcp_score, 1),
+        contractions=[round(x * 100, 1) for x in contractions],
+        vol_dry=round(vol_dry, 2), atr_ratio=round(atr_ratio, 2),
+        stine=stine, wk_vol_x=round(wk_vol_x, 2),
+        rs_raw=rs_raw,
+    )
+
+
+def pivot_trade_plan(m):
+    """交易计划：8% 硬止损 + 跌破 50 日线离场，仓位按 1% 风险预算反推。"""
+    E = PIVOT_E
+    px = m["close"]
+    stop = max(m["low"] * 0.99, px * (1 - E["stop_loss_pct"]))
+    if stop >= px:
+        stop = px * (1 - E["stop_loss_pct"])
+    risk_pct = (px - stop) / px * 100
+    pos_pct = min(25.0, E["risk_budget_pct"] / max(risk_pct, 0.5) * 100)
+    return dict(
+        buy_low=round(px * 0.995, 2), buy_high=round(px * 1.02, 2),
+        stop=round(stop, 2), risk_pct=round(risk_pct, 2),
+        target2=round(px + (px - stop) * 2, 2),
+        target3=round(px + (px - stop) * 3, 2),
+        trail_ma50=m.get("ma50", 0), pos_pct=round(pos_pct, 1),
+        exit_rule="跌破50日线(%s)离场，不设固定止盈" % m.get("ma50", 0),
+    )
+
+
+def pivot_grade(tt_pass, pocket, vcp, rs):
+    """信号分级 S/A/B/C。"""
+    if not pocket:
+        return ""
+    if tt_pass >= 8 and vcp and rs >= 90:
+        return "S"
+    if tt_pass >= 8 and rs >= 80:
+        return "A"
+    if tt_pass >= 6 and rs >= 70:
+        return "B"
+    return "C"
+
+
+def pivot_score(m, rs, sector_str=50.0):
+    """综合评分 0-100（权重经回测标定）。"""
+    W = PIVOT_W
+    tt_pass = m["tt_partial"] + (1 if rs >= PIVOT_T["rs_min"] else 0)
+    near_high = _pv_clip(1.0 + m["off_high_pct"] / 25.0, 0, 1)
+    s = (W["trend_template"] * (tt_pass / 8.0)
+         + W["rs_rating"] * (rs / 99.0)
+         + W["pocket_quality"] * (m["pocket_quality"] / 100.0)
+         + W["vcp_shape"] * (m["vcp_score"] / 100.0)
+         + W["near_high"] * near_high
+         + W["sector"] * (sector_str / 100.0))
+    return round(s, 1), tt_pass
+
+
+# ------------------------------------------------------------------ 数据层
+# 说明：复用 fund_arb 已有的 http_get_text / http_get_json；独立测试时用下面的兜底实现。
+try:
+    http_get_text  # noqa: F821  —— 注入 fund_arb 后使用其实现
+except NameError:
+    import urllib.request as _pv_ur
+
+    _PV_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+    def http_get_text(url, referer=None, timeout=10, retries=2, encoding="utf-8"):
+        headers = {"User-Agent": _PV_UA}
+        if referer:
+            headers["Referer"] = referer
+        last = None
+        for _ in range(retries + 1):
+            try:
+                req = _pv_ur.Request(url, headers=headers)
+                with _pv_ur.urlopen(req, timeout=timeout) as r:
+                    return r.read().decode(encoding, "ignore")
+            except Exception as e:
+                last = e
+        raise last
+
+
+def pivot_snap_batch(symbols):
+    """腾讯批量实时快照（一次最多 60 只）。返回 {symbol: {...}}。"""
+    txt = http_get_text("https://qt.gtimg.cn/q=" + ",".join(symbols),
+                        timeout=12, retries=1, encoding="gbk")
+    out = {}
+    for line in txt.split(";"):
+        line = line.strip()
+        if "=" not in line or '"' not in line:
+            continue
+        try:
+            key = line.split("=")[0].replace("v_", "").strip()
+            f = line.split('"')[1].split("~")
+            if len(f) < 46 or not f[3] or float(f[3]) <= 0:
+                continue
+            out[key] = dict(
+                name=f[1].strip(), price=float(f[3]), prev=float(f[4]), open=float(f[5]),
+                chg_pct=float(f[32] or 0), high=float(f[33] or 0), low=float(f[34] or 0),
+                volume=float(f[36] or 0),          # 成交量(手)
+                amount_wan=float(f[37] or 0),      # 成交额(万元)
+                turn_rate=float(f[38] or 0),       # 换手率(%)
+                float_mcap=float(f[44] or 0),      # 流通市值(亿)
+                total_mcap=float(f[45] or 0),      # 总市值(亿)
+                ts=f[30] if len(f) > 30 else "",
+            )
+        except (ValueError, IndexError):
+            pass
+    return out
+
+
+def pivot_fetch_ohlcv(symbol, n=None):
+    """腾讯前复权日线 OHLCV（时间升序）。"""
+    n = n or PIVOT_CFG["kline_len"]
+    txt = http_get_text(
+        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,{n},qfq",
+        timeout=12, retries=1)
+    data = json.loads(txt)
+    node = (data.get("data") or {}).get(symbol) or {}
+    arr = node.get("qfqday") or node.get("day") or []
+    o, h, l, c, v, d = [], [], [], [], [], []
+    for row in arr:
+        try:
+            d.append(row[0]); o.append(float(row[1])); c.append(float(row[2]))
+            h.append(float(row[3])); l.append(float(row[4])); v.append(float(row[5]))
+        except (IndexError, ValueError, TypeError):
+            pass
+    return dict(date=d, open=o, high=h, low=l, close=c, volume=v)
+
+
+def pivot_universe():
+    """全市场股票池：代码枚举 + 批量快照探活（一次拿到快照，省一轮请求）。"""
+    cands = []
+    for mkt, lo, hi in PIVOT_CODE_RANGES:
+        cands += [f"{mkt}{i:06d}" for i in range(lo, hi)]
+    chunks = [cands[i:i + 60] for i in range(0, len(cands), 60)]
+    alive = {}
+    with ThreadPoolExecutor(max_workers=PIVOT_CFG["max_workers"]) as ex:
+        for fut in as_completed([ex.submit(pivot_snap_batch, ch) for ch in chunks]):
+            try:
+                alive.update(fut.result())
+            except Exception:
+                pass
+    # 基础过滤：价格区间、成交额、剔除 ST/退市
+    C_ = PIVOT_CFG
+    out = {}
+    for sym, d in alive.items():
+        nm = d["name"]
+        if "ST" in nm or "退" in nm or nm.startswith("N"):
+            continue
+        if not (C_["min_price"] <= d["price"] <= C_["max_price"]):
+            continue
+        if d["amount_wan"] < C_["min_amount_wan"]:
+            continue
+        out[sym] = d
+    return out
+
+
+def pivot_market_state():
+    """大盘择时 M：沪深300 的 50/200 日线 + 25 日分销日计数 → 状态与建议仓位上限。"""
+    try:
+        k = pivot_fetch_ohlcv("sh000300", 260)
+    except Exception:
+        return dict(state="未知", score=50.0, max_position=50, detail="指数数据获取失败", bull=False)
+    c, v = k["close"], k["volume"]
+    if len(c) < 200:
+        return dict(state="未知", score=50.0, max_position=50, detail="指数历史不足", bull=False)
+    ma50, ma200 = _pv_sma(c, 50), _pv_sma(c, 200)
+    px = c[-1]
+    above50 = px > _pv_f(ma50[-1])
+    above200 = px > _pv_f(ma200[-1])
+    ma50_up = _pv_slope_up(ma50, 10)
+    ma200_up = _pv_slope_up(ma200, 22)
+    # 分销日：指数跌幅 >0.2% 且成交量大于前一日
+    dd = 0
+    for i in range(len(c) - 25, len(c)):
+        if i < 1:
+            continue
+        if c[i] / c[i - 1] - 1 < -0.002 and v[i] > v[i - 1]:
+            dd += 1
+    score = (30 if above50 else 0) + (30 if above200 else 0) + \
+            (15 if ma50_up else 0) + (15 if ma200_up else 0) + max(0, 10 - dd * 2)
+    if score >= 75 and dd < 4:
+        state, pos = "进攻", 100
+    elif score >= 55:
+        state, pos = "谨慎", 60
+    elif score >= 35:
+        state, pos = "防御", 30
+    else:
+        state, pos = "空仓", 10
+    return dict(state=state, score=round(score, 1), max_position=pos,
+                bull=bool(above50 and above200),
+                dd_count=dd, above_ma50=above50, above_ma200=above200,
+                index_close=round(px, 2), ma50=round(_pv_f(ma50[-1]), 2),
+                ma200=round(_pv_f(ma200[-1]), 2),
+                detail=f"沪深300 {'站上' if above50 else '跌破'}50日线、"
+                       f"{'站上' if above200 else '跌破'}200日线，25日分销日 {dd} 个")
+
+
+def pivot_scan(progress=None):
+    """全市场扫描主流程。progress(done, total, phase) 用于回报进度。"""
+    t0 = time.time()
+
+    def _p(done, total, phase):
+        if progress:
+            try:
+                progress(done, total, phase)
+            except Exception:
+                pass
+
+    _p(0, 1, "拉取全市场快照")
+    market = pivot_market_state()
+    uni = pivot_universe()
+    syms = sorted(uni.keys())
+    total = len(syms)
+    _p(0, total, "计算指标")
+
+    metrics, done = {}, 0
+    lock = threading.Lock()
+
+    def _one(sym):
+        try:
+            k = pivot_fetch_ohlcv(sym)
+            if len(k["close"]) < 150:
+                return sym, None
+            return sym, pivot_compute(k["open"], k["high"], k["low"], k["close"], k["volume"])
+        except Exception:
+            return sym, None
+
+    with ThreadPoolExecutor(max_workers=PIVOT_CFG["max_workers"]) as ex:
+        for fut in as_completed([ex.submit(_one, s) for s in syms]):
+            try:
+                sym, m = fut.result()
+                if m:
+                    metrics[sym] = m
+            except Exception:
+                pass
+            with lock:
+                done += 1
+                if done % 100 == 0 or done == total:
+                    _p(done, total, "计算指标")
+
+    # ---- RS 全市场百分位排名（1-99）----
+    _p(total, total, "计算RS评级")
+    pairs = [(s, m["rs_raw"]) for s, m in metrics.items() if m.get("rs_raw") is not None]
+    pairs.sort(key=lambda x: x[1])
+    nn = len(pairs)
+    rs_map = {s: round(i / max(nn - 1, 1) * 98 + 1) for i, (s, _) in enumerate(pairs)}
+
+    # ---- 组装选股结果 ----
+    picks = []
+    for sym, m in metrics.items():
+        if not m["pocket"]:
+            continue
+        rs = rs_map.get(sym, 1)
+        sc, tt_pass = pivot_score(m, rs)
+        g = pivot_grade(tt_pass, m["pocket"], m["vcp"], rs)
+        snap = uni.get(sym, {})
+        reasons = []
+        if tt_pass >= 8:
+            reasons.append("趋势模板 8/8 全过（Minervini 第二阶段）")
+        elif tt_pass >= 6:
+            reasons.append(f"趋势模板 {tt_pass}/8")
+        if rs >= 90:
+            reasons.append(f"RS {rs} 全市场前 {100-rs}%")
+        elif rs >= 80:
+            reasons.append(f"RS {rs} 强于八成个股")
+        if m["vol_x"] >= 1.5:
+            reasons.append(f"量能达 10 日最大跌量的 {m['vol_x']}倍")
+        if m["vcp"]:
+            reasons.append("VCP 波动收缩成立")
+        if m["off_high_pct"] >= -10:
+            reasons.append(f"距 52 周高点仅 {abs(m['off_high_pct']):.1f}%")
+        if all(m["stine"].values()):
+            reasons.append("符合 Stine 超级强势股全部条件")
+        picks.append(dict(
+            symbol=sym, code=sym[2:], name=snap.get("name", sym),
+            grade=g, score=sc, rs=rs, trend_pass=tt_pass,
+            close=m["close"], chg_pct=m["chg_pct"], vol_x=m["vol_x"],
+            vol_vs_ma50=m["vol_vs_ma50"], pocket_quality=m["pocket_quality"],
+            vcp=m["vcp"], vcp_score=m["vcp_score"],
+            off_high_pct=m["off_high_pct"], up_from_low_pct=m["up_from_low_pct"],
+            ma50=m["ma50"], ma150=m["ma150"], ma200=m["ma200"],
+            amount_wan=round(snap.get("amount_wan", 0), 0),
+            float_mcap=round(snap.get("float_mcap", 0), 1),
+            turn_rate=snap.get("turn_rate", 0),
+            tt=m["tt"], stine=m["stine"], reasons=reasons,
+            plan=pivot_trade_plan(m),
+        ))
+
+    picks.sort(key=lambda x: (-x["score"], -x["rs"]))
+    grade_cnt = {g: sum(1 for p in picks if p["grade"] == g) for g in ("S", "A", "B", "C")}
+    return dict(
+        version=PIVOT_VERSION,
+        updated=bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+        trade_date=bj_now().strftime("%Y-%m-%d"),
+        elapsed=round(time.time() - t0, 1),
+        market=market,
+        stats=dict(universe=total, computed=len(metrics),
+                   picks=len(picks), grade=grade_cnt),
+        picks=picks[:PIVOT_CFG["top_n"]],
+        total_picks=len(picks),
+    )
+
+
+# ------------------------------------------------------------------ 缓存与调度
+PIVOT_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pivot_cache.json")
+
+_PIVOT = {
+    "result": None,      # 最近一次完整扫描结果
+    "scanning": False,   # 是否正在扫描
+    "progress": {"done": 0, "total": 0, "phase": ""},
+    "error": "",
+}
+_PIVOT_LOCK = threading.Lock()
+
+
+def _pivot_load_disk():
+    """启动时回填磁盘缓存，使休眠/重启后首个请求即可秒回上次结果。"""
+    try:
+        if os.path.exists(PIVOT_CACHE_FILE):
+            with open(PIVOT_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get("picks") is not None:
+                with _PIVOT_LOCK:
+                    _PIVOT["result"] = data
+                print(f"    [口袋支点] 载入磁盘缓存：{data.get('updated')} 命中 {data.get('total_picks')} 只")
+    except Exception as e:
+        print(f"    [口袋支点] 磁盘缓存载入失败: {e}")
+
+
+def _pivot_save_disk(res):
+    try:
+        with open(PIVOT_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(res, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"    [口袋支点] 磁盘缓存写入失败: {e}")
+
+
+def pivot_run_scan_bg():
+    """后台扫描（单飞：同一时刻只允许一个扫描线程）。"""
+    with _PIVOT_LOCK:
+        if _PIVOT["scanning"]:
+            return False
+        _PIVOT["scanning"] = True
+        _PIVOT["error"] = ""
+        _PIVOT["progress"] = {"done": 0, "total": 0, "phase": "启动中"}
+
+    def _prog(done, total, phase):
+        with _PIVOT_LOCK:
+            _PIVOT["progress"] = {"done": done, "total": total, "phase": phase}
+
+    def _run():
+        try:
+            res = pivot_scan(progress=_prog)
+            with _PIVOT_LOCK:
+                _PIVOT["result"] = res
+            _pivot_save_disk(res)
+            print(f"    [口袋支点] 扫描完成：{res['stats']['universe']} 只 → "
+                  f"命中 {res['total_picks']} 只，耗时 {res['elapsed']}s")
+        except Exception as e:
+            with _PIVOT_LOCK:
+                _PIVOT["error"] = str(e)
+            print(f"    [口袋支点] 扫描失败: {e}")
+        finally:
+            with _PIVOT_LOCK:
+                _PIVOT["scanning"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True
+
+
+def pivot_api_payload(force=False):
+    """/api/pivot 的响应体：立即返回缓存 + 扫描状态；缓存过期或强制则后台重扫。"""
+    with _PIVOT_LOCK:
+        res = _PIVOT["result"]
+        scanning = _PIVOT["scanning"]
+        prog = dict(_PIVOT["progress"])
+        err = _PIVOT["error"]
+
+    today = bj_now().strftime("%Y-%m-%d")
+    stale = (res is None) or (res.get("trade_date") != today)
+    # 收盘后(15:00 起)当日结果才算最终；盘中允许 30 分钟内的结果直接复用
+    if res and res.get("trade_date") == today:
+        try:
+            upd = datetime.strptime(res["updated"], "%Y-%m-%d %H:%M:%S")
+            if (bj_now() - upd).total_seconds() > 1800 and bj_now().hour < 15:
+                stale = True
+        except Exception:
+            pass
+
+    if (force or (stale and _is_trading_day(bj_now()))) and not scanning:
+        pivot_run_scan_bg()
+        scanning = True
+
+    if res is None:
+        return dict(scanning=scanning, progress=prog, error=err,
+                    picks=[], stats=dict(universe=0, picks=0, grade={}),
+                    market={}, updated="", total_picks=0)
+    out = dict(res)
+    out["scanning"] = scanning
+    out["progress"] = prog
+    out["error"] = err
+    out["stale"] = stale
+    return out
+
+
+class PivotScheduler(_threading.Thread):
+    """常驻线程：每交易日 14:50（收盘前 10 分钟）自动全市场扫描一次。"""
+    def run(self):
+        hour = int(os.environ.get("PIVOT_SCAN_HOUR", str(PIVOT_CFG["scan_hour"])))
+        minute = int(os.environ.get("PIVOT_SCAN_MINUTE", str(PIVOT_CFG["scan_minute"])))
+        while True:
+            now = bj_now()
+            cand = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if cand <= now:
+                cand = cand + timedelta(days=1)
+            while not _is_trading_day(cand):
+                cand = cand + timedelta(days=1)
+            secs = (cand - bj_now()).total_seconds()
+            if secs > 0:
+                time.sleep(secs)
+            if _is_trading_day(bj_now()):
+                print(f"    [口袋支点] {bj_now():%H:%M} 定时扫描触发")
+                pivot_run_scan_bg()
+            time.sleep(70)   # 防止同一分钟重复触发
 
 def _is_limited_fund(r):
     """是否「完全买不到」：暂停申购，或可买金额=0（purchase_limit==0）。
@@ -4713,6 +5406,11 @@ def main():
     load_holdings_choice_cache()
     # 磁盘持久化缓存(#2)：启动时回填内存，使休眠/重启后首个请求即可秒回历史数据
     _hydrate_from_disk()
+    # 口袋支点量化选股：回填磁盘缓存（重启秒回上次结果），启动常驻定时扫描线程
+    # （每交易日 14:50 收盘前 10 分钟自动全市场扫描；访问 /pivot 可查看并手动重扫）
+    _pivot_load_disk()
+    PivotScheduler(daemon=True).start()
+    print("  口袋支点选股引擎已启用（每交易日 14:50 自动扫描，访问 /pivot 查看）")
     # 预热 + 周期刷新：网页3(TOP套利，全市场扫描最重)与排行页在实例常驻期间始终命中缓存、秒出。
     # 默认基金 162411 不再主动预热（按需计算即可，结果同样会落盘）；
     # _prewarm_running 防止上一次重算未结束时又重叠启动（避免并发猛刷上游被限流）。
