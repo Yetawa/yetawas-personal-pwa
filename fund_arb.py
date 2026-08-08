@@ -40,6 +40,9 @@ from urllib.parse import urlparse, parse_qs
 import os
 import threading
 import statistics
+import collections
+from fund_arb_tpl import (COMMON_CSS, PAGE_HTML, PAGE2_HTML, PAGE3_HTML, PAGE4_HTML, PAGE5_HTML, MANIFEST_JSON, ICON_SVG, SW_JS)
+
 
 # 界面版本（用于页面展示与 PWA 缓存区分）
 VERSION = "V1.3"
@@ -92,7 +95,7 @@ RANKING_WATCHLIST = [
     "501012", "161040", "161812", "161125", "161128", "501018", "160723",
     "161129", "501225",
 ]
-RANKING_MAX_WORKERS = 8  # 提高并行度：44 只基金冷计算/预热更快（东财等上游对并发容忍度高）
+RANKING_MAX_WORKERS = int(os.environ.get("FUND_ARB_MAX_WORKERS", "8"))  # 提高并行度：44 只基金冷计算/预热更快（东财等上游对并发容忍度高）；可用 FUND_ARB_MAX_WORKERS 覆盖
 
 # 排行默认清单：剔除 5 只联网查询始终无价格数据的异常基金
 # （164801 / 161113 / 167725 / 162804 / 160244，查询时恒报 "无价格数据"）
@@ -705,9 +708,10 @@ def composite_label(code):
 # 美西实例跨洋抓东财/腾讯，单次 RTT 高且易抖动；把上游响应缓存 90s，
 # 可让重复请求（同基金反复看、排行内多基金共享标的）秒回，且精度无损
 # （日内净值/价格/汇率在 90s 内几乎不变）。
-_HTTP_CACHE = {}
+_HTTP_CACHE = collections.OrderedDict()   # 有序字典，超出上限时淘汰最旧条目（近似 LRU）
 _HTTP_CACHE_LOCK = threading.Lock()
 _HTTP_CACHE_TTL = 90  # 秒
+_MAX_HTTP_CACHE = int(os.environ.get("FUND_ARB_HTTP_CACHE_MAX", "2000"))  # 单进程缓存上限，防长稳运行内存增长
 
 # ---- 数据源熔断器 ----
 # 腾讯K线/东财K线等上游不稳定时（如腾讯持续501），每只基金都要先打一次坏源
@@ -764,6 +768,8 @@ def http_get_json(url, referer=None, timeout=10, retries=2, sleep_base=0.5):
                     raise ValueError("上游返回 null（无数据）")
                 with _HTTP_CACHE_LOCK:
                     _HTTP_CACHE[key] = (now + _HTTP_CACHE_TTL, val)
+                    if len(_HTTP_CACHE) > _MAX_HTTP_CACHE:
+                        _HTTP_CACHE.popitem(last=False)
                 return val
         except Exception as e:
             last_err = e
@@ -790,6 +796,8 @@ def http_get_text(url, referer=None, timeout=10, retries=2, encoding="utf-8"):
                 val = resp.read().decode(encoding, "ignore")
                 with _HTTP_CACHE_LOCK:
                     _HTTP_CACHE[key] = (now + _HTTP_CACHE_TTL, val)
+                    if len(_HTTP_CACHE) > _MAX_HTTP_CACHE:
+                        _HTTP_CACHE.popitem(last=False)
                 return val
         except Exception as e:
             last_err = e
@@ -1541,7 +1549,32 @@ def choose_mode(code, days=30):
     return res
 
 
+# ---- 基金元信息短期缓存（per-code，TTL 默认 600s）----
+# fetch_fund_name/control/info 为同基金反复取（排行/全市场扫描/枢轴预暖多次触发），
+# 加一层进程内短缓存避免重复打东财 fundf10；与 _HTTP_CACHE 解耦，跨扫描复用。
+_FINFO_CACHE = {}            # (func, code) -> (ts, value)
+_FINFO_LOCK = threading.Lock()
+_FINFO_TTL = int(os.environ.get("FUND_ARB_FINFO_TTL", "600"))
+
+
+def _cached_finfo(func_name, code, producer):
+    key = (func_name, code)
+    now = time.time()
+    with _FINFO_LOCK:
+        e = _FINFO_CACHE.get(key)
+        if e and (now - e[0]) < _FINFO_TTL:
+            return e[1]
+    val = producer()
+    with _FINFO_LOCK:
+        _FINFO_CACHE[key] = (now, val)
+    return val
+
+
 def fetch_fund_name(code, retries=2):
+    return _cached_finfo("name", code, lambda: _fetch_fund_name_raw(code, retries))
+
+
+def _fetch_fund_name_raw(code, retries=2):
     """尝试从东财页面或接口获取基金真实名称，失败返回 None。"""
     try:
         url = f"https://fundf10.eastmoney.com/jjfl_{code}.html"
@@ -1588,6 +1621,10 @@ def fetch_fund_names_batch(codes, chunk=30):
 
 
 def fetch_fund_control(code, retries=3):
+    return _cached_finfo("control", code, lambda: _fetch_fund_control_raw(code, retries))
+
+
+def _fetch_fund_control_raw(code, retries=3):
     """从东财 fundf10 jjfl 页面解析申购状态 / 限购金额 / 赎回状态 / 申购起点
     注意：页面返回的是当前最新交易状态，并非每日历史，因此只适合做顶部摘要。
     """
@@ -1628,6 +1665,10 @@ def fetch_fund_control(code, retries=3):
 
 
 def fetch_fund_info(code, retries=2):
+    return _cached_finfo("info", code, lambda: _fetch_fund_info_raw(code, retries))
+
+
+def _fetch_fund_info_raw(code, retries=2):
     """一次性抓取 fundf10 jjfl 页面，同时解析基金名称与申购状态，减少重复请求。"""
     res = {"name": None, "control": {"subscribe_status": "", "redeem_status": "",
            "purchase_limit": None, "purchase_limit_text": "", "purchase_min": None, "ok": False}}
@@ -2971,1118 +3012,271 @@ def build_csv(rows, control, code, name, oil_gas=False, use_fx=True):
 # ---------------------------------------------------------------------------
 # 公共样式（界面一、界面二复用）
 # ---------------------------------------------------------------------------
-COMMON_CSS = r"""
-:root{color-scheme:dark;
-  --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#c9d1d9; --muted:#8b949e; --title:#f0f6fc;
-  --input-bg:#0d1117; --input-text:#f0f6fc; --btn:#1f6feb; --btn-hover:#388bfd; --row-hover:#1c2128;
-  --th-bg:#1f6feb; --th-text:#fff; --pos:#ff5b5b; --neg:#2ecc71; --est:#f2a900; --lock:#f0a020; --code-bg:#0d1117; --code-text:#79c0ff;
-  --sb-warn-bg:#2a1416; --sb-warn-border:#ff4d4f55; --sb-warn-label:#d98b8b;
-  --sb-ok-bg:#13251a; --sb-ok-border:#52c41a55; --sb-ok-label:#7ec89a;
-  --sb-info-bg:#161b22; --sb-info-border:#30363d; --sb-info-label:#8b949e;
-}
-:root[data-theme="light"]{color-scheme:light;
-  --bg:#ffffff; --panel:#f5f7fa; --border:#e3e8ef; --text:#1f2933; --muted:#6b7280; --title:#111827;
-  --input-bg:#ffffff; --input-text:#111827; --btn:#2563eb; --btn-hover:#3b82f6; --row-hover:#f0f4f8;
-  --th-bg:#2563eb; --th-text:#ffffff; --pos:#dc2626; --neg:#16a34a; --est:#d97706; --lock:#b45309; --code-bg:#f1f5f9; --code-text:#2563eb;
-  --sb-warn-bg:#fef2f2; --sb-warn-border:#fca5a5; --sb-warn-label:#b91c1c;
-  --sb-ok-bg:#f0fdf4; --sb-ok-border:#86efac; --sb-ok-label:#15803d;
-  --sb-info-bg:#f5f7fa; --sb-info-border:#e3e8ef; --sb-info-label:#6b7280;
-}
-*{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;transition:background .2s,color .2s}
-.wrap{max-width:1280px;margin:0 auto}
-.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
-.tzline{font-size:13px;color:var(--muted);background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin:6px 0 14px}
-.tzline b{color:var(--text)}
-.titles{flex:1;min-width:0}
-h1{font-size:22px;margin:0 0 4px;color:var(--title)}
-.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
-.top-actions{display:flex;align-items:flex-start;gap:8px;flex:none}
-.theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
-a.theme-btn{text-decoration:none}
-.theme-btn:hover{border-color:var(--btn);color:var(--btn)}
-.stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
-.stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
-@keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px}
-.field{display:flex;flex-direction:column;gap:4px}
-.field label{font-size:12px;color:var(--muted)}
-.field input,.field textarea,.field select{background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--input-text);padding:8px 10px;font-size:14px}
-.field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--btn)}
-button{background:var(--btn);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;cursor:pointer;font-weight:600}
-button:hover{background:var(--btn-hover)}
-button:disabled{opacity:.6;cursor:wait}
-.fund-title{font-size:22px;font-weight:600;color:var(--title);margin-left:auto;padding-left:12px;white-space:nowrap}
-.fund-title small{color:var(--muted);font-size:13px;font-weight:400;margin-left:8px}
-.statusbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:var(--sb-info-bg);border:1px solid var(--sb-info-border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px}
-.statusbar.warn{border-color:var(--sb-warn-border);background:var(--sb-warn-bg)}
-.statusbar.ok{border-color:var(--sb-ok-border);background:var(--sb-ok-bg)}
-.statusbar.info{border-color:var(--sb-info-border);background:var(--sb-info-bg)}
-.status-item{display:flex;align-items:center;gap:6px}
-.status-label{color:var(--muted)}
-.statusbar.warn .status-label{color:var(--sb-warn-label)}
-.statusbar.ok .status-label{color:var(--sb-ok-label)}
-.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-.sitem{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
-.sitem .l{color:var(--muted);font-size:12px;margin-bottom:4px}
-.sitem .v{font-size:18px;font-weight:600;color:var(--title)}
-/* 回测精度面板：指标卡在上、说明脚注在下，整体更有序 */
-.vmetrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
-.vnote{display:flex;flex-wrap:wrap;align-items:center;gap:6px;color:var(--muted);font-size:12px;line-height:1.7;text-align:left;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
-.vnote b{color:var(--text);font-weight:600}
-/* 排行表：名称列左对齐、代码超链接、可点击筛选的统计卡片 */
-.name{text-align:left}
-.codelink{color:var(--code-text);text-decoration:none;font-weight:600}
-.codelink:hover{text-decoration:underline}
-.sitem.clickable{cursor:pointer;transition:border-color .15s,box-shadow .15s}
-.sitem.clickable:hover{border-color:var(--btn)}
-.sitem.clickable.active{border-color:var(--btn);box-shadow:inset 0 0 0 2px var(--btn);background:var(--row-hover)}
-.pos{color:var(--pos);font-weight:600}
-.neg{color:var(--neg);font-weight:600}
-.lock{color:var(--lock);font-weight:600}
-.est{color:var(--est);font-style:italic}
-.tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:13px;table-layout:auto}
-th,td{border:1px solid var(--border);padding:8px 10px;text-align:right;vertical-align:middle;white-space:nowrap}
-th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0}
-td:first-child{text-align:left}
-.op-cell{width:64px;text-align:center;white-space:nowrap}
-.sig-cell{white-space:normal;min-width:104px;text-align:center;line-height:1.35}
-.ver{display:inline-block;margin-left:8px;font-size:12px;font-weight:600;color:var(--th-text);background:var(--th-bg);border-radius:999px;padding:1px 10px;vertical-align:middle}
-tbody tr:hover{background:var(--row-hover)}
-.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;white-space:nowrap}
-.note{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:14px;font-size:12px;line-height:1.7;color:var(--muted)}
-.note ul{margin:6px 0;padding-left:18px}.note li{margin:3px 0}
-#loading{color:var(--muted);padding:20px;text-align:center}
-#err{color:var(--pos);padding:14px}
-code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--code-text)}
-/* 响应式布局：窄屏（手机）自适应 */
-@media (max-width:760px){
-  body{padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
-  .topbar{flex-direction:column;align-items:stretch;gap:10px}
-  .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
-  .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
-  .theme-btn{align-self:flex-start}
-  body{overflow-x:hidden}
-  .panel{flex-direction:column;align-items:stretch;gap:10px}
-  .field{width:100%}
-  .field input,.field textarea,.field select{width:100%}
-  button{width:100%}
-  .fund-title{margin-left:0;margin-top:2px;font-size:18px}
-  h1{font-size:18px}
-  .sub{font-size:12px}
-  .summary{grid-template-columns:repeat(2,1fr)}
-  .sitem .v{font-size:16px}
-  .statusbar{font-size:12px;gap:8px}
-  .tablebox{padding:4px}
-  th,td{padding:6px 8px;font-size:12px}
-}
-@media (max-width:420px){
-  .summary{grid-template-columns:1fr}
-}
-"""
 
 # ---------------------------------------------------------------------------
 # 交互网页界面一（由 / 返回，数据通过 /api/data 拉取）
 # ---------------------------------------------------------------------------
-PAGE_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d1117">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon.svg">
-<title>LOF/ETF 套利数据看板</title>
-<style>""" + COMMON_CSS + r"""</style></head><body>
-<div class="wrap">
-<div class="topbar">
-  <div class="titles">
-    <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.3</span></h1>
-    <div class="sub">填基金代码 → 拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
-  </div>
-  <div class="top-actions">
-    <a class="theme-btn" href="/ranking" title="基金溢价排行表">排行表</a>
-    <a class="theme-btn" href="/top" title="全市场 LOF TOP 套利机会">TOP套利</a>
-    <a class="theme-btn" href="/pivot" title="口袋支点量化选股">口袋支点</a>
-    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
-    <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
-  </div>
-</div>
-
-<div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b><span id="btinline"></span></div>
-
-<div class="panel">
-  <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
-  <div class="field"><label>显示近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60" title="仅控制表格展示行数；估算/校准固定用 30 个交易日"></div>
-  <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
-  <div class="field"><label>估值模式</label><select id="mode">
-    <option value="auto">自动择优</option>
-    <option value="index">指数代理</option>
-    <option value="holdings">持仓估算</option>
-  </select></div>
-  <button id="btn" onclick="load()">查询</button>
-  <div id="fund-title" class="fund-title"></div>
-</div>
-
-<div id="statusbar" class="statusbar" style="display:none"></div>
-<div id="baseinfo" class="baseinfo" style="display:none;margin:8px 0;color:#8b949e;font-size:13px"></div>
-<div id="summary" class="summary"></div>
-<div id="validate" class="summary" style="display:none"></div>
-<div id="loading">加载中…</div>
-<div id="err"></div>
-<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>
-
-<div class="note">
-<b>说明</b>
-<ul>
-  <li><b>官方溢价</b> = (价格 - 净值) / 净值；<b>估值溢价</b> = (价格 - 估算净值) / 估算净值；<b>误差</b> = (估算净值 - 官方净值) / 官方净值。红=溢价/涨，绿=折价/跌。</li>
-  <li>估算净值 = 锚定净值 × (标的_t / 标的_锚) × (汇率_t / 汇率_锚)，w 为仓位系数（按历史回测校准）。QDII 净值 T+1 公布，受时差/汇率/跟踪误差影响，仅供参考，非投资建议。</li>
-  <li>申购状态是套利前提：<b>暂停申购</b> 无法做「申购→卖出」；<b>限大额</b> 受每日上限约束。</li>
-</ul>
-</div>
-</div>
-<script>
-const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
-let currentMode="auto";
-function applyTheme(t){
-  document.documentElement.setAttribute('data-theme', t);
-  const icon=document.getElementById('themeIcon');
-  const lbl=document.getElementById('themeLbl');
-  if(icon) icon.textContent = (t==='light') ? '☀️' : '🌙';
-  if(lbl) lbl.textContent  = (t==='light') ? '日间' : '夜间';
-  try{ localStorage.setItem('arb_theme', t); }catch(e){}
-}
-function toggleTheme(){
-  const cur = (document.documentElement.getAttribute('data-theme')==='light') ? 'dark' : 'light';
-  applyTheme(cur);
-}
-function initTheme(){
-  let t='dark';
-  try{ t = localStorage.getItem('arb_theme') || 'dark'; }catch(e){}
-  applyTheme(t);
-}
-initTheme();
-function fmtNum(v,d=4){ return v==null?"—":Number(v).toFixed(d); }
-function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+v.toFixed(2)+"%"; }
-function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-
-async function load(){
-  const code=document.getElementById('code').value.trim();
-  const days=document.getElementById('days').value.trim();
-  const threshold=document.getElementById('threshold').value.trim();
-  currentMode=document.getElementById('mode').value.trim();
-  const btn=document.getElementById('btn');
-  btn.disabled=true; document.getElementById('loading').style.display='block';
-  document.getElementById('err').textContent=''; document.getElementById('tablebox').style.display='none';
-  document.getElementById('summary').innerHTML='';
-  document.getElementById('statusbar').style.display='none';
-  document.getElementById('fund-title').innerHTML='';
-  try{
-    let url='/api/data?code='+encodeURIComponent(code)+'&days='+encodeURIComponent(days)
-          +'&threshold='+encodeURIComponent(threshold)+'&mode='+encodeURIComponent(currentMode);
-    const r=await fetch(url); const d=await r.json();
-    if(d.error){ throw new Error(d.error); }
-    render(d);
-  }catch(e){
-    document.getElementById('err').textContent='加载失败：'+e.message;
-  }finally{
-    document.getElementById('loading').style.display='none';
-    btn.disabled=false;
-  }
-}
-
-function render(d){
-  document.getElementById('staleBadge').style.display=(d&&d.stale)?'inline-flex':'none';
-  const code=d.code, name=d.name||('基金'+code);
-  // 友好提示：无数据（如代码非上市基金）时不留空白
-  document.getElementById('err').textContent = (!d.rows || d.rows.length===0)
-    ? '未查询到该基金的行情数据（代码可能非上市基金，或暂无可交易数据）。' : '';
-  syncClock(d);
-  // 右侧大标题：基金名称 + 代码
-  document.getElementById('fund-title').innerHTML=esc(name)+' <small>'+esc(code)+'</small>';
-
-  // 交易状态条（申购状态、限购、赎回）—— 这是基金当前状态，不是每日变化数据
-  const c=d.control||{};
-  const st=c.subscribe_status||'';
-  const stCol=STATUS_COLORS[st]||'#8c8c8c';
-  const bar=document.getElementById('statusbar');
-  bar.style.display='flex';
-  let barClass='info', barHtml='';
-  if(st){
-    barClass = (st==='开放申购'||st==='限大额申购')?'ok':'warn';
-    let hint='';
-    if(st==='暂停申购') hint='当前无法做「申购套利」，仅折价赎回套利可行（需看赎回状态）。';
-    else if(st==='限大额申购') hint='可做申购套利，但受每日上限约束。';
-    else if(st==='开放申购') hint='申购通道正常开放，可做「申购→卖出」溢价套利。';
-    else hint='该基金仅场内交易（无个人现金申赎），无法做申赎套利，只能二级市场买卖。';
-    barHtml='<div class="status-item"><span class="status-label">申购状态</span>'
-          +'<span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(st)+'</span></div>'
-          +'<div class="status-item"><span class="status-label">限购金额</span><span>'+(c.purchase_limit_text?esc(c.purchase_limit_text):'—')+'</span></div>'
-          +'<div class="status-item"><span class="status-label">赎回状态</span><span>'+esc(c.redeem_status||'—')+'</span></div>'
-          +'<div class="status-item"><span class="status-label">申购起点</span><span>'+(c.purchase_min!=null?esc(c.purchase_min+'元'):'—')+'</span></div>'
-          +'<div class="status-item" style="margin-left:auto;color:#8b949e">'+hint+'</div>';
-  }else{
-    barHtml='<div class="status-item">ℹ️ 申购状态获取失败（可能网络受限），请手动核对基金公告。</div>';
-  }
-  bar.className='statusbar '+barClass;
-  bar.innerHTML=barHtml;
-  // 摘要与估值基准块都要用 summary，先在此声明（避免 TDZ：估值基准块早于原声明处引用 s 会抛 ReferenceError）
-  const s=d.summary||{};
-
-  // 估值基准透明化（对标 haoetf「估值基准：SP500 7413.18 +0.02%」）：展示标的/模式/最新标的价
-  const baseEl=document.getElementById('baseinfo');
-  if(baseEl){
-    let bhtml='<b>估值基准</b>：'+esc(d.underlying_label||'—');
-    if(d.est_mode) bhtml+=' ｜ 模式：'+esc(d.est_mode);
-    if(s.latest_xop!=null) bhtml+=' ｜ 最新标的价：'+Number(s.latest_xop).toFixed(4);
-    baseEl.innerHTML=bhtml; baseEl.style.display='block';
-  }
-
-  // 摘要卡片（原油/油气基金才显示 XOP 收盘）
-  const showOil = !!d.is_oil_gas;
-  const summ=[
-    ['最新场内价', fmtNum(s.latest_price,4)],
-    ['最新估值溢价', fmtPct(s.latest_premium), s.latest_premium>0?'pos':(s.latest_premium<0?'neg':'')],
-  ];
-  if(d.use_fx!==false){
-    summ.push(['最新 USD/CNY', fmtNum(s.latest_fx,4)]);
-  }
-  if(showOil){
-    summ.splice(2,0,['最新 XOP 收盘', fmtNum(s.latest_xop,2)]);
-  }
-  document.getElementById('summary').innerHTML=summ.map(it=>
-    '<div class="sitem"><div class="l">'+it[0]+'</div><div class="v '+(it[2]||'')+'">'+it[1]+'</div></div>'
-  ).join('');
-
-  // 表格：日期 价格 涨跌% 净值 净值涨跌幅 估算净值 估值溢价 误差 [汇率 汇率涨跌]
-  //       （原油/油气基金追加 XOP收盘、XOP溢价） 申购状态 限购金额 套利信号
-  const showFx = d.use_fx!==false;
-  const head=['日期','价格','涨跌%','净值','净值涨跌幅','估算净值','估值溢价','误差'];
-  if(showFx) head.push('汇率','汇率涨跌');
-  if(showOil) head.push('XOP收盘','XOP溢价');
-  head.push('申购状态','限购金额','套利信号');
-  const limitTxt = c.purchase_limit!=null ? esc(c.purchase_limit+'元') : '—';
-  const stSub=c.subscribe_status||'', stRed=c.redeem_status||'';
-  const openSub=(stSub==='开放申购'||stSub==='限大额申购'), openRed=(stRed==='开放赎回');
-  const sigOf=p=>{
-    if(p==null) return ['—',''];
-    if(p>d.threshold) return openSub?['溢价·可申购套利','pos']:['溢价·仅场内','lock'];
-    if(p<-d.threshold) return openRed?['折价·可赎回套利','neg']:['折价·仅场内','lock'];
-    return ['平价(观察)',''];
-  };
-  let rowsHtml=d.rows.map(r=>{
-    const navCell = r.real_nav!=null? fmtNum(r.real_nav,4)
-        : '<span class="est">'+fmtNum(r.est_nav,4)+'<br><small>净值待公布</small></span>';
-    const sigR = r.est_premium!=null? r.est_premium : r.premium;
-    const [sigTxt,sigC]=sigOf(sigR);
-    let cells='<td>'+esc(r.date)+'</td>'
-      +'<td>'+fmtNum(r.price,4)+'</td>'
-      +'<td class="'+cls(r.price_change)+'">'+fmtPct(r.price_change,true)+'</td>'
-      +'<td>'+navCell+'</td>'
-      +'<td class="'+cls(r.nav_change)+'">'+fmtPct(r.nav_change,true)+'</td>'
-      +'<td>'+fmtNum(r.est_nav,4)+'</td>'
-      +'<td class="'+cls(r.est_premium)+'">'+fmtPct(r.est_premium,true)+'</td>'
-      +'<td class="'+cls(r.nav_err)+'">'+(r.nav_err!=null?fmtPct(r.nav_err,true):'—')+'</td>';
-    if(showFx){
-      cells += '<td>'+fmtNum(r.fx,4)+'</td>'
-             + '<td class="'+cls(r.fx_change)+'">'+fmtPct(r.fx_change,true)+'</td>';
-    }
-    if(showOil){
-      cells += '<td>'+fmtNum(r.xop,2)+'</td>'
-             + '<td class="'+cls(r.premium)+'">'+fmtPct(r.premium,true)+'</td>';
-    }
-    const stCol=STATUS_COLORS[c.subscribe_status||'']||'#8c8c8c';
-    cells += '<td><span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(c.subscribe_status||'—')+'</span></td>'
-           + '<td>'+limitTxt+'</td>'
-           + '<td class="'+sigC+'">'+sigTxt+'</td>';
-    return '<tr>'+cells+'</tr>';
-  }).join('');
-  document.getElementById('tbl').innerHTML='<tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr>'+rowsHtml;
-  document.getElementById('tablebox').style.display='block';
-  loadValidate(code);
-}
-
-async function loadValidate(code){
-  const box=document.getElementById('validate');
-  box.style.display='none'; box.innerHTML='';
-  const bt=document.getElementById('btinline'); if(bt) bt.innerHTML='';
-  try{
-    const r=await fetch('/api/validate?code='+encodeURIComponent(code)+'&days=30&mode='+encodeURIComponent(currentMode));
-    const d=await r.json();
-    if(d.error) return;
-    let comp='';
-    if(d.idx_mae!=null && d.hld_mae!=null){
-      comp=' · 自动择优→'+(d.mode==='holdings'?'持仓':'指数')
-        +' · 指数MAE '+esc(d.idx_mae)+'% · 持仓MAE '+esc(d.hld_mae)+'%'
-        +(d.mode==='holdings' && d.coverage!=null?(' · 覆盖 '+Math.round(d.coverage*100)+'%'):'');
-    }else if(d.mode==='holdings'){
-      comp=' · 模式=持仓估算'+(d.coverage!=null?(' · 覆盖 '+Math.round(d.coverage*100)+'%'):'');
-    }else if(d.mode==='index'){
-      comp=' · 模式=指数代理';
-    }
-    box.innerHTML='<div class="vmetrics">'
-      +'<div class="sitem"><div class="l">估算精度 MAE</div><div class="v">±'+esc(d.mae)+'%</div></div>'
-      +'<div class="sitem"><div class="l">中位数偏差</div><div class="v '+(d.median>0?'pos':(d.median<0?'neg':''))+'">'+fmtPct(d.median,true)+'</div></div>'
-      +'<div class="sitem"><div class="l">RMSE</div><div class="v">'+esc(d.rmse)+'%</div></div>'
-      +'</div>';
-    // 回测参数说明并入顶部「北京时间」同一行，界面更整洁
-    if(bt) bt.innerHTML=' ｜ 基于 <b>'+esc(d.count)+'</b> 个交易日回测 · w=<b>'+esc(Number(d.weight).toFixed(4))+'</b> · 滞后窗口 lag=<b>'+esc(d.lag)+'</b> · 标的=<b>'+esc(d.underlying)+'</b>'+comp+' · MAE 越小说明估算越稳。';
-    box.style.display='block';
-  }catch(e){}
-}
-document.getElementById('code').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
-document.getElementById('days').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
-document.getElementById('threshold').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
-// 支持从排行表点击代码跳转：?code=XXXX 预填并自动查询
-(function(){
-  try{
-    const p=new URLSearchParams(location.search);
-    const c=(p.get('code')||'').trim();
-    if(/^\d{6}$/.test(c)){ document.getElementById('code').value=c; }
-  }catch(e){}
-})();
-// 默认基金：无 ?code 时取「LOF / ETF 基金溢价排行表(网页2)」按当前默认排序的第 1 名。
-// 默认排序与网页2完全一致：① 申购状态(限大额>开放>暂停>其他) ② 估算溢价(或官方溢价)由高到低 ③ 成交额由大到小。
-// 拉取失败回退 162411。_BASE 兼容独立 HTML(file://) 与线上同源两种场景（make_standalone 会注入 BASE）。
-const _BASE = (typeof BASE !== 'undefined') ? BASE : '';
-function statusRankTop(st){
-  if(st==='限大额申购') return 0;
-  if(st==='开放申购') return 1;
-  if(st==='暂停申购') return 2;
-  return 3;
-}
-async function loadTopDefault(){
-  const input=document.getElementById('code');
-  input.value='';
-  document.getElementById('loading').style.display='block';
-  document.getElementById('fund-title').innerHTML='正在加载今日溢价排行表榜首基金…';
-  try{
-    const r=await fetch(_BASE+'/api/ranking?threshold=1.5');
-    const d=await r.json();
-    if(d.rows && d.rows.length){
-      const rows=d.rows.slice();
-      rows.sort((a,b)=>{
-        if(a.error && !b.error) return 1;
-        if(!a.error && b.error) return -1;
-        const s = statusRankTop(a.subscribe_status) - statusRankTop(b.subscribe_status);
-        if(s!==0) return s;
-        const ap = (a.est_premium!=null? a.est_premium : (a.premium!=null? a.premium : -Infinity));
-        const bp = (b.est_premium!=null? b.est_premium : (b.premium!=null? b.premium : -Infinity));
-        if(ap!==bp) return bp-ap;
-        const at = (a.turnover!=null? a.turnover : -Infinity);
-        const bt = (b.turnover!=null? b.turnover : -Infinity);
-        return bt-at;
-      });
-      if(rows.length) input.value=rows[0].code;
-    }
-  }catch(e){}
-  if(!input.value) input.value='162411';
-  load();
-}
-// 北京时间实时时钟：server_ts 为后端 UTC 秒。用它校准浏览器时钟漂移(_calib)，
-// 再用 Asia/Shanghai 显示——只转换一次时区，杜绝「+8h 后再 +8h」的双重偏移。
-let _calib = 0; // 真实 UTC 与浏览器本地时钟的偏差(ms)：真实 UTC 时刻 = Date.now() + _calib
-function syncClock(d){
-  if(d && d.server_ts){ _calib = d.server_ts*1000 - Date.now(); tickClock(); }
-}
-function tickClock(){
-  const el=document.getElementById('clock'); if(!el) return;
-  const now = new Date(Date.now() + _calib);
-  el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
-}
-setInterval(tickClock, 1000); tickClock();
-// 打开界面：带 ?code= 直接查该基金；否则默认加载 TOP 套利榜第 1 名
-(function(){
-  const p=new URLSearchParams(location.search);
-  const c=(p.get('code')||'').trim();
-  if(/^\d{6}$/.test(c)){ load(); } else { loadTopDefault(); }
-})();
-// 注册 Service Worker，支持「添加到主屏幕 / 离线看壳」
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err));
-  });
-}
-</script>
-</body></html>"""
 
 # ---------------------------------------------------------------------------
 # 交互网页界面二（由 /ranking 返回，数据通过 /api/ranking 拉取）
 # ---------------------------------------------------------------------------
-PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d1117">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon.svg">
-<title>LOF/ETF 基金溢价排行表</title>
-<style>""" + COMMON_CSS + r"""
-/* 界面二专属样式 */
-.watchlist{width:100%;min-height:60px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px}
-.add-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
-.add-row .field{flex:1;min-width:120px}
-.add-row button{padding:9px 14px}
-/* 代码清单：挪到查询行右侧，点击展开为下拉编辑菜单（拉菜单） */
-.codelist{margin-left:auto;flex:none;min-width:240px;max-width:520px;align-self:flex-end}
-.codelist>summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;gap:3px;
-  background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;
-  color:var(--text);font-size:13px;user-select:none}
-.codelist>summary::-webkit-details-marker{display:none}
-.codelist>summary:hover{border-color:var(--btn)}
-.codelist .cl-head{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--title)}
-.codelist .cl-head .chev{transition:transform .15s;color:var(--muted)}
-.codelist[open] .cl-head .chev{transform:rotate(180deg)}
-.codelist .cl-preview{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-.codelist .cl-body{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
-/* 排行表格：表头锁定 + 横向滚动显示全部列（手机端不再截断中间列） */
-.rank-scroll{overflow:auto;max-height:74vh;-webkit-overflow-scrolling:touch}
-.rank-scroll table{font-size:12px;table-layout:auto;width:max-content;min-width:100%}
-.rank-scroll th,.rank-scroll td{padding:7px 8px;white-space:nowrap}
-.rank-scroll th{position:sticky;top:0;z-index:3}
-.summary2{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
-.rank-bar{background:var(--sb-info-bg);border:1px solid var(--sb-info-border);border-radius:10px;padding:12px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:13px}
-.rank-bar .k{color:var(--muted)}
-.rank-bar .v{font-weight:600;color:var(--title)}
-.del-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:2px 8px;font-size:12px;border-radius:4px;cursor:pointer}
-.del-btn:hover{background:#ff4d4f22;border-color:#ff4d4f55;color:#ff4d4f}
-.pin-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:2px 7px;font-size:12px;border-radius:4px;cursor:pointer;margin-right:4px;opacity:.55;filter:grayscale(1)}
-.pin-btn.on{opacity:1;filter:none;border-color:#ffc53d88;background:#ffc53d1a}
-.pin-btn:hover{background:#ffc53d22;border-color:#ffc53d}
-.op-cell .pin-btn{margin-right:4px}
-.sort-hint{color:var(--muted);font-size:12px;margin-left:8px}
-.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--btn);color:#fff;
-  padding:8px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50}
-.toast.show{opacity:1}
-@media (max-width:760px){
-  .summary2{grid-template-columns:repeat(2,1fr)}
-  .add-row .field{width:100%}
-  .codelist{margin-left:0;max-width:none;width:100%;align-self:stretch}
-  .rank-scroll{max-height:66vh}
-}
-@media (max-width:420px){
-  .summary2{grid-template-columns:1fr}
-}
-</style></head><body>
-<div class="wrap">
-<div class="topbar">
-  <div class="titles">
-    <h1>LOF / ETF 基金溢价排行表 <span class="ver">V1.3</span></h1>
-  </div>
-  <div class="top-actions">
-    <a class="theme-btn" href="/" title="返回单基金套利看板">套利看板</a>
-    <a class="theme-btn" href="/top" title="全市场 LOF TOP 套利机会">TOP套利</a>
-    <a class="theme-btn" href="/pivot" title="口袋支点量化选股">口袋支点</a>
-    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
-    <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
-  </div>
-</div>
-
-<div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
-
-<div class="panel">
-  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
-  <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
-  <button id="btn" onclick="load()">查询排行</button>
-  <details class="codelist" id="codelist">
-    <summary>
-      <span class="cl-head"><span id="clCount">基金清单</span><span class="chev">▾</span></span>
-      <span class="cl-preview" id="clPreview"></span>
-    </summary>
-    <div class="cl-body">
-      <div class="field" style="width:100%"><label>基金代码清单（逗号 / 空格 / 分号 / 换行分隔）</label>
-        <textarea id="watchlist" class="watchlist" placeholder="例如：162411, 161130, 164824"></textarea></div>
-      <div class="add-row">
-        <div class="field"><label>添加基金代码</label><input id="addCode" placeholder="6 位基金代码"></div>
-        <button onclick="addCode()">添加</button>
-        <button onclick="saveList();toast('已保存设置')" style="background:var(--panel);color:var(--text);border:1px solid var(--border)">保存设置</button>
-        <button onclick="resetList()" style="background:var(--panel);color:var(--text);border:1px solid var(--border)">恢复默认</button>
-        <span class="sort-hint">默认申购状态优先、溢价高者居前；点击表头可切换排序</span>
-      </div>
-    </div>
-  </details>
-</div>
-
-<div class="rank-bar" id="rankbar" style="display:none"></div>
-<div id="summary2" class="summary2"></div>
-<div id="loading">加载中…</div>
-<div id="err"></div>
-<div class="tablebox rank-scroll" id="tablebox" style="display:none"><table id="tbl"></table></div>
-
-<div class="note">
-<b>说明</b>
-<ul>
-  <li><b>官方溢价</b> = (价格 - 净值) / 净值；<b>估值溢价</b> = (价格 - 估算净值) / 估算净值。红=溢价，绿=折价。</li>
-  <li>非交易日自动落到最近 &le; 该日的交易日。估算算法与套利看板一致；QDII（原油/黄金/纳指/标普/印度等）按海外标估算，国内基金取最近净值。</li>
-  <li>增删代码后点「查询排行」刷新；「保存设置」可永久记住清单。</li>
-</ul>
-</div>
-</div>
-<script>
-const DEFAULT_WATCHLIST=["513310","501018","518850","161226","159501","513520","513290","513120","513130","159985","160644","159545","159516","515880","159819","511130","159201","588200","159509","161128","511380","562800","159552","561550","520870","159530","515030","159326","159218","513750","513690","515220","162411","160719","501312","161130","161129","161124","160216","161125","160723","501225","501025","501012","160140"];
-const LIST_VERSION="20250727";
-const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
-let currentRows=[], sortKey='premium', sortDesc=true, currentFilter=null, currentThreshold=1.5, currentMeta=null;
-
-function applyTheme(t){
-  document.documentElement.setAttribute('data-theme', t);
-  const icon=document.getElementById('themeIcon'); const lbl=document.getElementById('themeLbl');
-  if(icon) icon.textContent = (t==='light') ? '☀️' : '🌙';
-  if(lbl) lbl.textContent  = (t==='light') ? '日间' : '夜间';
-  try{ localStorage.setItem('arb_theme', t); }catch(e){}
-}
-function toggleTheme(){ applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'); }
-function initTheme(){ let t='dark'; try{ t=localStorage.getItem('arb_theme')||'dark'; }catch(e){} applyTheme(t); }
-initTheme();
-function fmtNum(v,d=4){ return v==null?"—":Number(v).toFixed(d); }
-function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+v.toFixed(2)+"%"; }
-function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-
-function parseWatchlist(){
-  const raw=document.getElementById('watchlist').value;
-  return [...new Set(raw.split(/[,，;；\s]+/).map(x=>x.trim()).filter(x=>/^\d{6}$/.test(x)))];
-}
-function setWatchlist(arr){ document.getElementById('watchlist').value = arr.join('\n'); }
-function refreshCodeListUI(){
-  const list=parseWatchlist();
-  const cnt=document.getElementById('clCount');
-  const prev=document.getElementById('clPreview');
-  if(cnt) cnt.textContent='基金 '+list.length+' 只';
-  if(prev) prev.textContent = list.length? list.slice(0,14).join(' ') + (list.length>14?' …':'') : '（空）';
-}
-function loadList(){
-  let list;
-  try{
-    const ver = localStorage.getItem('arb_ranking_list_version');
-    if(ver === LIST_VERSION) list = JSON.parse(localStorage.getItem('arb_ranking_list'));
-  }catch(e){}
-  if(!Array.isArray(list) || list.length===0){ list = DEFAULT_WATCHLIST; saveList(); }
-  setWatchlist(list);
-  refreshCodeListUI();
-}
-function saveList(){ localStorage.setItem('arb_ranking_list', JSON.stringify(parseWatchlist())); localStorage.setItem('arb_ranking_list_version', LIST_VERSION); }
-
-// 置顶（钉选）状态：localStorage 持久化，数组顺序即置顶排列顺序
-let pins=[];
-function loadPins(){ try{ const p=JSON.parse(localStorage.getItem('fundarb_pins')); if(Array.isArray(p)) pins=p.filter(x=>typeof x==='string'); }catch(e){} }
-function savePins(){ try{ localStorage.setItem('fundarb_pins', JSON.stringify(pins)); }catch(e){} }
-function togglePin(code){
-  const i=pins.indexOf(code);
-  if(i>=0) pins.splice(i,1); else pins.push(code);
-  savePins(); renderBody();
-}
-function clearPins(){ pins=[]; savePins(); renderBody(); }
-function addCode(){
-  const inp=document.getElementById('addCode'); const c=inp.value.trim();
-  if(!/^\d{6}$/.test(c)){ alert('请输入 6 位基金代码'); return; }
-  const list=parseWatchlist();
-  if(list.includes(c)){ alert('该代码已在清单中'); inp.value=''; return; }
-  list.push(c); setWatchlist(list); saveList(); refreshCodeListUI(); inp.value='';
-  load();
-}
-function removeCode(c){
-  const list=parseWatchlist().filter(x=>x!==c); setWatchlist(list); saveList(); refreshCodeListUI(); load();
-}
-function resetList(){ setWatchlist(DEFAULT_WATCHLIST); saveList(); refreshCodeListUI(); load(); }
-function toast(msg){
-  let t=document.getElementById('toast');
-  if(!t){ t=document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
-  t.textContent=msg; t.classList.add('show');
-  clearTimeout(t._tm); t._tm=setTimeout(()=>t.classList.remove('show'), 1600);
-}
-
-function today(){ const s=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return s.replace(/\//g,'-'); }
-function initDate(){
-  const d=document.getElementById('rdate');
-  d.value = today();
-}
-
-document.getElementById('addCode').addEventListener('keydown',e=>{ if(e.key==='Enter') addCode(); });
-
-document.getElementById('rdate').addEventListener('change',()=>{
-  try{ localStorage.setItem('arb_ranking_date', document.getElementById('rdate').value); }catch(e){}
-});
-
-async function load(){
-  const date=document.getElementById('rdate').value;
-  const threshold=document.getElementById('threshold').value;
-  const codes=parseWatchlist();
-  if(codes.length===0){ alert('请至少输入一个基金代码'); return; }
-  saveList();
-  try{ localStorage.setItem('arb_ranking_date', date); }catch(e){}
-  const btn=document.getElementById('btn'); btn.disabled=true;
-  document.getElementById('loading').style.display='block';
-  document.getElementById('err').textContent=''; document.getElementById('tablebox').style.display='none';
-  document.getElementById('rankbar').style.display='none'; document.getElementById('summary2').innerHTML='';
-  try{
-    const url='/api/ranking?date='+encodeURIComponent(date)+'&codes='+encodeURIComponent(codes.join(','))+'&threshold='+encodeURIComponent(threshold);
-    const r=await fetch(url); const d=await r.json();
-    if(d.error){ throw new Error(d.error); }
-    currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d);
-  }catch(e){
-    document.getElementById('err').textContent='加载失败：'+e.message;
-  }finally{
-    document.getElementById('loading').style.display='none'; btn.disabled=false;
-  }
-}
-
-function statusRank(st){
-  if(st==='限大额申购') return 0;
-  if(st==='开放申购') return 1;
-  if(st==='暂停申购') return 2;
-  return 3;
-}
-function defaultSort(){
-  sortKey='__default__'; sortDesc=true;
-  currentRows.sort((a,b)=>{
-    if(a.error && !b.error) return 1;
-    if(!a.error && b.error) return -1;
-    const s = statusRank(a.subscribe_status) - statusRank(b.subscribe_status);
-    if(s!==0) return s;
-    const ap = (a.est_premium!=null? a.est_premium : (a.premium!=null? a.premium : -Infinity));
-    const bp = (b.est_premium!=null? b.est_premium : (b.premium!=null? b.premium : -Infinity));
-    if(ap!==bp) return bp-ap;
-    const at = (a.turnover!=null? a.turnover : -Infinity);
-    const bt = (b.turnover!=null? b.turnover : -Infinity);
-    return bt-at;
-  });
-  renderBody();
-}
-function sortRows(key){
-  if(sortKey===key) sortDesc=!sortDesc; else { sortKey=key; sortDesc=true; }
-  const isStr = ['code','name','date','subscribe_status','signal'].includes(key);
-  currentRows.sort((a,b)=>{
-    let av=a[sortKey], bv=b[sortKey];
-    if(a.error) av=null; if(b.error) bv=null;
-    if(av==null && bv==null) return 0;
-    if(av==null) return 1; if(bv==null) return -1;
-    if(isStr) return sortDesc? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
-    return sortDesc? (bv-av) : (av-bv);
-  });
-  renderBody();
-}
-function render(meta){
-  document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
-  currentMeta=meta; currentThreshold=meta.threshold;
-  syncClock(meta);
-  const rows=currentRows;
-  const ok=rows.filter(r=>!r.error);
-  const premium=ok.filter(r=>r.premium!=null);
-  const maxPrem = premium.length? premium.reduce((a,b)=>a.premium>b.premium?a:b) : null;
-  const minPrem = premium.length? premium.reduce((a,b)=>a.premium<b.premium?a:b) : null;
-
-  const bar=document.getElementById('rankbar');
-  bar.style.display='flex';
-  bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
-    +'<div class="status-item"><span class="k">基金数</span><span class="v">'+rows.length+'</span></div>'
-    +'<div class="status-item"><span class="k">成功</span><span class="v">'+ok.length+'</span></div>'
-    +(maxPrem?'<div class="status-item"><span class="k">最高溢价</span><span class="v pos">'+fmtPct(maxPrem.premium)+' '+esc(maxPrem.name)+'</span></div>':'')
-    +(minPrem?'<div class="status-item"><span class="k">最高折价</span><span class="v neg">'+fmtPct(minPrem.premium)+' '+esc(minPrem.name)+'</span></div>':'')
-    +(pins.length?'<div class="status-item clickable" onclick="clearPins()" title="取消全部置顶"><span class="k">已置顶</span><span class="v" style="color:#ffc53d">'+pins.length+' 只 · 清除</span></div>':'');
-
-  renderSummary();
-  defaultSort();
-}
-
-// 统计卡片：三项数值可点击筛选；再次点击或「清除筛选」取消
-function renderSummary(){
-  const meta=currentMeta; if(!meta) return;
-  const rows=currentRows;
-  const ok=rows.filter(r=>!r.error);
-  const up=ok.filter(r=>r.premium>meta.threshold).length;
-  const down=ok.filter(r=>r.premium<-meta.threshold).length;
-  const sub=ok.filter(r=>['开放申购','限大额申购'].includes(r.subscribe_status)&&r.premium>meta.threshold).length;
-  const card=(lbl,val,cls,type)=>'<div class="sitem clickable'+(currentFilter===type?' active':'')+'" onclick="setFilter(\''+type+'\')" title="点击筛选符合条件的基金"><div class="l">'+lbl+'</div><div class="v '+cls+'">'+val+'</div></div>';
-  let html=[
-    card('溢价 > '+meta.threshold+'%', up, 'pos', 'premium'),
-    card('折价 < -'+meta.threshold+'%', down, 'neg', 'discount'),
-    card('可申购套利', sub, '', 'subscribe'),
-    '<div class="sitem"><div class="l">数据异常</div><div class="v">'+(rows.length-ok.length)+'</div></div>',
-  ];
-  if(currentFilter){
-    html.push('<div class="sitem clickable active" onclick="setFilter(null)" title="清除筛选"><div class="l">清除筛选</div><div class="v">✕</div></div>');
-  }
-  document.getElementById('summary2').innerHTML=html.join('');
-}
-
-function applyFilter(r){
-  if(r.error) return false;
-  if(currentFilter==='premium')    return r.premium>currentThreshold;
-  if(currentFilter==='discount')   return r.premium<-currentThreshold;
-  if(currentFilter==='subscribe')  return ['开放申购','限大额申购'].includes(r.subscribe_status) && r.premium>currentThreshold;
-  return true;
-}
-
-function setFilter(type){
-  currentFilter = (currentFilter===type && type!==null) ? null : type;
-  renderSummary();   // 刷新卡片高亮
-  renderBody();      // 按筛选重绘表格
-}
-
-function renderBody(){
-  const head=[
-    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
-    {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
-    {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},{k:'turnover',l:'成交额(万元)'},
-    {k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},{k:'signal',l:'套利信号'},{k:'',l:'操作'}
-  ];
-  const hHtml=head.map(h=>{ const cls=(h.l==='操作')?' class="op-cell"':''; return h.k? '<th'+cls+' style="cursor:pointer" onclick="sortRows(\''+h.k+'\')" title="点击排序">'+esc(h.l)+'</th>' : '<th'+cls+'>'+esc(h.l)+'</th>'; }).join('');
-  let rows = currentFilter ? currentRows.filter(applyFilter) : currentRows;
-  // 置顶排序：被钉选的基金浮到表首（按 pins 数组顺序），其余保持当前排序在后
-  if(pins.length){
-    const pinnedSet=new Set(pins); const pinned=[], unpinned=[];
-    for(const r of rows){ if(!r.error && pinnedSet.has(r.code)) pinned.push(r); else unpinned.push(r); }
-    pinned.sort((a,b)=> pins.indexOf(a.code)-pins.indexOf(b.code));
-    rows = pinned.concat(unpinned);
-  }
-  const rowsHtml=rows.map(r=>{
-    if(r.error) return '<tr><td>'+esc(r.code)+'</td><td colspan="14" style="text-align:left;color:var(--muted)">'+esc(r.name)+' — '+esc(r.error)+'</td></tr>';
-    const st=r.subscribe_status||''; const stCol=STATUS_COLORS[st]||'#8c8c8c';
-    const limitTxt = r.purchase_limit!=null ? esc(r.purchase_limit+'元') : '—';
-    const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':((r.signal_cls==='premium_lock'||r.signal_cls==='discount_lock')?'lock':''));
-    return '<tr>'
-      +'<td class="code"><a class="codelink" href="/?code='+esc(r.code)+'">'+esc(r.code)+'</a></td>'
-      +'<td class="name" title="'+esc(r.name)+'">'+esc(r.short||r.name)+'</td>'
-      +'<td>'+esc(r.date)+'</td>'
-      +'<td>'+fmtNum(r.price,4)+'</td>'
-      +'<td class="'+cls(r.price_change)+'">'+fmtPct(r.price_change,true)+'</td>'
-      +'<td>'+fmtNum(r.nav,4)+'</td>'
-      +'<td>'+esc(r.nav_date||'—')+'</td>'
-      +'<td class="'+cls(r.premium)+'">'+fmtPct(r.premium,true)+'</td>'
-      +'<td>'+fmtNum(r.est_nav,4)+'</td>'
-      +'<td class="'+cls(r.est_premium)+'">'+fmtPct(r.est_premium,true)+'</td>'
-      +'<td>'+(r.turnover!=null? Number(r.turnover).toLocaleString('zh-CN',{maximumFractionDigits:0}) : '—')+'</td>'
-      +'<td><span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(st||'—')+'</span></td>'
-      +'<td>'+limitTxt+'</td>'
-      +'<td class="'+sigC+' sig-cell">'+esc(r.signal)+'</td>'
-      +'<td class="op-cell"><button class="pin-btn'+(pins.includes(r.code)?' on':'')+'" onclick="togglePin(\''+esc(r.code)+'\')" title="置顶/取消置顶">📌</button><button class="del-btn" onclick="removeCode(\''+esc(r.code)+'\')" title="移除">×</button></td>'
-      +'</tr>';
-  }).join('');
-  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+rowsHtml;
-  document.getElementById('tablebox').style.display='block';
-}
-
-// 北京时间实时时钟：server_ts 为后端 UTC 秒。用它校准浏览器时钟漂移(_calib)，
-// 再用 Asia/Shanghai 显示——只转换一次时区，杜绝「+8h 后再 +8h」的双重偏移。
-let _calib = 0; // 真实 UTC 与浏览器本地时钟的偏差(ms)：真实 UTC 时刻 = Date.now() + _calib
-function syncClock(d){
-  if(d && d.server_ts){ _calib = d.server_ts*1000 - Date.now(); tickClock(); }
-}
-function tickClock(){
-  const el=document.getElementById('clock'); if(!el) return;
-  const now = new Date(Date.now() + _calib);
-  el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
-}
-setInterval(tickClock, 1000); tickClock();
-loadList(); loadPins(); initDate(); load();
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err)); });
-}
-</script>
-</body></html>"""
 
 
 # ---------------------------------------------------------------------------
 # 交互网页界面三（由 /top 返回，数据通过 /api/top 拉取）：全市场 LOF TOP 套利榜
 # ---------------------------------------------------------------------------
-PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d1117">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon.svg">
-<title>LOF TOP 套利榜</title>
-<style>""" + COMMON_CSS + r"""
-.rank-scroll{overflow:auto;max-height:74vh;-webkit-overflow-scrolling:touch}
-.rank-scroll table{font-size:12px;table-layout:auto;width:max-content;min-width:100%}
-.rank-scroll th,.rank-scroll td{padding:7px 8px;white-space:nowrap}
-.rank-scroll th{position:sticky;top:0;z-index:3}
-.summary2{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
-.rank-bar{background:var(--sb-info-bg);border:1px solid var(--sb-info-border);border-radius:10px;padding:12px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:13px}
-.rank-bar .k{color:var(--muted)}
-.rank-bar .v{font-weight:600;color:var(--title)}
-@media (max-width:760px){
-  .summary2{grid-template-columns:repeat(2,1fr)}
-  .rank-scroll{max-height:66vh}
-}
-@media (max-width:420px){ .summary2{grid-template-columns:1fr} }
-</style></head><body>
-<div class="wrap">
-<div class="topbar">
-  <div class="titles">
-    <h1>LOF TOP 套利榜 <span class="ver">V1.3</span></h1>
-  </div>
-  <div class="top-actions">
-    <a class="theme-btn" href="/" title="单基金套利看板">套利看板</a>
-    <a class="theme-btn" href="/ranking" title="基金溢价排行表">排行表</a>
-    <a class="theme-btn" href="/pivot" title="口袋支点量化选股">口袋支点</a>
-    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
-    <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
-  </div>
-</div>
-
-<div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
-
-<div class="panel">
-  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
-  <div class="field"><label>溢价阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
-  <div class="field"><label>折价阈值 %</label><input id="dgate" value="-2" type="number" step="0.1" min="-10" max="-0.1"></div>
-  <button id="btn" onclick="load()">扫描全市场</button>
-  <span class="sort-hint" style="color:var(--muted);font-size:12px">首次扫描约 30~90 秒（全市场取数），10 分钟内重复查询秒回。</span>
-</div>
-
-<div class="rank-bar" id="rankbar" style="display:none"></div>
-<div id="summary2" class="summary2"></div>
-<div id="loading">加载中…（全市场扫描较慢，请稍候）</div>
-<div id="err"></div>
-<div class="tablebox rank-scroll" id="tablebox" style="display:none"><table id="tbl"></table></div>
-
-<div class="note">
-<b>说明</b>
-<ul>
-  <li>全市场 LOF 自动扫描 → 粗筛（可交易+非债基+规模≥1亿+有净值）→ 精算估算溢价 → 终筛（申赎/限购/阈值）→ 默认排序：① 申购状态（限大额申购 → 开放申购 靠前）② 估算溢价由高到低 ③ 成交额由大到小。估算算法与排行表一致。</li>
-  <li><b>粗筛条件（同时满足）</b>：① 当天 A 股场内可交易（有行情且有成交）· ② 非债基（剔除债基/含债/固收类型）· ③ 二级市场可交易规模（东财场内流通市值）≥ 1 亿元 · ④ 有最新净值。终筛再加：⑤ 限购 &gt; 1 元或不限购（暂停申购不入选）· ⑥ 估算溢价 ≥ 溢价阈值 或 估算溢价 &lt; 折价阈值且开放赎回。</li>
-  <li><b>成交额</b>：默认排序第③位的成交额列反映流动性（来源腾讯当日行情字段[37]；盘前查看即为上一交易日全量成交）。</li>
-  <li><b>估算溢价</b> = (价格 - 估算净值) / 估算净值；QDII 按海外标的+汇率修正，国内基金取最近净值。红=溢价，绿=折价。</li>
-  <li>「暂停申购」不属于可申购状态（开放申购 / 限大额申购），不满足条件③，即使深折价也不入榜（条件为同时满足）。</li>
-  <li>二级市场可交易规模取东财场内流通市值（场内规模），门槛 ≥ 1 亿元；限购金额取东财场内基金表当日数据。榜单仅供参考，非投资建议。</li>
-</ul>
-</div>
-</div>
-<script>
-const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
-let currentRows=[], sortKey='abs_est', sortDesc=true, currentFilter=null, currentMeta=null, currentThreshold=1.5, currentDgate=-2;
-function applyTheme(t){
-  document.documentElement.setAttribute('data-theme', t);
-  const icon=document.getElementById('themeIcon'); const lbl=document.getElementById('themeLbl');
-  if(icon) icon.textContent = (t==='light') ? '☀️' : '🌙';
-  if(lbl) lbl.textContent  = (t==='light') ? '日间' : '夜间';
-  try{ localStorage.setItem('arb_theme', t); }catch(e){}
-}
-function toggleTheme(){ applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'); }
-function initTheme(){ let t='dark'; try{ t=localStorage.getItem('arb_theme')||'dark'; }catch(e){} applyTheme(t); }
-initTheme();
-function fmtNum(v,d=4){ return v==null?"—":Number(v).toFixed(d); }
-function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+v.toFixed(2)+"%"; }
-function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function today(){ const s=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return s.replace(/\//g,'-'); }
-
-async function load(){
-  const date=document.getElementById('rdate').value;
-  const threshold=document.getElementById('threshold').value;
-  const dgate=document.getElementById('dgate').value;
-  const btn=document.getElementById('btn'); btn.disabled=true;
-  document.getElementById('loading').style.display='block';
-  document.getElementById('err').textContent=''; document.getElementById('tablebox').style.display='none';
-  document.getElementById('rankbar').style.display='none'; document.getElementById('summary2').innerHTML='';
-  try{
-    const url='/api/top?date='+encodeURIComponent(date)+'&threshold='+encodeURIComponent(threshold)+'&dgate='+encodeURIComponent(dgate);
-    const r=await fetch(url); const d=await r.json();
-    if(d.error){ throw new Error(d.error); }
-    currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d);
-  }catch(e){
-    document.getElementById('err').textContent='加载失败：'+e.message;
-  }finally{
-    document.getElementById('loading').style.display='none'; btn.disabled=false;
-  }
-}
-
-function statusRankTop(st){
-  if(st==='限大额申购') return 0;
-  if(st==='开放申购') return 1;
-  return 2;
-}
-function defaultSort(){
-  sortKey='__default__'; sortDesc=true;
-  currentRows.sort((a,b)=>{
-    const s = statusRankTop(a.subscribe_status) - statusRankTop(b.subscribe_status);
-    if(s!==0) return s;
-    const ap = (a.est_premium!=null? a.est_premium : (a.premium!=null? a.premium : -Infinity));
-    const bp = (b.est_premium!=null? b.est_premium : (b.premium!=null? b.premium : -Infinity));
-    if(ap!==bp) return bp-ap;
-    const at = (a.turnover!=null? a.turnover : -Infinity);
-    const bt = (b.turnover!=null? b.turnover : -Infinity);
-    return bt-at;
-  });
-  renderBody();
-}
-// 统计卡片：溢价套利/折价套利可点击筛选（与网页2一致）；再次点击或「清除筛选」取消
-function renderSummary(){
-  const meta=currentMeta; if(!meta) return;
-  const rows=currentRows;
-  const est=r=> r.est_premium!=null?r.est_premium:(r.premium!=null?r.premium:null);
-  const prem=rows.filter(r=>{const p=est(r); return p!=null && p>=meta.threshold;}).length;
-  const disc=rows.filter(r=>{const p=est(r); return p!=null && p<meta.dgate && r.redeem_status==='开放赎回';}).length;
-  const card=(lbl,val,cls,type)=>'<div class="sitem clickable'+(currentFilter===type?' active':'')+'" onclick="setFilter(\''+type+'\')" title="点击筛选符合条件的基金"><div class="l">'+lbl+'</div><div class="v '+cls+'">'+val+'</div></div>';
-  let html=[
-    card('溢价套利（≥'+meta.threshold+'%）', prem, 'pos', 'premium'),
-    card('折价套利（<'+meta.dgate+'%且可赎回）', disc, 'neg', 'discount'),
-    '<div class="sitem"><div class="l">入榜总数</div><div class="v">'+rows.length+'</div></div>',
-  ];
-  if(currentFilter){
-    html.push('<div class="sitem clickable active" onclick="setFilter(null)" title="清除筛选"><div class="l">清除筛选</div><div class="v">✕</div></div>');
-  }
-  document.getElementById('summary2').innerHTML=html.join('');
-}
-function applyFilter(r){
-  const est=r.est_premium!=null?r.est_premium:(r.premium!=null?r.premium:null);
-  if(est==null) return false;
-  if(currentFilter==='premium')  return est>=currentThreshold;
-  if(currentFilter==='discount') return est<currentDgate && r.redeem_status==='开放赎回';
-  return true;
-}
-function setFilter(type){
-  currentFilter = (currentFilter===type && type!==null) ? null : type;
-  renderSummary();
-  renderBody();
-}
-function sortRows(key){
-  if(sortKey===key) sortDesc=!sortDesc; else { sortKey=key; sortDesc=true; }
-  const isStr = ['code','name','date','nav_date','subscribe_status','redeem_status','signal'].includes(key);
-  currentRows.sort((a,b)=>{
-    let av=a[sortKey], bv=b[sortKey];
-    if(av==null && bv==null) return 0;
-    if(av==null) return 1; if(bv==null) return -1;
-    if(isStr) return sortDesc? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
-    return sortDesc? (bv-av) : (av-bv);
-  });
-  renderBody();
-}
-
-function render(meta){
-  document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
-  currentMeta=meta;
-  // 同步查询阈值到全局，供点击筛选卡片时 applyFilter 使用（否则会沿用默认值 1.5/-2，与卡片标签不一致）
-  currentThreshold=meta.threshold; currentDgate=meta.dgate;
-  syncClock(meta);
-  const rows=currentRows;
-  const bar=document.getElementById('rankbar');
-  bar.style.display='flex';
-  bar.innerHTML='<div class="status-item"><span class="k">查询日期</span><span class="v">'+esc(meta.date)+'</span></div>'
-    +'<div class="status-item"><span class="k">全市场 LOF</span><span class="v">'+esc(meta.universe)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">场内可交易</span><span class="v">'+esc(meta.tradable)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">剔除债基</span><span class="v">'+esc((meta.filter_trace&&meta.filter_trace.excluded_bond)||0)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">粗筛候选(非债基+规模≥1亿)</span><span class="v">'+esc(meta.candidates)+' 只</span></div>'
-    +'<div class="status-item"><span class="k">入榜</span><span class="v">'+esc(meta.count)+' 只</span></div>';
-  renderSummary();
-  defaultSort();
-}
-
-function renderBody(){
-  const head=[
-    {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
-    {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
-    {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},{k:'index_change',l:'指数涨跌'},
-    {k:'scale',l:'场内规模(亿)'},{k:'turnover',l:'成交额(万元)'},{k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},
-    {k:'redeem_status',l:'赎回状态'},{k:'signal',l:'套利信号'}
-  ];
-  const hHtml=head.map(h=> h.k? '<th style="cursor:pointer" onclick="sortRows(\''+h.k+'\')" title="点击排序">'+esc(h.l)+'</th>' : '<th>'+esc(h.l)+'</th>').join('');
-  const rows = currentFilter ? currentRows.filter(applyFilter) : currentRows;
-  const rowsHtml=rows.map((r,i)=>{
-    const st=r.subscribe_status||''; const stCol=STATUS_COLORS[st]||'#8c8c8c';
-    const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':((r.signal_cls==='premium_lock'||r.signal_cls==='discount_lock')?'lock':''));
-    const rdCol = (r.redeem_status==='开放赎回')?'#52c41a':'#ff4d4f';
-    return '<tr>'
-      +'<td>'+(i+1)+'</td>'
-      +'<td class="code"><a class="codelink" href="/?code='+esc(r.code)+'">'+esc(r.code)+'</a></td>'
-      +'<td class="name" title="'+esc(r.name)+'">'+esc(r.short||r.name)+'</td>'
-      +'<td>'+esc(r.date)+'</td>'
-      +'<td>'+fmtNum(r.price,4)+'</td>'
-      +'<td class="'+cls(r.price_change)+'">'+fmtPct(r.price_change,true)+'</td>'
-      +'<td>'+fmtNum(r.nav,4)+'</td>'
-      +'<td>'+esc(r.nav_date||'—')+'</td>'
-      +'<td class="'+cls(r.premium)+'">'+fmtPct(r.premium,true)+'</td>'
-      +'<td>'+fmtNum(r.est_nav,4)+'</td>'
-    +'<td class="'+cls(r.est_premium)+'">'+fmtPct(r.est_premium,true)+'</td>'
-    +'<td class="'+cls(r.index_change)+'">'+fmtPct(r.index_change,true)+'</td>'
-    +'<td>'+(r.scale!=null? Number(r.scale).toFixed(2):'—')+'</td>'
-      +'<td>'+(r.turnover!=null? Number(r.turnover).toLocaleString('zh-CN',{maximumFractionDigits:0}) : '—')+'</td>'
-      +'<td><span class="badge" style="background:'+stCol+'22;color:'+stCol+';border:1px solid '+stCol+'55">'+esc(st||'—')+'</span></td>'
-      +'<td>'+esc(r.purchase_limit_text||'—')+'</td>'
-      +'<td style="color:'+rdCol+'">'+esc(r.redeem_status||'—')+'</td>'
-      +'<td class="'+sigC+' sig-cell">'+esc(r.signal||'—')+'</td>'
-      +'</tr>';
-  }).join('');
-  const emptyMsg = currentFilter ? '当前筛选条件下没有符合条件的 LOF 基金' : '当前没有满足全部四个条件的 LOF 基金';
-  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+(rows.length? rowsHtml : '<tr><td colspan="18" style="text-align:center;color:var(--muted);padding:18px">'+emptyMsg+'</td></tr>');
-  document.getElementById('tablebox').style.display='block';
-}
-
-// 北京时间实时时钟（与其余页面一致：server_ts 校准 + Asia/Shanghai 单次转换）
-let _calib = 0;
-function syncClock(d){ if(d && d.server_ts){ _calib = d.server_ts*1000 - Date.now(); tickClock(); } }
-function tickClock(){
-  const el=document.getElementById('clock'); if(!el) return;
-  const now = new Date(Date.now() + _calib);
-  el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
-}
-setInterval(tickClock, 1000); tickClock();
-(function(){ const d=document.getElementById('rdate'); d.value=today(); })();
-load();
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err)); });
-}
-</script>
-</body></html>"""
 
 
 # ---------------------------------------------------------------------------
 # PWA 资源（manifest / service worker / 图标）
 # ---------------------------------------------------------------------------
-MANIFEST_JSON = r"""{
-  "name": "LOF/ETF 基金套利数据看板",
-  "short_name": "套利看板",
-  "description": "动态拉取 LOF/ETF 净值、价格、标的、汇率与申购状态，计算溢价率与套利信号。",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
-  "orientation": "portrait",
-  "icons": [
-    {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
-  ]
-}"""
 
-ICON_SVG = r"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0d1117"/>
-  <rect x="96" y="300" width="56" height="116" rx="8" fill="#2ecc71"/>
-  <rect x="176" y="240" width="56" height="176" rx="8" fill="#2ecc71"/>
-  <rect x="256" y="180" width="56" height="236" rx="8" fill="#ff5b5b"/>
-  <rect x="336" y="120" width="56" height="296" rx="8" fill="#ff5b5b"/>
-  <path d="M120 200 L256 150 L392 110" fill="none" stroke="#f0f6fc" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M372 96 L398 108 L380 132 Z" fill="#f0f6fc"/>
-</svg>"""
 
-SW_JS = r"""const CACHE='fundarb-v1.4';
-const SHELL=['/','/ranking','/top','/manifest.json','/icon.svg'];
-self.addEventListener('install',e=>{
-  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));
-});
-self.addEventListener('activate',e=>{
-  e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
-});
-self.addEventListener('fetch',e=>{
-  const url=new URL(e.request.url);
-  // 数据接口：网络优先，失败回退缓存
-  if(url.pathname.startsWith('/api/')){
-    e.respondWith(
-      fetch(e.request).then(r=>{const cp=r.clone();caches.open(CACHE).then(c=>c.put(e.request,cp));return r;})
-        .catch(()=>caches.match(e.request))
-    );
-    return;
-  }
-  // 静态壳：缓存优先，回退网络
-  e.respondWith(
-    caches.match(e.request).then(c=>c||fetch(e.request).then(r=>{const cp=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,cp));return r;}))
-  );
-});
-"""
 
 
 # ---------------------------------------------------------------------------
 # HTTP 服务
 # ---------------------------------------------------------------------------
-PAGE4_HTML = (
+
+
+# ===== 可转债折价套利引擎（纯标准库，复用 bj_now/_is_trading_day）=====
+# -*- coding: utf-8 -*-
+# ===== 可转债折价套利引擎（纯标准库，无 numpy/pandas）=====
+# 数据源：东方财富 push2delay 可转债全列表（一次分页拉全市场 ~320 只，秒级完成）
+# 套利定义：转股溢价率 < 0（折价）即具备"买入转债+融券卖空正股+转股"的无风险套利条件
+#   套利收益率(粗略,未扣费) = (转股价值 - 转债现价) / 转债现价 * 100%
+# 复用 fund_arb 既有定义：bj_now / _is_trading_day（注入后自动复用，下方 try/except 兜底独立运行）
+import json, time, threading, os
+from urllib.request import urlopen, Request
+
+try:
+    bj_now
+except NameError:
+    def bj_now():
+        return datetime.utcnow() + timedelta(hours=8)
+
+try:
+    _is_trading_day
+except NameError:
+    def _is_trading_day(dt):
+        return dt.weekday() < 5  # 简化：仅排除周末，假期由 fund_arb 版本覆盖
+
+CB_CFG = dict(
+    top_n=10,                  # 榜单条数
+    scan_hour=14,              # 每交易日自动扫描时刻
+    scan_minute=45,            # 尾盘 14:45
+    min_arb_pct=-100.0,        # 套利收益率下限（仅作保险，正常取 >0 即折价）
+    exclude_st=True,           # 排除 ST/*ST 正股（强赎/退市风险）
+    fallback_if_empty=True,    # 无严格折价时降级显示"最接近折价"的前 N 只
+)
+CB_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_cache.json")
+_CB_LOCK = threading.Lock()
+_CB = dict(result=None, scanning=False, error="", progress=dict(done=0, total=0, phase=""))
+
+_UT = "fa5fd1943c7b386f172d6893dbfba10b"
+_CB_FIELDS = "f12,f13,f14,f2,f232,f234,f236,f237,f238,f243"
+
+
+def _cb_http_get(url, timeout=20):
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0",
+                                "Referer": "https://quote.eastmoney.com/"})
+    return urlopen(req, timeout=timeout).read().decode("utf-8", "ignore")
+
+
+def cb_fetch_list():
+    """分页拉取东方财富全市场可转债（MK0354），返回原始 diff 列表。"""
+    items = []
+    for pn in range(1, 6):
+        url = ("https://push2delay.eastmoney.com/api/qt/clist/get?pn=%d&pz=100&po=1&np=1"
+               "&fltt=2&invt=2&fs=b:MK0354&fields=%s&ut=%s" % (pn, _CB_FIELDS, _UT))
+        try:
+            d = json.loads(_cb_http_get(url))
+            diff = (d.get("data") or {}).get("diff") or []
+            if not diff:
+                break
+            items += diff
+            if len(diff) < 100:
+                break
+        except Exception as e:
+            print("    [可转债] 第%d页拉取失败: %s" % (pn, e))
+            break
+    return items
+
+
+def cb_compute(items, progress=None):
+    """计算套利收益率、过滤、排序、取前 N。返回结果 dict。"""
+    t0 = time.time()
+    today = int(bj_now().strftime("%Y%m%d"))
+    rows = []
+    for it in items:
+        try:
+            code = str(it.get("f12"))
+            name = it.get("f14")
+            price = float(it.get("f2"))
+            cv = float(it.get("f236"))
+            prem = float(it.get("f237"))            # 转股溢价率(%)：<0 即折价(套利空间)
+            stock_code = str(it.get("f232") or "")
+            stock_name = it.get("f234") or ""
+            start = str(it.get("f243") or "")
+            dlow = it.get("f238")
+        except (TypeError, ValueError):
+            continue
+        if price <= 0 or cv <= 0:
+            continue
+        arb = (cv - price) / price * 100.0          # 套利收益率(折价率)
+        in_conv = len(start) >= 8 and int(start) <= today   # 已进入转股期
+        is_st = bool(stock_name) and ("ST" in stock_name)
+        market = "sh" if str(it.get("f13")) == "1" else "sz"
+        rows.append(dict(
+            code=code, market=market, name=name,
+            price=round(price, 3), convert_value=round(cv, 3),
+            premium=round(prem, 3), arb=round(arb, 3),
+            stock_code=stock_code, stock_name=stock_name,
+            double_low=round(price + prem, 2),
+            convert_start=start, in_conv=in_conv, is_st=is_st,
+        ))
+        if progress:
+            progress(len(rows), len(items), "计算中")
+    # 严格折价：套利收益率>0 且 转股期内 且 非ST
+    strict = [r for r in rows if r["arb"] > 0 and r["in_conv"] and not r["is_st"]]
+    strict.sort(key=lambda x: x["arb"], reverse=True)
+    for r in strict:
+        r["is_discount"] = True
+    picks = strict[:CB_CFG["top_n"]]
+    mode = "strict"
+    # 严格折价不足 N 只时，自动补足"最接近折价"的正溢价标的，凑满前 N（标注 is_discount=False）
+    if len(picks) < CB_CFG["top_n"] and CB_CFG["fallback_if_empty"]:
+        seen = {p["code"] for p in picks}
+        cand = [r for r in rows if r["in_conv"] and not r["is_st"]
+                and r["arb"] <= 0 and r["code"] not in seen]
+        cand.sort(key=lambda x: x["arb"], reverse=True)
+        for r in cand:
+            if len(picks) >= CB_CFG["top_n"]:
+                break
+            r["is_discount"] = False
+            picks.append(r)
+        mode = "mixed" if picks else "fallback"
+        if mode == "fallback":
+            for r in picks:
+                r["is_discount"] = False
+    for i, p in enumerate(picks):
+        p["rank"] = i + 1
+    elapsed = round(time.time() - t0, 1)
+    return dict(
+        trade_date=bj_now().strftime("%Y-%m-%d"),
+        updated=bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+        picks=picks, total_picks=len(picks), mode=mode,
+        stats=dict(universe=len(rows), strict=len(strict),
+                   discount=len(strict)),
+        elapsed=elapsed,
+    )
+
+
+def cb_scan(progress=None):
+    items = cb_fetch_list()
+    return cb_compute(items, progress=progress)
+
+
+def _cb_load_disk():
+    try:
+        if os.path.exists(CB_CACHE_FILE):
+            with open(CB_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get("picks") is not None:
+                with _CB_LOCK:
+                    _CB["result"] = data
+                print("    [可转债] 载入磁盘缓存：%s 命中 %d 只" %
+                      (data.get("updated"), data.get("total_picks")))
+    except Exception as e:
+        print("    [可转债] 磁盘缓存载入失败: %s" % e)
+
+
+def _cb_save_disk(res):
+    try:
+        with open(CB_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(res, f, ensure_ascii=False)
+    except Exception as e:
+        print("    [可转债] 磁盘缓存写入失败: %s" % e)
+
+
+def cb_run_scan_bg():
+    with _CB_LOCK:
+        if _CB["scanning"]:
+            return False
+        _CB["scanning"] = True
+        _CB["error"] = ""
+        _CB["progress"] = {"done": 0, "total": 0, "phase": "启动中"}
+
+    def _prog(done, total, phase):
+        with _CB_LOCK:
+            _CB["progress"] = {"done": done, "total": total, "phase": phase}
+
+    def _run():
+        try:
+            res = cb_scan(progress=_prog)
+            with _CB_LOCK:
+                _CB["result"] = res
+            _cb_save_disk(res)
+            print("    [可转债] 扫描完成：%d 只 → 命中 %d 只，耗时 %ss，模式 %s"
+                  % (res["stats"]["universe"], res["total_picks"], res["elapsed"], res["mode"]))
+        except Exception as e:
+            with _CB_LOCK:
+                _CB["error"] = str(e)
+            print("    [可转债] 扫描失败: %s" % e)
+        finally:
+            with _CB_LOCK:
+                _CB["scanning"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True
+
+
+def cb_api_payload(force=False):
+    """/api/cb 响应体：立即返回缓存+扫描状态；缓存过期或强制则后台重扫。"""
+    with _CB_LOCK:
+        res = _CB["result"]
+        scanning = _CB["scanning"]
+        prog = dict(_CB["progress"])
+        err = _CB["error"]
+    today = bj_now().strftime("%Y-%m-%d")
+    stale = (res is None) or (res.get("trade_date") != today)
+    if (force or (stale and _is_trading_day(bj_now()))) and not scanning:
+        cb_run_scan_bg()
+        scanning = True
+    if res is None:
+        return dict(scanning=scanning, progress=prog, error=err,
+                    picks=[], stats=dict(universe=0, picks=0, strict=0, discount=0),
+                    updated="", total_picks=0, mode="")
+    out = dict(res)
+    out["scanning"] = scanning
+    out["progress"] = prog
+    out["error"] = err
+    out["stale"] = stale
+    return out
+
+
+class CbScheduler(threading.Thread):
+    """常驻线程：每交易日 14:45 自动扫描一次。"""
+    def run(self):
+        hour = int(os.environ.get("CB_SCAN_HOUR", str(CB_CFG["scan_hour"])))
+        minute = int(os.environ.get("CB_SCAN_MINUTE", str(CB_CFG["scan_minute"])))
+        while True:
+            now = bj_now()
+            cand = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if cand <= now:
+                cand = cand + timedelta(days=1)
+            while not _is_trading_day(cand):
+                cand = cand + timedelta(days=1)
+            sleep_s = (cand - bj_now()).total_seconds()
+            if sleep_s > 0:
+                time.sleep(min(sleep_s, 3600))
+                continue
+            if not _CB["scanning"]:
+                cb_run_scan_bg()
+            time.sleep(60)
+
+
+(
     '<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="theme-color" content="#0d1117">\n<link rel="manifest" href="/manifest.json">\n<link rel="apple-touch-icon" href="/icon.svg">\n<title>口袋支点量化选股 V1.0</title>\n<style>'
     + COMMON_CSS
     + '</style></head><body>\n'
@@ -4247,12 +3441,22 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path in ("/pivot", "/pivot.html"):
             self._send(200, PAGE4_HTML, "text/html; charset=utf-8")
+        elif parsed.path in ("/cb", "/cb.html"):
+            self._send(200, PAGE5_HTML, "text/html; charset=utf-8")
             return
         if parsed.path == "/api/pivot":
             qs = parse_qs(parsed.query)
             force = qs.get("force", ["0"])[0] in ("1", "true", "True")
             try:
                 self._send(200, json.dumps(pivot_api_payload(force=force), ensure_ascii=False))
+            except Exception as e:
+                self._send(200, json.dumps({"error": str(e), "scanning": False, "picks": []}, ensure_ascii=False))
+            return
+        elif parsed.path == "/api/cb":
+            qs = parse_qs(parsed.query)
+            force = qs.get("force", ["0"])[0] in ("1", "true", "True")
+            try:
+                self._send(200, json.dumps(cb_api_payload(force=force), ensure_ascii=False), "application/json; charset=utf-8")
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "scanning": False, "picks": []}, ensure_ascii=False))
             return
@@ -4523,6 +3727,8 @@ PIVOT_CFG = dict(
     top_n=60,               # 网页展示条数上限
     scan_hour=14, scan_minute=50,   # 收盘前 10 分钟自动扫描
 )
+# 抓取并发可用环境变量覆盖（避免盲目调大导致上游 429/超时）
+PIVOT_CFG["max_workers"] = int(os.environ.get("FUND_ARB_PIVOT_WORKERS", PIVOT_CFG["max_workers"]))
 
 # 口袋支点参数（Morales & Kacher 严格版）
 PIVOT_P = dict(
@@ -5410,6 +4616,10 @@ def main():
     # （每交易日 14:50 收盘前 10 分钟自动全市场扫描；访问 /pivot 可查看并手动重扫）
     _pivot_load_disk()
     PivotScheduler(daemon=True).start()
+    # 可转债套利：回填磁盘缓存 + 每交易日 14:45 自动扫描
+    _cb_load_disk()
+    CbScheduler(daemon=True).start()
+    print("  可转债套利引擎已启用（每交易日 14:45 自动扫描，访问 /cb 查看）")
     print("  口袋支点选股引擎已启用（每交易日 14:50 自动扫描，访问 /pivot 查看）")
     # 预热 + 周期刷新：网页3(TOP套利，全市场扫描最重)与排行页在实例常驻期间始终命中缓存、秒出。
     # 默认基金 162411 不再主动预热（按需计算即可，结果同样会落盘）；
