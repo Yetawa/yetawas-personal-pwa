@@ -1057,7 +1057,7 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <meta name="theme-color" content="#0d1117">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon.svg">
-<title>可转债折价套利</title>
+<title>可转债套利</title>
 <style>""" + COMMON_CSS + r"""
 /* ===== 可转债页专属样式（表格 / 卡片 / 角标）===== */
 :root{--bg2:#0d1117;--link:#79c0ff}
@@ -1083,7 +1083,7 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 <div class="wrap">
 <div class="topbar">
   <div class="titles">
-    <h1>可转债折价套利 <span class="ver">V1.0</span></h1>
+    <h1>可转债套利 <span class="ver">V1.0</span></h1>
     <div class="sub">转股溢价率 &lt; 0（折价）即具备"买入转债 + 融券卖空正股 + 转股"的折价套利条件；榜单按套利收益率降序取前 10。</div>
   </div>
   <div class="top-actions">
