@@ -3074,7 +3074,7 @@ _CB_LOCK = threading.Lock()
 _CB = dict(result=None, scanning=False, error="", progress=dict(done=0, total=0, phase=""))
 
 _UT = "fa5fd1943c7b386f172d6893dbfba10b"
-_CB_FIELDS = "f12,f13,f14,f2,f232,f234,f236,f237,f238,f243"
+_CB_FIELDS = "f12,f13,f14,f2,f5,f232,f234,f236,f237,f238,f243"  # f5=成交量(手)，已停牌债成交量为0
 
 
 def _cb_http_get(url, timeout=20):
@@ -3107,6 +3107,10 @@ def cb_compute(items, progress=None):
     """计算套利收益率、过滤、排序、取前 N。返回结果 dict。"""
     t0 = time.time()
     today = int(bj_now().strftime("%Y%m%d"))
+    # best-effort：未来 2 个交易日内将停牌的可转债代码集合（接口不可用则空集）
+    soon = _cb_suspended_soon_set()
+    suspended_already = 0
+    suspended_soon = 0
     rows = []
     for it in items:
         try:
@@ -3119,9 +3123,18 @@ def cb_compute(items, progress=None):
             stock_name = it.get("f234") or ""
             start = str(it.get("f243") or "")
             dlow = it.get("f238")
+            volume = float(it.get("f5") or 0)       # 成交量(手)
         except (TypeError, ValueError):
             continue
         if price <= 0 or cv <= 0:
+            continue
+        # 可转债已停牌（无成交量）→ 不推送
+        if volume <= 0:
+            suspended_already += 1
+            continue
+        # 可转债将于 2 交易日内停牌 → 不推送
+        if code in soon:
+            suspended_soon += 1
             continue
         arb = (cv - price) / price * 100.0          # 套利收益率(折价率)
         in_conv = len(start) >= 8 and int(start) <= today   # 已进入转股期
@@ -3168,8 +3181,74 @@ def cb_compute(items, progress=None):
         picks=picks, total_picks=len(picks), mode=mode,
         stats=dict(universe=len(rows), strict=len(strict),
                    discount=len(strict)),
+        suspended_stats=dict(already=suspended_already, soon=suspended_soon,
+                             soon_source=_cb_soon_source),
         elapsed=elapsed,
     )
+
+
+def _cb_next_trading_days(n):
+    """返回从明天起的第 n 个交易日的 date 对象列表。"""
+    out = []
+    d = bj_now()
+    while len(out) < n:
+        d = d + timedelta(days=1)
+        if _is_trading_day(d):
+            out.append(d.date())
+    return out
+
+
+_cb_soon_source = "unavailable"
+
+
+def _cb_suspended_soon_set():
+    """Best-effort：返回未来 2 个交易日内将停牌的可转债代码集合。
+
+    数据源：东方财富停牌日历(RPT_DMSK_TS_STOCKNEW)。依赖外网，
+    若网络/字段不可用则优雅降级返回空集，绝不阻断主流程。
+    """
+    global _cb_soon_source
+    try:
+        days = _cb_next_trading_days(2)
+        if not days:
+            return set()
+        last = days[-1]
+        cols = "SECURITY_CODE,SECURITY_NAME_ABBR,TRADE_DATE"
+        url = ("https://datacenter-web.eastmoney.com/api/data/v1/get?reportName="
+               "RPT_DMSK_TS_STOCKNEW&client=PC&source=WEB&pageSize=1000&pageNumber=1&"
+               "columns=%s" % cols)
+        d = json.loads(_cb_http_get(url, timeout=20))
+        rows = (d.get("result") or {}).get("data") or []
+        if not rows:
+            _cb_soon_source = "eastmoney:empty"
+            return set()
+        # 容错解析：自动定位"代码列"与"日期列"
+        ckey = dkey = None
+        for k in rows[0]:
+            ku = str(k).upper()
+            if ckey is None and ("CODE" in ku or "代码" in str(k)):
+                ckey = k
+            if dkey is None and ("DATE" in ku or "日期" in str(k) or "停牌" in str(k)):
+                dkey = k
+        if not ckey or not dkey:
+            _cb_soon_source = "eastmoney:no-columns"
+            return set()
+        out = set()
+        for r in rows:
+            try:
+                dv = str(r.get(dkey) or "").replace("-", "").replace("/", "").strip()
+                if len(dv) >= 8 and dv.isdigit():
+                    sdate = datetime(int(dv[:4]), int(dv[4:6]), int(dv[6:8])).date()
+                    if bj_now().date() <= sdate <= last:
+                        out.add(str(r.get(ckey)))
+            except Exception:
+                continue
+        _cb_soon_source = "eastmoney:%d rows,%d matched" % (len(rows), len(out))
+        return out
+    except Exception as e:
+        _cb_soon_source = "unavailable:%s" % e
+        print("    [可转债] 停牌日历获取失败，跳过“2日内停牌”过滤: %s" % e)
+        return set()
 
 
 def cb_scan(progress=None):
@@ -3441,6 +3520,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path in ("/pivot", "/pivot.html"):
             self._send(200, PAGE4_HTML, "text/html; charset=utf-8")
+            return
         elif parsed.path in ("/cb", "/cb.html"):
             self._send(200, PAGE5_HTML, "text/html; charset=utf-8")
             return
