@@ -6177,6 +6177,108 @@ def _cb_fnum(x):
         return None
 
 
+# ---- 可转债权威信息表（存续状态判定的唯一可信来源）--------------------------
+# 行情列表字段 f243 实为“网上申购日”(=PUBLIC_START_DATE)，并非转股起始日，
+# 用它判断“是否已进入转股期”对任何已发行债恒为真，故必须改用本表。
+CB_NEAR_END_DAYS = 10          # 距终止日不足该天数 → 视为临近终止，不推送
+_CB_INFO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "cb_info_cache.json")
+_CB_INFO_TTL = 12 * 3600       # 静态信息，12 小时缓存足够
+_cb_info_cache = dict(ts=0.0, data=None)
+_cb_info_source = "unloaded"
+
+
+def _cb_pdate(v):
+    """'2026-08-11 00:00:00' / '20260811' -> 20260811(int)；无效返回 None。"""
+    if not v:
+        return None
+    s = str(v).strip()[:10].replace("-", "").replace("/", "")
+    return int(s[:8]) if len(s) >= 8 and s[:8].isdigit() else None
+
+
+def _cb_info_map():
+    """全市场可转债权威信息(RPT_BOND_CB_LIST)，12h 内存+磁盘缓存。
+
+    返回 {code: dict(listing, tstart, tend, cease, delist, conv)}，日期为 int(YYYYMMDD)。
+    网络异常时回落到旧缓存/空 dict，绝不阻断主流程。
+    """
+    global _cb_info_source
+    now = time.time()
+    if _cb_info_cache.get("data") and now - _cb_info_cache.get("ts", 0) < _CB_INFO_TTL:
+        return _cb_info_cache["data"]
+    if not _cb_info_cache.get("data"):
+        try:
+            if os.path.exists(_CB_INFO_FILE):
+                with open(_CB_INFO_FILE, "r", encoding="utf-8") as f:
+                    obj = json.load(f)
+                if obj.get("data") and now - float(obj.get("ts") or 0) < _CB_INFO_TTL:
+                    _cb_info_cache["ts"] = float(obj["ts"])
+                    _cb_info_cache["data"] = obj["data"]
+                    _cb_info_source = "disk:%d" % len(obj["data"])
+                    return obj["data"]
+        except Exception:
+            pass
+    cols = ("SECURITY_CODE,SECURITY_NAME_ABBR,LISTING_DATE,TRANSFER_START_DATE,"
+            "TRANSFER_END_DATE,CEASE_DATE,DELIST_DATE,IS_CONVERT_STOCK")
+    out = {}
+    try:
+        for pn in range(1, 6):
+            url = ("https://datacenter-web.eastmoney.com/api/data/v1/get?"
+                   "reportName=RPT_BOND_CB_LIST&columns=%s&client=WEB&source=WEB"
+                   "&pageSize=500&pageNumber=%d&sortColumns=SECURITY_CODE&sortTypes=1"
+                   % (cols, pn))
+            d = json.loads(_cb_http_get(url, timeout=25))
+            rows = (d.get("result") or {}).get("data") or []
+            if not rows:
+                break
+            for r in rows:
+                c = str(r.get("SECURITY_CODE") or "").strip()
+                if not c:
+                    continue
+                out[c] = dict(
+                    listing=_cb_pdate(r.get("LISTING_DATE")),
+                    tstart=_cb_pdate(r.get("TRANSFER_START_DATE")),
+                    tend=_cb_pdate(r.get("TRANSFER_END_DATE")),
+                    cease=_cb_pdate(r.get("CEASE_DATE")),
+                    delist=_cb_pdate(r.get("DELIST_DATE")),
+                    conv=str(r.get("IS_CONVERT_STOCK") or ""),
+                )
+            if len(rows) < 500:
+                break
+    except Exception as e:
+        _cb_info_source = "error:%s" % e
+        print("    [可转债] 权威信息表获取失败，退化为旧缓存: %s" % e)
+        return _cb_info_cache.get("data") or {}
+    if not out:
+        _cb_info_source = "empty"
+        return _cb_info_cache.get("data") or {}
+    _cb_info_cache["ts"] = now
+    _cb_info_cache["data"] = out
+    _cb_info_source = "eastmoney:%d" % len(out)
+    try:
+        with open(_CB_INFO_FILE, "w", encoding="utf-8") as f:
+            json.dump(dict(ts=now, data=out), f, ensure_ascii=False)
+    except Exception:
+        pass
+    return out
+
+
+def _cb_days_between(d1, d2):
+    """d1、d2 均为 int(YYYYMMDD)，返回 d2-d1 的自然日差；无效返回 None。"""
+    try:
+        a = datetime(d1 // 10000, (d1 // 100) % 100, d1 % 100)
+        b = datetime(d2 // 10000, (d2 // 100) % 100, d2 % 100)
+        return (b - a).days
+    except Exception:
+        return None
+
+
+def _cb_end_date(rec):
+    """终止日 = 停止交易日/转股截止日/摘牌日 三者中最早的一个。"""
+    ends = [x for x in (rec.get("cease"), rec.get("tend"), rec.get("delist")) if x]
+    return min(ends) if ends else None
+
+
 def cb_fetch_list():
 
     """分页拉取东方财富全市场可转债（MK0354），返回原始 diff 列表。"""
@@ -6229,9 +6331,22 @@ def cb_compute(items, progress=None):
 
     soon = _cb_suspended_soon_set()
 
+    # 权威存续信息（未上市/未到转股期/已终止/临近终止 的唯一可信判据）
+    info = _cb_info_map()
+
     suspended_already = 0
 
     suspended_soon = 0
+
+    ex_unlisted = 0     # 尚未上市（新债只完成申购，无法买卖）
+
+    ex_preconv = 0      # 未到转股起始日（无法转股，折价不可兑现）
+
+    ex_ended = 0        # 已过终止日（停止交易/转股截止/已摘牌）
+
+    ex_near = 0         # 临近终止（剩余不足 CB_NEAR_END_DAYS 天）
+
+    no_info = 0         # 权威表无记录，降级放行
 
     rows = []
 
@@ -6279,13 +6394,46 @@ def cb_compute(items, progress=None):
             suspended_soon += 1
             continue
 
-        arb = (cv - price) / price * 100.0          # 套利收益率(折价率)
+        # ---- 存续状态四道硬过滤（依据权威表，非行情字段 f243）----
+        rec = info.get(code)
+        end_date = None
+        days_left = None
+        if rec is None:
+            # 权威表无记录：降级放行，避免数据源缺失时清空榜单
+            no_info += 1
+            in_conv = len(start) >= 8 and int(start) <= today
+        else:
+            listing = rec.get("listing")
+            tstart = rec.get("tstart")
+            end_date = _cb_end_date(rec)
+            # 1) 尚未上市：新债仅完成网上申购，二级市场买不到，折价是纸面数字
+            if listing is None or listing > today:
+                ex_unlisted += 1
+                continue
+            # 2) 未到转股起始日：不能转股，折价无法兑现
+            if tstart and tstart > today:
+                ex_preconv += 1
+                continue
+            # 3) 已过终止日：停止交易/转股截止/已摘牌
+            if end_date and end_date <= today:
+                ex_ended += 1
+                continue
+            # 4) 临近终止：留出缓冲，规避“最后交易日早于转股截止日”的空窗
+            if end_date:
+                days_left = _cb_days_between(today, end_date)
+                if days_left is not None and days_left < CB_NEAR_END_DAYS:
+                    ex_near += 1
+                    continue
+            in_conv = True
 
-        in_conv = len(start) >= 8 and int(start) <= today   # 已进入转股期
+        arb = (cv - price) / price * 100.0          # 套利收益率(折价率)
 
         is_st = bool(stock_name) and ("ST" in stock_name)
 
         market = "sh" if str(it.get("f13")) == "1" else "sz"
+
+        # 对外的“转股起始日”以权威表为准；f243 实为申购日，仅在无权威记录时兜底
+        conv_start_out = str((rec or {}).get("tstart") or "") or start
 
         rows.append(dict(
 
@@ -6293,13 +6441,17 @@ def cb_compute(items, progress=None):
 
             price=round(price, 3), convert_value=round(cv, 3),
 
-            premium=round(prem, 3), arb=round(arb, 3),
+            premium=(round(prem, 3) if prem is not None else None),
+            arb=round(arb, 3),
 
             stock_code=stock_code, stock_name=stock_name,
 
             double_low=round(price + (prem or 0), 2),
 
-            convert_start=start, in_conv=in_conv, is_st=is_st,
+            convert_start=conv_start_out, in_conv=in_conv, is_st=is_st,
+
+            end_date=(str(end_date) if end_date else ""),
+            days_left=days_left, apply_date=start,
 
         ))
 
@@ -6372,6 +6524,12 @@ def cb_compute(items, progress=None):
         suspended_stats=dict(already=suspended_already, soon=suspended_soon,
 
                              soon_source=_cb_soon_source),
+
+        # 存续过滤明细：便于排查“为何某债没上榜/上了榜”
+        listing_stats=dict(unlisted=ex_unlisted, pre_convert=ex_preconv,
+                           ended=ex_ended, near_end=ex_near,
+                           no_info=no_info, near_days=CB_NEAR_END_DAYS,
+                           info_source=_cb_info_source),
 
         elapsed=elapsed,
 
