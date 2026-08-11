@@ -2106,6 +2106,54 @@ def _live_xop_price(und):
 
 
 _LIVE_HOLD_EST_CACHE = {}   # code -> (ts, port_ret, idx_chg)，60s 有效，缓存组合收益率(与锚点解耦)
+_HOLD_SNAP_CACHE = {}        # 腾讯代码 -> (ts, price, prev)，60s 有效，跨基金共享，避免重复批量请求
+_HOLD_SNAP_LOCK = threading.Lock()
+
+
+def _prefetch_holdings_snapshot(symbols, ttl=60):
+    """一次性批量预取若干持仓股的实时价+昨收，写入共享缓存；精算循环内直接命中，零额外请求。
+    仅补取缓存失效的符号；快照已在缓存内的跳过。返回成功写入数。"""
+    symbols = list(dict.fromkeys(s for s in symbols if s))
+    now = time.time()
+    need = [s for s in symbols if (now - _HOLD_SNAP_CACHE.get(s, (0,))[0]) > ttl]
+    if not need:
+        return 0
+    written = 0
+    for i in range(0, len(need), 60):
+        chunk = need[i:i + 60]
+        try:
+            snap = pivot_snap_batch(chunk)
+        except Exception as e:
+            print(f"    [持仓快照预取] 批量失败: {e}")
+            continue
+        with _HOLD_SNAP_LOCK:
+            for s, q in snap.items():
+                if q.get("price") and q.get("prev"):
+                    _HOLD_SNAP_CACHE[s] = (time.time(), q["price"], q["prev"])
+                    written += 1
+    return written
+
+
+def _prefetch_top_holdings(cands):
+    """网页3全市场扫描冷启动优化：并发预热所有候选基金的前十大重仓(写 HOLDINGS_RAW_CACHE)
+    与持仓股实时快照(写 _HOLD_SNAP_CACHE)，使后续精算循环内 fetch_holdings/快照均命中缓存、零额外请求，
+    避免逐只打行情把冷启动拖过 onrender 请求超时。单次失败不影响其余(该基金优雅回退净值兜底)。"""
+    # 1) 并发取持仓，收集全部持仓股腾讯代码
+    syms = []
+    if not cands:
+        return
+    with ThreadPoolExecutor(max_workers=8) as fe:
+        futs = {fe.submit(fetch_holdings, c): c for c in cands}
+        for f in as_completed(futs):
+            try:
+                h = f.result()
+            except Exception:
+                continue
+            for (_, _, m, s) in h:
+                syms.append(_tencent_sym_for_holding(m, s))
+    if syms:
+        n = _prefetch_holdings_snapshot(syms)
+        print(f"    [TOP榜] 预取持仓快照 {n} 只，候选 {len(cands)} 只", flush=True)
 
 
 def _tencent_sym_for_holding(market, sym):
@@ -2132,13 +2180,8 @@ def live_holdings_estimate(code, anchor_nav, target_date, fx_map):
         if not holdings:
             return None
         syms = [_tencent_sym_for_holding(m, s) for (_, _, m, s) in holdings]
-        snap = {}
-        try:
-            snap = pivot_snap_batch(syms)   # 一次批量取全部重仓股 实时价+昨收
-        except Exception as e:
-            print(f"    [持仓实时估值] {code} 批量快照失败: {e}")
-        if not snap:
-            return None
+        _prefetch_holdings_snapshot(syms)   # 补取缺失快照(网页3已全量预热则此处直接命中)
+        now = time.time()
         fx = fetch_fx() if any(m in ("US", "HK") for _, _, m, _ in holdings) else None
         fx_keys = sorted(fx.keys()) if fx else []
         port_ret = 0.0
@@ -2146,12 +2189,10 @@ def live_holdings_estimate(code, anchor_nav, target_date, fx_map):
         total_w = 0.0
         for (name, w, market, sym) in holdings:
             tsym = _tencent_sym_for_holding(market, sym)
-            q = snap.get(tsym)
-            if not q or not q.get("price") or not q.get("prev"):
+            c = _HOLD_SNAP_CACHE.get(tsym)
+            if not c or now - c[0] > 60 or not c[1] or not c[2] or c[2] <= 0:
                 continue
-            price, prevc = q["price"], q["prev"]
-            if prevc <= 0:
-                continue
+            price, prevc = c[1], c[2]
             local_ret = price / prevc - 1
             if market in ("US", "HK") and fx and fx_keys:
                 fx_t = _fx_at(fx, target_date)
@@ -3013,6 +3054,9 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     }
 
     # -- 精算：复用排行表算法（估算溢价） --
+    # 方案B冷启动优化：先并发预热所有候选的前十大重仓与持仓股实时快照，
+    # 使下方精算循环内 fetch_holdings/快照均命中缓存、零额外请求，避免逐只打行情拖过 onrender 超时。
+    _prefetch_top_holdings(cands)
     rows = []
     with ThreadPoolExecutor(max_workers=RANKING_MAX_WORKERS) as exe:
         rk_futs = {exe.submit(compute_one_rank, c, target_date, fx_map, threshold): c for c in cands}
