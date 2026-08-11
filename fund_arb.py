@@ -2105,6 +2105,77 @@ def _live_xop_price(und):
     return None
 
 
+_LIVE_HOLD_EST_CACHE = {}   # code -> (ts, port_ret, idx_chg)，60s 有效，缓存组合收益率(与锚点解耦)
+
+
+def _tencent_sym_for_holding(market, sym):
+    """把持仓 (market, sym) 转成腾讯行情代码。持有函数已规整：HK->hk00xxx, A->6位, US->ticker。"""
+    if market == "HK":
+        return sym
+    if market == "US":
+        return "us" + sym
+    return ("sh" if sym[0] == "6" else "sz") + sym
+
+
+def live_holdings_estimate(code, anchor_nav, target_date, fx_map):
+    """方案B：用前十大重仓 + 腾讯实时行情合成「当前交易日盘中实时估值」。
+    返回 (est_nav, index_change_pct) 或 None（无持仓/取数失败则回退到净值兜底）。
+    本质同天天基金估值：est = 锚点净值 × (1 + Σ 重仓权重 × (实时价/昨收 - 1))，
+    仅用已验证可用的「东财持仓 + 腾讯批量实时快照」，不依赖被地域封锁的 fundgz 估值接口。
+    缓存的是组合收益率(port_ret)而非绝对估值，调用方再乘各自锚点净值，避免锚点错配。"""
+    cached = _LIVE_HOLD_EST_CACHE.get(code)
+    if cached and (time.time() - cached[0]) < 60:
+        port_ret, idx_chg = cached[1], cached[2]
+        return (anchor_nav * (1 + port_ret)) if anchor_nav else None, idx_chg
+    try:
+        holdings = fetch_holdings(code)
+        if not holdings:
+            return None
+        syms = [_tencent_sym_for_holding(m, s) for (_, _, m, s) in holdings]
+        snap = {}
+        try:
+            snap = pivot_snap_batch(syms)   # 一次批量取全部重仓股 实时价+昨收
+        except Exception as e:
+            print(f"    [持仓实时估值] {code} 批量快照失败: {e}")
+        if not snap:
+            return None
+        fx = fetch_fx() if any(m in ("US", "HK") for _, _, m, _ in holdings) else None
+        fx_keys = sorted(fx.keys()) if fx else []
+        port_ret = 0.0
+        got = 0
+        total_w = 0.0
+        for (name, w, market, sym) in holdings:
+            tsym = _tencent_sym_for_holding(market, sym)
+            q = snap.get(tsym)
+            if not q or not q.get("price") or not q.get("prev"):
+                continue
+            price, prevc = q["price"], q["prev"]
+            if prevc <= 0:
+                continue
+            local_ret = price / prevc - 1
+            if market in ("US", "HK") and fx and fx_keys:
+                fx_t = _fx_at(fx, target_date)
+                cur = [k for k in fx_keys if k <= target_date]
+                fx_p = fx[cur[-2]] if len(cur) >= 2 else fx_t
+                fx_ret = (fx_t / fx_p - 1) if (fx_t and fx_p) else 0.0
+            else:
+                fx_ret = 0.0
+            port_ret += w * ((1 + local_ret) * (1 + fx_ret) - 1)
+            total_w += w
+            got += 1
+        if got == 0 or not anchor_nav or anchor_nav == 0:
+            return None
+        idx_chg = port_ret * 100
+        _LIVE_HOLD_EST_CACHE[code] = (time.time(), port_ret, idx_chg)
+        est = anchor_nav * (1 + port_ret)
+        print(f"    [持仓实时估值] {code}: 命中{got}只/权重{round(total_w*100,1)}% "
+              f"组合变动{round(idx_chg,3)}% -> est_nav={est:.4f}")
+        return est, idx_chg
+    except Exception as e:
+        print(f"    [持仓实时估值] {code} 失败: {e}")
+        return None
+
+
 def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
     """为排行表计算某基金在 target_date 这一天的快照。"""
     code = code.strip()
@@ -2174,7 +2245,21 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
             print(f"    [{code}] 持仓择优失败，回退指数代理: {e}")
 
     und = underlying_for(code, name, reg)
-    if und:
+    # 方案B：国内基金(无明确指数映射)优先用「前十大重仓 + 腾讯实时行情」合成盘中实时估值；
+    # 已在 UNDERLYING_MAP 的指数基金(如161725白酒)保留更准的指数代理。仅最新交易日生效，
+    # 锚点取「该日之前最近一个已披露净值」，避免与今日涨跌重复计。
+    use_holdings = (und is None) or (und.get("use_fx") is False and code not in UNDERLYING_MAP)
+    if use_holdings and est_nav is None and nav is not None and price is not None and d == all_dates[-1]:
+        nav_dates_sorted = sorted(nav_map.keys())
+        before = [x for x in nav_dates_sorted if x < d]
+        anchor = nav_map.get(before[-1]) if before else nav
+        lh = live_holdings_estimate(code, anchor, d, fx_map)
+        if lh:
+            est_nav, ichg = lh
+            est_premium = (price - est_nav) / est_nav * 100
+            index_change = ichg
+            est_mode = "holdings_live"
+    if und and est_nav is None:
         try:
             # 持仓模式：用合成持仓指数作为估算标的（换汇已折入），w=1、lag=1、不再乘汇率
             if est_mode == "holdings" and hindex:
