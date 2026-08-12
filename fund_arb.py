@@ -3427,33 +3427,49 @@ class Handler(BaseHTTPRequestHandler):
     }
 
     def _sector_live_payload(self):
-        """服务端代理东方财富 ulist.np，规避浏览器跨域与 Referer 防盗链；返回 {industries:{name:{chg,main}}}"""
-        try:
-            secids = ",".join("90." + b for b in self.SECTOR_BK.values())
-            url = ("https://push2.eastmoney.com/api/qt/ulist.np/get?fields=f3,f12,f14,f62"
-                   "&secids=" + secids + "&_=" + str(int(time.time() * 1000)))
-            req = urllib.request.Request(url, headers={
-                "User-Agent": UA,
-                "Referer": "https://quote.eastmoney.com/",
-                "Accept": "application/json, text/plain, */*",
-            })
-            with urllib.request.urlopen(req, timeout=8) as r:
-                j = json.loads(r.read().decode("utf-8", "replace"))
-            diff = ((j or {}).get("data") or {}).get("diff") or []
-            ind = {}
-            for x in diff:
-                name = x.get("f14")
-                chg = x.get("f3")
-                main = x.get("f62")
-                if not name:
-                    continue
-                ind[name] = {
-                    "chg": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
-                    "main": round((main or 0) / 1e8, 2) if isinstance(main, (int, float)) else None,
-                }
-            return {"date": datetime.now().strftime("%Y-%m-%d"), "count": len(ind), "industries": ind}
-        except Exception as e:
-            return {"error": str(e), "industries": {}}
+        """服务端代理东方财富行情；多镜像域名轮询+重试，失败优雅回退。
+        返回 {"live":true,"industries":{name:{chg,main}}} 或 {"live":false,"industries":null,"error":...}"""
+        import random
+        secids = ",".join("90." + b for b in self.SECTOR_BK.values())
+        fields = "f3,f12,f14,f62"
+        # 多 host 轮询：随机镜像节点 + 主域名 + delay 域名，规避单点 502/限流
+        hosts = ["%d.push2.eastmoney.com" % random.randint(1, 99) for _ in range(8)]
+        hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
+        UA_B = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+        last_err = None
+        for host in hosts:
+            try:
+                url = ("https://%s/api/qt/ulist.np/get?fields=%s&secids=%s"
+                       "&ut=fa5fd1943c7b386f172d6893dbfba10b&_=%d" % (
+                           host, fields, secids, int(time.time() * 1000)))
+                req = urllib.request.Request(url, headers={
+                    "User-Agent": UA_B,
+                    "Referer": "https://quote.eastmoney.com/",
+                    "Accept": "application/json, text/plain, */*",
+                })
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    j = json.loads(r.read().decode("utf-8", "replace"))
+                diff = ((j or {}).get("data") or {}).get("diff") or []
+                ind = {}
+                for x in diff:
+                    name = x.get("f14")
+                    chg = x.get("f3")
+                    main = x.get("f62")
+                    if not name:
+                        continue
+                    ind[name] = {
+                        "chg": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
+                        "main": round((main or 0) / 1e8, 2) if isinstance(main, (int, float)) else None,
+                    }
+                if ind:
+                    return {"live": True, "date": datetime.now().strftime("%Y-%m-%d"),
+                            "count": len(ind), "industries": ind}
+                last_err = "empty diff from " + host
+            except Exception as e:
+                last_err = str(e)
+                continue
+        return {"live": False, "industries": None, "error": last_err or "all hosts failed"}
 
     def do_GET(self):
         parsed = urlparse(self.path)
