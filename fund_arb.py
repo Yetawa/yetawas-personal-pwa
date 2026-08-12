@@ -3313,7 +3313,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+            "img-src 'self' data:; manifest-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         )
         # 跨域仅放行本地/同源（含 file:// 的独立 HTML）；杜绝任意站点跨域调用
         origin = self.headers.get("Origin")
@@ -3415,6 +3415,46 @@ class Handler(BaseHTTPRequestHandler):
         _persist_api()
         return val, False
 
+    # ---- 行业轮动：申万一级行业 BK 代码映射（与 sector_dashboard.html 的 D.bk 一致） ----
+    SECTOR_BK = {
+        "电子": "BK1201", "通信": "BK1215", "计算机": "BK1207", "传媒": "BK0486", "电力设备": "BK1200",
+        "机械设备": "BK1205", "国防军工": "BK1204", "汽车": "BK1211", "家用电器": "BK0456", "食品饮料": "BK0438",
+        "纺织服饰": "BK0436", "轻工制造": "BK1212", "医药生物": "BK1216", "公用事业": "BK0427", "交通运输": "BK1210",
+        "房地产": "BK1202", "商贸零售": "BK1213", "社会服务": "BK1214", "综合": "BK1217", "建筑材料": "BK1208",
+        "建筑装饰": "BK1209", "农林牧渔": "BK0433", "基础化工": "BK1206", "钢铁": "BK0479", "有色金属": "BK0478",
+        "石油石化": "BK0464", "煤炭": "BK0437", "环保": "BK0728", "美容护理": "BK1035", "银行": "BK1283",
+        "非银金融": "BK1203",
+    }
+
+    def _sector_live_payload(self):
+        """服务端代理东方财富 ulist.np，规避浏览器跨域与 Referer 防盗链；返回 {industries:{name:{chg,main}}}"""
+        try:
+            secids = ",".join("90." + b for b in self.SECTOR_BK.values())
+            url = ("https://push2.eastmoney.com/api/qt/ulist.np/get?fields=f3,f12,f14,f62"
+                   "&secids=" + secids + "&_=" + str(int(time.time() * 1000)))
+            req = urllib.request.Request(url, headers={
+                "User-Agent": UA,
+                "Referer": "https://quote.eastmoney.com/",
+                "Accept": "application/json, text/plain, */*",
+            })
+            with urllib.request.urlopen(req, timeout=8) as r:
+                j = json.loads(r.read().decode("utf-8", "replace"))
+            diff = ((j or {}).get("data") or {}).get("diff") or []
+            ind = {}
+            for x in diff:
+                name = x.get("f14")
+                chg = x.get("f3")
+                main = x.get("f62")
+                if not name:
+                    continue
+                ind[name] = {
+                    "chg": round(chg / 100, 2) if isinstance(chg, (int, float)) else None,
+                    "main": round((main or 0) / 1e8, 2) if isinstance(main, (int, float)) else None,
+                }
+            return {"date": datetime.now().strftime("%Y-%m-%d"), "count": len(ind), "industries": ind}
+        except Exception as e:
+            return {"error": str(e), "industries": {}}
+
     def do_GET(self):
         parsed = urlparse(self.path)
         # 接口限流（静态资源与页面不限）
@@ -3423,9 +3463,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/manifest.json":
             self._serve_file("manifest.json", MANIFEST_JSON, "application/manifest+json; charset=utf-8")
-            return
         if parsed.path == "/sw.js":
-            self._serve_file("sw.js", SW_JS, "application/javascript; charset=utf-8")
+            try:
+                _sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sw.js")
+                with open(_sp, encoding="utf-8") as _sf:
+                    self._send(200, _sf.read(), "application/javascript; charset=utf-8")
+            except Exception:
+                self._send(404, "Not Found", "text/plain; charset=utf-8")
+            return
+        if parsed.path == "/api/sector_live":
+            self._send(200, json.dumps(self._sector_live_payload(), ensure_ascii=False), "application/json; charset=utf-8")
             return
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
