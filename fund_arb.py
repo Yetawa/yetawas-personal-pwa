@@ -134,18 +134,6 @@ UNDERLYING_MAP = {
     "501025": _u("FXI"), "162719": _u("IEO"), "161125": _u("SPY"), "161128": _u("XLK"),
     "501018": _u("USO"), "161129": _u("USO"), "501225": _u("SOXX"),
     "164824": _u("INDA"),
-    # ---- 国内 A 股指数型 LOF：用对应宽基/行业指数实时行情做盘中估算 ----
-    # 中证/国证指数走腾讯 sz/sh 代码（日 K 已含当日实时值），use_fx=False。
-    # 公式自动变为 估算净值 = 上一净值 × (指数今日/指数昨日)，盘中随指数实时变动，
-    # 不再退回「抄上一交易日净值」的兜底。w 取 0.98（指数满仓跟踪 + 现金拖累折中）。
-    "161725": {"tx": "sz399997", "sa": "399997", "use_fx": False},  # 招商中证白酒 → 中证白酒
-    "160632": {"tx": "sz399987", "sa": "399987", "use_fx": False},  # 鹏华酒 → 中证酒
-    "160143": {"tx": "sz399006", "sa": "399006", "use_fx": False},  # 南方创业板 → 创业板指
-    "161032": {"tx": "sz399998", "sa": "399998", "use_fx": False},  # 富国煤炭 → 中证煤炭
-    "160225": {"tx": "sz399976", "sa": "399976", "use_fx": False},  # 国泰新能源 → 中证新能源车
-    "160706": {"tx": "sh000300", "sa": "000300", "use_fx": False},  # 嘉实沪深300 → 沪深300
-    "160119": {"tx": "sh000905", "sa": "000905", "use_fx": False},  # 南方中证500 → 中证500
-    "161726": {"tx": "sz399441", "sa": "399441", "use_fx": False},  # 招商国证生物医药 → 国证生物医药
 }
 
 # 仓位系数 w：标的/汇率涨跌对基金净值的实际传导比例
@@ -159,9 +147,6 @@ UNDERLYING_WEIGHT = {
     "XLV": 0.98, "XBI": 0.98, "XLK": 0.98, "SOXX": 0.98,  # 行业/宽基股票
     "EWH": 0.98, "FXI": 0.98,                               # 港股
     "AGG": 0.90,                                             # 债券
-    # 国内 A 股指数代理（sa=指数代码）：指数满仓 LOF，w 取 0.98
-    "399997": 0.98, "399987": 0.98, "399006": 0.98,
-    "399998": 0.98, "399976": 0.98, "000300": 0.98, "000905": 0.98, "399441": 0.98,
 }
 
 # 按基金代码强制指定 w（覆盖按标的/校准的默认值）。
@@ -2105,118 +2090,6 @@ def _live_xop_price(und):
     return None
 
 
-_LIVE_HOLD_EST_CACHE = {}   # code -> (ts, port_ret, idx_chg)，60s 有效，缓存组合收益率(与锚点解耦)
-_HOLD_SNAP_CACHE = {}        # 腾讯代码 -> (ts, price, prev)，60s 有效，跨基金共享，避免重复批量请求
-_HOLD_SNAP_LOCK = threading.Lock()
-
-
-def _prefetch_holdings_snapshot(symbols, ttl=60):
-    """一次性批量预取若干持仓股的实时价+昨收，写入共享缓存；精算循环内直接命中，零额外请求。
-    仅补取缓存失效的符号；快照已在缓存内的跳过。返回成功写入数。"""
-    symbols = list(dict.fromkeys(s for s in symbols if s))
-    now = time.time()
-    need = [s for s in symbols if (now - _HOLD_SNAP_CACHE.get(s, (0,))[0]) > ttl]
-    if not need:
-        return 0
-    written = 0
-    for i in range(0, len(need), 60):
-        chunk = need[i:i + 60]
-        try:
-            snap = pivot_snap_batch(chunk)
-        except Exception as e:
-            print(f"    [持仓快照预取] 批量失败: {e}")
-            continue
-        with _HOLD_SNAP_LOCK:
-            for s, q in snap.items():
-                if q.get("price") and q.get("prev"):
-                    _HOLD_SNAP_CACHE[s] = (time.time(), q["price"], q["prev"])
-                    written += 1
-    return written
-
-
-def _prefetch_top_holdings(cands):
-    """网页3全市场扫描冷启动优化：并发预热所有候选基金的前十大重仓(写 HOLDINGS_RAW_CACHE)
-    与持仓股实时快照(写 _HOLD_SNAP_CACHE)，使后续精算循环内 fetch_holdings/快照均命中缓存、零额外请求，
-    避免逐只打行情把冷启动拖过 onrender 请求超时。单次失败不影响其余(该基金优雅回退净值兜底)。"""
-    # 1) 并发取持仓，收集全部持仓股腾讯代码
-    syms = []
-    if not cands:
-        return
-    with ThreadPoolExecutor(max_workers=8) as fe:
-        futs = {fe.submit(fetch_holdings, c): c for c in cands}
-        for f in as_completed(futs):
-            try:
-                h = f.result()
-            except Exception:
-                continue
-            for (_, _, m, s) in h:
-                syms.append(_tencent_sym_for_holding(m, s))
-    if syms:
-        n = _prefetch_holdings_snapshot(syms)
-        print(f"    [TOP榜] 预取持仓快照 {n} 只，候选 {len(cands)} 只", flush=True)
-
-
-def _tencent_sym_for_holding(market, sym):
-    """把持仓 (market, sym) 转成腾讯行情代码。持有函数已规整：HK->hk00xxx, A->6位, US->ticker。"""
-    if market == "HK":
-        return sym
-    if market == "US":
-        return "us" + sym
-    return ("sh" if sym[0] == "6" else "sz") + sym
-
-
-def live_holdings_estimate(code, anchor_nav, target_date, fx_map):
-    """方案B：用前十大重仓 + 腾讯实时行情合成「当前交易日盘中实时估值」。
-    返回 (est_nav, index_change_pct) 或 None（无持仓/取数失败则回退到净值兜底）。
-    本质同天天基金估值：est = 锚点净值 × (1 + Σ 重仓权重 × (实时价/昨收 - 1))，
-    仅用已验证可用的「东财持仓 + 腾讯批量实时快照」，不依赖被地域封锁的 fundgz 估值接口。
-    缓存的是组合收益率(port_ret)而非绝对估值，调用方再乘各自锚点净值，避免锚点错配。"""
-    cached = _LIVE_HOLD_EST_CACHE.get(code)
-    if cached and (time.time() - cached[0]) < 60:
-        port_ret, idx_chg = cached[1], cached[2]
-        return (anchor_nav * (1 + port_ret)) if anchor_nav else None, idx_chg
-    try:
-        holdings = fetch_holdings(code)
-        if not holdings:
-            return None
-        syms = [_tencent_sym_for_holding(m, s) for (_, _, m, s) in holdings]
-        _prefetch_holdings_snapshot(syms)   # 补取缺失快照(网页3已全量预热则此处直接命中)
-        now = time.time()
-        fx = fetch_fx() if any(m in ("US", "HK") for _, _, m, _ in holdings) else None
-        fx_keys = sorted(fx.keys()) if fx else []
-        port_ret = 0.0
-        got = 0
-        total_w = 0.0
-        for (name, w, market, sym) in holdings:
-            tsym = _tencent_sym_for_holding(market, sym)
-            c = _HOLD_SNAP_CACHE.get(tsym)
-            if not c or now - c[0] > 60 or not c[1] or not c[2] or c[2] <= 0:
-                continue
-            price, prevc = c[1], c[2]
-            local_ret = price / prevc - 1
-            if market in ("US", "HK") and fx and fx_keys:
-                fx_t = _fx_at(fx, target_date)
-                cur = [k for k in fx_keys if k <= target_date]
-                fx_p = fx[cur[-2]] if len(cur) >= 2 else fx_t
-                fx_ret = (fx_t / fx_p - 1) if (fx_t and fx_p) else 0.0
-            else:
-                fx_ret = 0.0
-            port_ret += w * ((1 + local_ret) * (1 + fx_ret) - 1)
-            total_w += w
-            got += 1
-        if got == 0 or not anchor_nav or anchor_nav == 0:
-            return None
-        idx_chg = port_ret * 100
-        _LIVE_HOLD_EST_CACHE[code] = (time.time(), port_ret, idx_chg)
-        est = anchor_nav * (1 + port_ret)
-        print(f"    [持仓实时估值] {code}: 命中{got}只/权重{round(total_w*100,1)}% "
-              f"组合变动{round(idx_chg,3)}% -> est_nav={est:.4f}")
-        return est, idx_chg
-    except Exception as e:
-        print(f"    [持仓实时估值] {code} 失败: {e}")
-        return None
-
-
 def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
     """为排行表计算某基金在 target_date 这一天的快照。"""
     code = code.strip()
@@ -2286,21 +2159,7 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
             print(f"    [{code}] 持仓择优失败，回退指数代理: {e}")
 
     und = underlying_for(code, name, reg)
-    # 方案B：国内基金(无明确指数映射)优先用「前十大重仓 + 腾讯实时行情」合成盘中实时估值；
-    # 已在 UNDERLYING_MAP 的指数基金(如161725白酒)保留更准的指数代理。仅最新交易日生效，
-    # 锚点取「该日之前最近一个已披露净值」，避免与今日涨跌重复计。
-    use_holdings = (und is None) or (und.get("use_fx") is False and code not in UNDERLYING_MAP)
-    if use_holdings and est_nav is None and nav is not None and price is not None and d == all_dates[-1]:
-        nav_dates_sorted = sorted(nav_map.keys())
-        before = [x for x in nav_dates_sorted if x < d]
-        anchor = nav_map.get(before[-1]) if before else nav
-        lh = live_holdings_estimate(code, anchor, d, fx_map)
-        if lh:
-            est_nav, ichg = lh
-            est_premium = (price - est_nav) / est_nav * 100
-            index_change = ichg
-            est_mode = "holdings_live"
-    if und and est_nav is None:
+    if und:
         try:
             # 持仓模式：用合成持仓指数作为估算标的（换汇已折入），w=1、lag=1、不再乘汇率
             if est_mode == "holdings" and hindex:
@@ -3054,9 +2913,6 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     }
 
     # -- 精算：复用排行表算法（估算溢价） --
-    # 方案B冷启动优化：先并发预热所有候选的前十大重仓与持仓股实时快照，
-    # 使下方精算循环内 fetch_holdings/快照均命中缓存、零额外请求，避免逐只打行情拖过 onrender 超时。
-    _prefetch_top_holdings(cands)
     rows = []
     with ThreadPoolExecutor(max_workers=RANKING_MAX_WORKERS) as exe:
         rk_futs = {exe.submit(compute_one_rank, c, target_date, fx_map, threshold): c for c in cands}
@@ -3218,7 +3074,7 @@ _CB_LOCK = threading.Lock()
 _CB = dict(result=None, scanning=False, error="", progress=dict(done=0, total=0, phase=""))
 
 _UT = "fa5fd1943c7b386f172d6893dbfba10b"
-_CB_FIELDS = "f12,f13,f14,f2,f5,f232,f234,f236,f237,f238,f243"  # f5=成交量(手)，已停牌债成交量为0
+_CB_FIELDS = "f12,f13,f14,f2,f232,f234,f236,f237,f238,f243"
 
 
 def _cb_http_get(url, timeout=20):
@@ -3251,10 +3107,6 @@ def cb_compute(items, progress=None):
     """计算套利收益率、过滤、排序、取前 N。返回结果 dict。"""
     t0 = time.time()
     today = int(bj_now().strftime("%Y%m%d"))
-    # best-effort：未来 2 个交易日内将停牌的可转债代码集合（接口不可用则空集）
-    soon = _cb_suspended_soon_set()
-    suspended_already = 0
-    suspended_soon = 0
     rows = []
     for it in items:
         try:
@@ -3267,18 +3119,9 @@ def cb_compute(items, progress=None):
             stock_name = it.get("f234") or ""
             start = str(it.get("f243") or "")
             dlow = it.get("f238")
-            volume = float(it.get("f5") or 0)       # 成交量(手)
         except (TypeError, ValueError):
             continue
         if price <= 0 or cv <= 0:
-            continue
-        # 可转债已停牌（无成交量）→ 不推送
-        if volume <= 0:
-            suspended_already += 1
-            continue
-        # 可转债将于 2 交易日内停牌 → 不推送
-        if code in soon:
-            suspended_soon += 1
             continue
         arb = (cv - price) / price * 100.0          # 套利收益率(折价率)
         in_conv = len(start) >= 8 and int(start) <= today   # 已进入转股期
@@ -3325,74 +3168,8 @@ def cb_compute(items, progress=None):
         picks=picks, total_picks=len(picks), mode=mode,
         stats=dict(universe=len(rows), strict=len(strict),
                    discount=len(strict)),
-        suspended_stats=dict(already=suspended_already, soon=suspended_soon,
-                             soon_source=_cb_soon_source),
         elapsed=elapsed,
     )
-
-
-def _cb_next_trading_days(n):
-    """返回从明天起的第 n 个交易日的 date 对象列表。"""
-    out = []
-    d = bj_now()
-    while len(out) < n:
-        d = d + timedelta(days=1)
-        if _is_trading_day(d):
-            out.append(d.date())
-    return out
-
-
-_cb_soon_source = "unavailable"
-
-
-def _cb_suspended_soon_set():
-    """Best-effort：返回未来 2 个交易日内将停牌的可转债代码集合。
-
-    数据源：东方财富停牌日历(RPT_DMSK_TS_STOCKNEW)。依赖外网，
-    若网络/字段不可用则优雅降级返回空集，绝不阻断主流程。
-    """
-    global _cb_soon_source
-    try:
-        days = _cb_next_trading_days(2)
-        if not days:
-            return set()
-        last = days[-1]
-        cols = "SECURITY_CODE,SECURITY_NAME_ABBR,TRADE_DATE"
-        url = ("https://datacenter-web.eastmoney.com/api/data/v1/get?reportName="
-               "RPT_DMSK_TS_STOCKNEW&client=PC&source=WEB&pageSize=1000&pageNumber=1&"
-               "columns=%s" % cols)
-        d = json.loads(_cb_http_get(url, timeout=20))
-        rows = (d.get("result") or {}).get("data") or []
-        if not rows:
-            _cb_soon_source = "eastmoney:empty"
-            return set()
-        # 容错解析：自动定位"代码列"与"日期列"
-        ckey = dkey = None
-        for k in rows[0]:
-            ku = str(k).upper()
-            if ckey is None and ("CODE" in ku or "代码" in str(k)):
-                ckey = k
-            if dkey is None and ("DATE" in ku or "日期" in str(k) or "停牌" in str(k)):
-                dkey = k
-        if not ckey or not dkey:
-            _cb_soon_source = "eastmoney:no-columns"
-            return set()
-        out = set()
-        for r in rows:
-            try:
-                dv = str(r.get(dkey) or "").replace("-", "").replace("/", "").strip()
-                if len(dv) >= 8 and dv.isdigit():
-                    sdate = datetime(int(dv[:4]), int(dv[4:6]), int(dv[6:8])).date()
-                    if bj_now().date() <= sdate <= last:
-                        out.add(str(r.get(ckey)))
-            except Exception:
-                continue
-        _cb_soon_source = "eastmoney:%d rows,%d matched" % (len(rows), len(out))
-        return out
-    except Exception as e:
-        _cb_soon_source = "unavailable:%s" % e
-        print("    [可转债] 停牌日历获取失败，跳过“2日内停牌”过滤: %s" % e)
-        return set()
 
 
 def cb_scan(progress=None):
@@ -3653,7 +3430,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
             return
-        if parsed.path in ("/", "/index.html"):
+        if parsed.path in ("/arb", "/arb.html"):
             self._send(200, PAGE_HTML, "text/html; charset=utf-8")
             return
         if parsed.path in ("/ranking", "/ranking.html"):
@@ -3664,9 +3441,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path in ("/pivot", "/pivot.html"):
             self._send(200, PAGE4_HTML, "text/html; charset=utf-8")
-            return
         elif parsed.path in ("/cb", "/cb.html"):
             self._send(200, PAGE5_HTML, "text/html; charset=utf-8")
+            return
+        if parsed.path in ("/", "/index.html", "/sector_dashboard.html", "/sector"):
+            try:
+                _sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sector_dashboard.html")
+                with open(_sp, encoding="utf-8") as _sf:
+                    self._send(200, _sf.read(), "text/html; charset=utf-8")
+            except Exception:
+                self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
         if parsed.path == "/api/pivot":
             qs = parse_qs(parsed.query)
