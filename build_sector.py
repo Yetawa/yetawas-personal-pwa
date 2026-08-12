@@ -1,0 +1,593 @@
+# -*- coding: utf-8 -*-
+"""Build sector_dashboard.html — single-file PWA dashboard for A-share sector rotation & fund flow."""
+import json, os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# ---------- 08-12 live (EastMoney ulist.np) ----------
+boards = json.load(open(os.path.join(HERE, "boards_0812.json"), encoding="utf-8"))["data"]["diff"]
+indices = json.load(open(os.path.join(HERE, "indices_0812.json"), encoding="utf-8"))["data"]["diff"]
+
+idx_map = {x["f12"]: x for x in indices}
+def idx_val(code):
+    x = idx_map[code]
+    # prices are scaled: indices like 000001 are *100; style indices also *100
+    return round(x["f2"] / 100.0, 2), round(x["f3"] / 100.0, 2)
+
+day0812 = {}
+for b in boards:
+    name = b["f14"]
+    chg = round(b["f3"] / 100.0, 2)
+    main = round((b.get("f62") or 0) / 1e8, 2)
+    day0812[name] = {"chg": chg, "main": main}
+
+# BK code map (for reference / linking)
+BK = {
+    "电子":"BK1201","通信":"BK1215","计算机":"BK1207","传媒":"BK0486","电力设备":"BK1200",
+    "机械设备":"BK1205","国防军工":"BK1204","汽车":"BK1211","家用电器":"BK0456","食品饮料":"BK0438",
+    "纺织服饰":"BK0436","轻工制造":"BK1212","医药生物":"BK1216","公用事业":"BK0427","交通运输":"BK1210",
+    "房地产":"BK1202","商贸零售":"BK1213","社会服务":"BK1214","综合":"BK1217","建筑材料":"BK1208",
+    "建筑装饰":"BK1209","农林牧渔":"BK0433","基础化工":"BK1206","钢铁":"BK0479","有色金属":"BK0478",
+    "石油石化":"BK0464","煤炭":"BK0437","环保":"BK0728","美容护理":"BK1035","银行":"BK1283","非银金融":"BK1203",
+}
+
+# ---------- historical (web-searched, sourced) ----------
+day0811 = {
+ "通信":[1.13,13.36],"石油石化":[0.50,8.39],"医药生物":[0.31,-12.75],"公用事业":[0.27,-3.12],
+ "家用电器":[0.20,0.39],"纺织服饰":[0.11,2.64],"房地产":[-0.01,-3.45],"银行":[-0.02,0.42],
+ "建筑装饰":[-0.06,12.76],"电力设备":[-0.20,-25.98],"煤炭":[-0.23,1.62],"商贸零售":[-0.41,-2.19],
+ "计算机":[-0.46,-21.30],"机械设备":[-0.57,-11.61],"汽车":[-0.61,8.99],"综合":[-0.68,-0.06],
+ "环保":[-0.69,-2.32],"轻工制造":[-0.69,-3.06],"食品饮料":[-0.74,-12.62],"建筑材料":[-0.82,-7.73],
+ "传媒":[-0.86,-19.70],"电子":[-0.87,-101.70],"美容护理":[-0.90,-1.18],"非银金融":[-0.92,-22.64],
+ "社会服务":[-1.21,-3.53],"农林牧渔":[-1.21,-9.86],"交通运输":[-1.43,-16.75],"钢铁":[-1.52,-3.03],
+ "基础化工":[-1.57,-19.06],"国防军工":[-2.38,-36.66],"有色金属":[-4.42,-138.40],
+}
+day0810 = {
+ "电力设备":[0.71,17.78],"食品饮料":[2.51,16.34],"有色金属":[2.02,12.18],"基础化工":[1.68,5.95],
+ "国防军工":[1.32,5.72],"传媒":[1.42,5.64],"汽车":[1.37,4.58],"农林牧渔":[3.14,3.15],
+ "轻工制造":[1.91,2.40],"商贸零售":[1.62,1.81],"银行":[0.45,1.79],"钢铁":[0.94,1.39],
+ "煤炭":[2.34,1.30],"纺织服饰":[2.40,1.09],"美容护理":[1.79,0.53],"社会服务":[1.98,0.47],
+ "交通运输":[0.91,-0.45],"机械设备":[0.02,-0.57],"综合":[1.32,-1.00],"环保":[1.63,-1.95],
+ "房地产":[1.63,-2.14],"家用电器":[1.39,-2.70],"公用事业":[0.89,-2.77],"建筑装饰":[0.75,-3.37],
+ "石油石化":[1.49,-3.99],"建筑材料":[0.35,-13.24],"非银金融":[0.18,-15.70],"医药生物":[1.40,-20.60],
+ "计算机":[-0.26,-43.39],"通信":[-3.16,-170.44],"电子":[-0.49,-196.54],
+}
+day0807 = {
+ "电子":[3.53,282.97],"汽车":[0.28,-1.62],"医药生物":[4.77,88.46],"纺织服饰":[-0.27,-1.75],
+ "有色金属":[3.19,70.77],"家用电器":[-0.86,-1.75],"机械设备":[2.08,40.49],"食品饮料":[0.21,-1.76],
+ "电力设备":[1.19,29.93],"房地产":[-0.51,-1.83],"建筑材料":[3.33,29.25],"社会服务":[0.11,-1.87],
+ "国防军工":[1.47,10.51],"轻工制造":[-0.16,-2.43],"基础化工":[1.23,9.73],"商贸零售":[-0.42,-2.84],
+ "煤炭":[-0.34,1.17],"环保":[0.49,-2.85],"钢铁":[-0.21,1.00],"交通运输":[-0.64,-3.38],
+ "石油石化":[0.64,0.85],"传媒":[0.05,-9.48],"公用事业":[-0.10,0.35],"银行":[-0.65,-10.61],
+ "农林牧渔":[-0.21,0.15],"非银金融":[-0.26,-11.47],"建筑装饰":[-0.06,-0.35],"通信":[0.13,-24.25],
+ "美容护理":[0.72,-0.46],"计算机":[-0.60,-58.56],"综合":[0.77,-0.94],
+}
+# 08-06 partial (data宝 主力资金日报 + 行业资金流向日报，部分行业当日明细未完全公开)
+day0806 = {
+ "煤炭":[4.42,11.63],"建筑材料":[2.32,None],"电子":[1.62,19.68],"通信":[1.30,20.49],
+ "基础化工":[None,13.92],"电力设备":[-1.70,-71.22],"计算机":[None,-68.74],"传媒":[-1.82,None],
+}
+
+def to_obj(d):
+    return {name: {"chg": v[0], "main": v[1]} for name, v in d.items()}
+
+DAYS = {
+ "2026-08-12": {"label":"08-12 周三","source":"东方财富实时行情接口(ulist.np) 收盘数据 · 主力净流入=超大单+大单","industries": day0812},
+ "2026-08-11": {"label":"08-11 周二","source":"证券时报·数据宝 A股行情指标(申万一级行业)","industries": to_obj(day0811)},
+ "2026-08-10": {"label":"08-10 周一","source":"证券时报·数据宝 A股行情指标(申万一级行业)","industries": to_obj(day0810)},
+ "2026-08-07": {"label":"08-07 周五","source":"东方财富资金流向日报(13个行业主力净流入)","industries": to_obj(day0807)},
+ "2026-08-06": {"label":"08-06 周四","source":"证券时报·数据宝 主力资金日报(部分行业当日明细未完全公开，缺失项以 — 表示)","industries": to_obj(day0806)},
+}
+
+# indices (08-12 close)
+INDICES = {
+ "上证指数": idx_val("000001"),
+ "深证成指": idx_val("399001"),
+ "创业板指": idx_val("399006"),
+ "沪深300": idx_val("000300"),
+ "科创50": idx_val("000688"),
+ "北证50": idx_val("899050"),
+}
+STYLE = {
+ "大盘成长": idx_val("399372"),
+ "大盘价值": idx_val("399373"),
+ "小盘成长": idx_val("399376"),
+ "小盘价值": idx_val("399377"),
+ "上证50": idx_val("000016"),
+ "中证1000": idx_val("000852"),
+}
+
+NORTH = {"date":"2026-08-12","turnover":2822.87,"cumTrillion":251.20,
+ "note":"2024-08-19 起北向资金不再披露每日净买入/净卖出，仅披露陆股通成交额；故无法提供每日净买入趋势，以下以成交额衡量活跃度。"}
+MARGIN = {"date":"2026-08-11","balance":26633.29,"delta":11.73}
+
+ETFS = [
+ ["通信 / CPO","通信ETF","515880","光模块、5.5G 主线，与电子联动最强"],
+ ["电子 / 半导体","电子50ETF","515320","覆盖半导体、消费电子；或 半导体ETF 512480"],
+ ["科创芯片","科创芯片ETF","588290","国产算力、先进制程核心标的"],
+ ["电力设备 / 新能源","新能源ETF","516160","光伏、锂电、储能龙头集合"],
+ ["汽车","汽车ETF","516110","含智能化、零部件；与机器人链重叠"],
+ ["机械设备 / 机器人","机器人ETF","562500","人形机器人、工业自动化主题"],
+ ["国防军工","军工ETF","512660","航空装备、军工电子，事件驱动型"],
+ ["有色金属","有色ETF","512940","铜、铝、黄金、小金属；周期弹性"],
+ ["煤炭","煤炭ETF","515220","高股息红利、低估值防御"],
+ ["医药生物","生物医药ETF","159508","CXO、创新药、生物制品"],
+ ["食品饮料","食品饮料ETF","516900","白酒+大众消费，复苏预期"],
+ ["房地产","地产ETF","159707","政策博弈、估值修复"],
+ ["银行","银行ETF","512800","高股息、低估值红利压舱石"],
+ ["非银金融 / 券商","券商ETF","512000","行情β与资本市场改革受益"],
+ ["计算机 / 软件","软件ETF","561010","AI应用、信创、工业软件"],
+ ["建筑材料","建材ETF","159745","地产链后周期、基建催化"],
+ ["环保","环保ETF","159861","水务、固废、绿电运营"],
+ ["农林牧渔","养殖ETF","159865","生猪养殖周期+饲料"],
+ ["钢铁","钢铁ETF","515210","特钢、普钢，并购重组主题"],
+ ["基础化工","化工ETF","516020","钛白粉、化肥、新材料"],
+ ["交通运输","交运ETF","561320","快递、航运、高股息公路铁路"],
+]
+
+JUDGE = [
+ ["科技制造主线未改，但警惕短期拥挤","通信、电子连续获主力集中加仓——08-07 电子单日净流入 282.97 亿、08-12 通信+129 亿/电子+101 亿，AI算力(CPO/PCB/半导体)仍是资金最密集方向。但 08-10、08-11 电子、通信曾单日大幅净流出(合计超 360 亿)，显示涨幅过快后分歧显著，追高需控仓，宜沿 5/10 日线分批。"],
+ ["成长风格占优，价值提供防御底座","08-12 小盘成长 +1.05% 显著跑赢大盘价值 -0.50%，全周成长(大盘成长+1.24%/小盘成长+1.05%)持续占优；但银行、煤炭、石油石化等价值/红利板块在波动期展现抗跌属性。建议以成长(通信/电子ETF)为矛、红利(银行/煤炭ETF)为盾的哑铃配置。"],
+ ["周期躁动持续性弱，消费复苏待验证","煤炭、有色等周期在 08-06/08-07 冲高后于 08-11 大幅回撤(有色金属 -4.42%/-138 亿)，说明周期行情多为事件/情绪驱动、持续性差；大消费(食品饮料/家电/医药)在 08-10 后分化，医药 08-07 大涨后回落。消费与医药宜等待基本面或资金面拐点信号，逢低布局优于追涨。"],
+]
+
+DATA = {
+ "generatedAt": "2026-08-12 21:49",
+ "today": "2026-08-12",
+ "bk": BK,
+ "days": DAYS,
+ "indices": INDICES,
+ "style": STYLE,
+ "north": NORTH,
+ "margin": MARGIN,
+ "etfs": ETFS,
+ "judge": JUDGE,
+}
+
+DATA_JSON = json.dumps(DATA, ensure_ascii=False)
+
+# ---------------- load HTML template ----------------
+TEMPLATE = r"""<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f17">
+<title>A股行业轮动与资金流向监控</title>
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22A%E8%82%A1%E8%A1%8C%E4%B8%9A%E8%BD%AE%E5%8A%A8%E7%9B%91%E6%8E%A7%22%2C%22short_name%22%3A%22%E8%A1%8C%E4%B8%9A%E8%BD%AE%E5%8A%A8%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230b0f17%22%2C%22theme_color%22%3A%22%230b0f17%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3Dhttp%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D100%20height%3D100%20rx%3D20%20fill%3D%22%230b0f17%22%2F%3E%3Ctext%20x%3D50%20y%3D68%20font-size%3D54%20text-anchor%3Dmiddle%20fill%3D%22%23ef4444%22%3E%E8%A1%8C%3C%2Ftext%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+<style>
+:root{
+  --bg:#0b0f17; --bg2:#111827; --card:#151c2c; --card2:#1b2436; --line:#243049;
+  --txt:#e6edf7; --txt2:#9fb0c8; --txt3:#64748b;
+  --up:#ef4444; --down:#22c55e; --flat:#64748b;
+  --accent:#2dd4bf; --gold:#f5b94a;
+  --upbg:rgba(239,68,68,.16); --downbg:rgba(34,197,94,.16);
+  --up-rgb:239,68,68; --down-rgb:34,197,94; --flat-rgb:100,116,139;
+  --shadow:0 6px 24px rgba(0,0,0,.35);
+}
+[data-theme="light"]{
+  --bg:#f5f1e8; --bg2:#efe9dc; --card:#fffdf8; --card2:#f3ede1; --line:#e3d9c6;
+  --txt:#2a2418; --txt2:#6b6151; --txt3:#9a8f7c;
+  --up:#e11d48; --down:#16a34a; --flat:#94a3b8;
+  --accent:#0d9488; --gold:#b8860b;
+  --upbg:rgba(225,29,72,.12); --downbg:rgba(22,163,74,.12);
+  --up-rgb:225,29,72; --down-rgb:22,163,74; --flat-rgb:148,163,184;
+  --shadow:0 6px 20px rgba(120,90,40,.12);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--txt);line-height:1.5;font-size:14px;
+  background-image:radial-gradient(1200px 600px at 80% -10%,rgba(45,212,191,.07),transparent),radial-gradient(900px 500px at 0% 0%,rgba(239,68,68,.06),transparent);
+  min-height:100vh;}
+.wrap{max-width:1180px;margin:0 auto;padding:14px 14px 60px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.h-title{font-size:19px;font-weight:800;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+.h-title .dot{width:10px;height:10px;border-radius:3px;background:var(--up);box-shadow:0 0 12px var(--up)}
+.h-sub{color:var(--txt2);font-size:12px}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:10px;
+  padding:7px 12px;font-size:13px;cursor:pointer;transition:.15s;font-weight:600}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.icon{padding:7px 10px;font-size:16px;line-height:1}
+.badge{font-size:11px;color:var(--txt2);border:1px solid var(--line);border-radius:20px;padding:3px 10px;background:var(--card)}
+
+.sect{margin:16px 0}
+.sect-h{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}
+.sect-h h2{font-size:15px;margin:0;font-weight:800;letter-spacing:.5px}
+.sect-h .tag{font-size:11px;color:var(--txt3)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:12px}
+.cols-2{grid-template-columns:1fr 1fr}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:760px){.cols-2,.cols-3{grid-template-columns:1fr}}
+
+/* index chips */
+.idx-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+@media(max-width:860px){.idx-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:460px){.idx-row{grid-template-columns:repeat(2,1fr)}}
+.idx{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.idx .n{font-size:12px;color:var(--txt2)}
+.idx .v{font-size:17px;font-weight:800;margin-top:2px}
+.idx .c{font-size:12px;font-weight:700}
+
+/* date selector */
+.dates{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.date-btn{border:1px solid var(--line);background:var(--card);color:var(--txt2);border-radius:10px;
+  padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer;transition:.15s}
+.date-btn.active{background:var(--accent);border-color:var(--accent);color:#06121f}
+.date-btn .d{font-size:11px;opacity:.8;font-weight:600}
+.src-note{font-size:11px;color:var(--txt3);margin:2px 0 10px}
+
+/* heatmap */
+.heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
+.tile{border-radius:11px;padding:9px 8px;border:1px solid var(--line);position:relative;overflow:hidden;cursor:default;transition:.12s}
+.tile:hover{transform:translateY(-2px);border-color:var(--accent);z-index:2}
+.tile .tn{font-size:12.5px;font-weight:700}
+.tile .tc{font-size:16px;font-weight:800;margin-top:2px}
+.tile .tm{font-size:11px;font-weight:600;opacity:.92;margin-top:1px}
+.legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txt3);margin-top:10px;flex-wrap:wrap}
+.legend .bar{height:10px;width:160px;border-radius:6px;background:linear-gradient(90deg,var(--down),var(--flat) 50%,var(--up))}
+
+/* flow bars */
+.flow{display:flex;flex-direction:column;gap:5px}
+.frow{display:grid;grid-template-columns:84px 1fr 74px;align-items:center;gap:8px}
+.fname{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ftrack{position:relative;height:18px;background:var(--card2);border-radius:6px}
+.ftrack::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line)}
+.fbar{position:absolute;top:2px;bottom:2px;border-radius:4px}
+.fbar.pos{left:50%;background:var(--upbg);border-left:3px solid var(--up)}
+.fbar.neg{right:50%;background:var(--downbg);border-right:3px solid var(--down)}
+.fval{font-size:12px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.fval.pos{color:var(--up)} .fval.neg{color:var(--down)}
+
+/* style */
+.style-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px}
+@media(max-width:860px){.style-row{grid-template-columns:repeat(3,1fr)}}
+.style-idx{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:9px 10px;text-align:center}
+.style-idx .n{font-size:11.5px;color:var(--txt2)}
+.style-idx .c{font-size:15px;font-weight:800;margin-top:2px}
+.spread{display:flex;gap:10px;flex-wrap:wrap}
+.spread .chip{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px}
+.spread .chip b{font-size:14px}
+
+/* north / margin */
+.kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(max-width:560px){.kpi{grid-template-columns:1fr}}
+.kpi .big{font-size:26px;font-weight:800}
+.kpi .lbl{font-size:12px;color:var(--txt2)}
+.note{font-size:11.5px;color:var(--txt3);margin-top:8px;line-height:1.6}
+
+/* judgments */
+.judge{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:860px){.judge{grid-template-columns:1fr}}
+.judge .j{border-left:3px solid var(--gold);padding-left:12px}
+.judge .jt{font-weight:800;font-size:13.5px;margin-bottom:5px}
+.judge .jb{font-size:12.5px;color:var(--txt2);line-height:1.65}
+
+/* etf table */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--txt3);font-weight:700;font-size:11.5px}
+td .code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--accent);font-weight:700}
+tr:hover td{background:var(--card2)}
+
+.narr{font-size:13px;color:var(--txt2);line-height:1.75;background:var(--card2);border:1px solid var(--line);
+  border-left:3px solid var(--accent);border-radius:10px;padding:11px 14px}
+.narr b{color:var(--txt)}
+
+.foot{margin-top:30px;font-size:11px;color:var(--txt3);line-height:1.7;border-top:1px solid var(--line);padding-top:14px}
+.foot a{color:var(--accent);text-decoration:none}
+.live{font-size:11px;color:var(--gold);font-weight:700}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.pill.up{background:var(--upbg);color:var(--up)} .pill.down{background:var(--downbg);color:var(--down)}
+
+.pagenav{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 2px}
+.pagenav a{display:inline-flex;align-items:center;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
+.pagenav a:hover{border-color:var(--accent)}
+.pagenav a.active{background:var(--accent);color:#06243a;border-color:var(--accent)}
+
+.snap-note{font-size:11.5px;color:var(--txt3);line-height:1.6;background:var(--card2);border:1px dashed var(--line);border-radius:9px;padding:7px 11px;margin:4px 0 2px}
+.snap-note b{color:var(--gold)}
+.mini{position:sticky;top:0;z-index:30;display:flex;gap:12px;flex-wrap:nowrap;align-items:center;
+  background:color-mix(in srgb, var(--card) 86%, transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:10px;padding:7px 11px;margin:6px 0;font-size:12px;box-shadow:var(--shadow);overflow-x:auto}
+.mini .m{white-space:nowrap}
+.mini b{font-weight:800;font-variant-numeric:tabular-nums}
+.mini .up{color:var(--up)} .mini .down{color:var(--down)}
+.mini .sep{color:var(--txt3);margin:0 2px}
+.mini .lead{color:var(--accent);font-weight:700}
+
+.scroll-hint{display:none;font-size:11px;color:var(--txt3);text-align:center;padding:6px 0 2px}
+@media(max-width:620px){.scroll-hint{display:block}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="h-title"><span class="dot"></span> A股行业轮动与资金流向监控</div>
+      <div class="h-sub">申万一级行业 · 主力资金净流入 · 风格轮动 · 北向/两融 &nbsp;|&nbsp; 数据日期 <span id="datestr">2026-08-12</span></div>
+    </div>
+    <div class="spacer"></div>
+    <span class="live" id="liveTag"></span>
+    <button class="btn icon" id="refreshBtn" title="尝试拉取东方财富实时数据">⟳</button>
+    <button class="btn icon" id="themeBtn" title="切换昼/夜">🌙</button>
+  </header>
+  <nav class="pagenav">
+    <a class="active" href="/sector">行业轮动</a>
+    <a href="/arb">套利看板</a>
+    <a href="/ranking">排行表</a>
+    <a href="/top">TOP套利</a>
+    <a href="/pivot">口袋支点</a>
+    <a href="/cb">可转债套利</a>
+  </nav>
+
+  <div class="snap-note" id="snapNote"></div>
+  <div class="mini" id="mini"></div>
+
+  <!-- 大盘概览 -->
+  <div class="sect">
+    <div class="sect-h"><h2>① 大盘概览</h2><span class="tag">08-12 收盘 · 东方财富</span></div>
+    <div class="idx-row" id="idxRow"></div>
+  </div>
+
+  <!-- 资金主线 -->
+  <div class="sect">
+    <div class="sect-h"><h2>② 今日资金主线</h2><span class="tag" id="narrDay"></span>
+      <button class="btn icon" id="narrToggle" title="展开/收起主线">▾</button></div>
+    <div class="narr" id="narr"></div>
+  </div>
+
+  <!-- 日期选择 -->
+  <div class="sect">
+    <div class="sect-h"><h2>③ 行业涨跌热力 & 资金净流入</h2><span class="tag">近5个交易日可切换</span></div>
+    <div class="dates" id="dates"></div>
+    <div class="src-note" id="srcNote"></div>
+    <div class="heat" id="heat"></div>
+    <div class="legend"><span>跌</span><span class="bar"></span><span>涨</span><span style="margin-left:8px">色块深浅 = 涨跌幅绝对值</span></div>
+  </div>
+
+  <!-- 资金净流入排行 -->
+  <div class="sect">
+    <div class="sect-h"><h2>④ 主力资金行业净流入排行（双向条形）</h2><span class="tag">红=净流入 · 绿=净流出（亿元）</span></div>
+    <div class="card"><div class="flow" id="flow"></div></div>
+  </div>
+
+  <!-- 风格轮动 -->
+  <div class="sect">
+    <div class="sect-h"><h2>⑤ 风格轮动强弱</h2><span class="tag">08-12 收盘 · 巨潮风格指数</span></div>
+    <div class="card">
+      <div class="style-row" id="styleRow"></div>
+      <div class="spread" id="spread"></div>
+    </div>
+  </div>
+
+  <!-- 北向 + 两融 -->
+  <div class="sect">
+    <div class="sect-h"><h2>⑥ 北向资金动向 & 两融</h2></div>
+    <div class="kpi">
+      <div class="card">
+        <div class="lbl">北向资金 · 陆股通成交额（<span id="nbDate"></span>）</div>
+        <div class="big" id="nbTurn"></div>
+        <div class="lbl" style="margin-top:4px">累计成交额 <b id="nbCum"></b> 万亿元</div>
+        <div class="note" id="nbNote"></div>
+      </div>
+      <div class="card">
+        <div class="lbl">两融余额（<span id="mgDate"></span>）</div>
+        <div class="big" id="mgBal"></div>
+        <div class="lbl" style="margin-top:4px">较前交易日 <b id="mgDelta"></b> 亿元</div>
+        <div class="note">两融余额反映杠杆资金风险偏好，持续回升通常对应市场上行动能增强。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 研判 -->
+  <div class="sect">
+    <div class="sect-h"><h2>⑦ 行业配置研判</h2><span class="tag">基于近5日资金与涨跌结构</span></div>
+    <div class="judge" id="judge"></div>
+  </div>
+
+  <!-- ETF -->
+  <div class="sect">
+    <div class="sect-h"><h2>⑧ 相关 ETF 推荐</h2><span class="tag">对应热点行业 · 代码仅供参考</span></div>
+    <div class="card" style="padding:0;overflow:auto">
+      <div class="scroll-hint">← 左右滑动查看完整表格 →</div>
+      <table id="etfTbl">
+        <thead><tr><th>行业 / 主题</th><th>ETF</th><th>代码</th><th>逻辑</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="foot">
+    数据来源：东方财富实时行情接口(ulist.np)、证券时报·数据宝 A股行情指标/资金流向日报、东方财富资金流向日报、港交所/交易所公开数据。
+    各交易日数据来源已在上方逐日标注。北向资金自 2024-08-19 起不再披露每日净买入/净卖出，仅披露成交额。<br>
+    本页为单文件 PWA（可「添加到主屏幕」离线查看），支持昼/夜切换与近5个交易日切换。数据为公开行情快照，<b>仅供研究参考，不构成投资建议</b>。<br>
+    返回套利看板：<a href="https://fund-arb.onrender.com/arb" target="_blank" rel="noopener">https://fund-arb.onrender.com/arb</a>
+  </div>
+</div>
+
+<script>
+const D = __DATA_JSON__;
+const $ = s => document.querySelector(s);
+let curDay = D.today;
+
+function fmtChg(c){ if(c===null||c===undefined) return "—"; return (c>=0?"+":"")+c.toFixed(2)+"%"; }
+function fmtMain(m){ if(m===null||m===undefined) return "—"; return (m>=0?"+":"")+m.toFixed(1)+"亿"; }
+function cls(c,suffix){ if(c===null||c===undefined) return ""; return c>=0?(suffix||"up"):(suffix||"down"); }
+
+/* 大盘概览 */
+function renderIdx(){
+  const order=["上证指数","深证成指","创业板指","沪深300","科创50","北证50"];
+  $("#idxRow").innerHTML = order.map(n=>{
+    const [v,c]=D.indices[n];
+    return `<div class="idx"><div class="n">${n}</div><div class="v">${v.toLocaleString()}</div>
+      <div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
+  }).join("");
+}
+
+/* 吸顶迷你摘要条（下滑时常驻，便于快速抓取当日要点） */
+function renderMini(){
+  const d=D.days[D.today].industries;
+  const top=Object.keys(d).sort((a,b)=>(d[b].chg||0)-(d[a].chg||0))[0];
+  const short={"上证指数":"沪指","深证成指":"深成指","创业板指":"创业板","沪深300":"沪深300","科创50":"科创50","北证50":"北证50"};
+  const mk=n=>{const [v,c]=D.indices[n];const cc=cls(c);return `${short[n]} <b class="${cc}">${v.toLocaleString()}</b> <b class="${cc}">${fmtChg(c)}</b>`;};
+  let h="";
+  h+=`<span class="m">📅 <b>${D.today}</b></span><span class="sep">|</span>`;
+  h+=`<span class="m">${mk("上证指数")}</span><span class="sep">·</span>`;
+  h+=`<span class="m">${mk("深证成指")}</span><span class="sep">·</span>`;
+  h+=`<span class="m">${mk("创业板指")}</span>`;
+  h+=`<span class="sep">|</span><span class="m lead">主线：${top} ${fmtChg(d[top].chg)}</span>`;
+  $("#mini").innerHTML=h;
+}
+
+/* 日期按钮 */
+function renderDates(){
+  const keys=Object.keys(D.days).sort().reverse();
+  $("#dates").innerHTML = keys.map(k=>{
+    const d=D.days[k];
+    const active = k===curDay?"active":"";
+    return `<button class="date-btn ${active}" data-k="${k}">${d.label.split(" ")[0]}<div class="d">${d.label.split(" ")[1]||""}</div></button>`;
+  }).join("");
+  document.querySelectorAll(".date-btn").forEach(b=>b.onclick=()=>{curDay=b.dataset.k;renderDates();renderDay();});
+}
+
+/* 行业热力 + 资金条形 + 主线（按当前日） */
+function renderDay(){
+  const day=D.days[curDay];
+  $("#srcNote").textContent = "数据来源：" + day.source;
+  $("#datestr").textContent = curDay;
+  const ind = day.industries;
+  // heatmap
+  const names=Object.keys(ind);
+  const maxAbs=Math.max(0.5,...names.map(n=>Math.abs(ind[n].chg||0)));
+  $("#heat").innerHTML = names.map(n=>{
+    const o=ind[n]; const c=o.chg, m=o.main;
+    const col = c===null? "var(--flat)" : (c>=0?"var(--up)":"var(--down)");
+    const inten = c===null?0.12:Math.min(0.85, Math.abs(c)/maxAbs*0.8+0.12);
+    const bg = c===null? "var(--card2)" : (c>=0?`rgba(var(--up-rgb),${inten})`:`rgba(var(--down-rgb),${inten})`);
+    return `<div class="tile" style="background:${bg};border-color:${c===null?'var(--line)':col}">
+      <div class="tn" style="color:${c===null?'var(--txt2)':'var(--txt)'}">${n}</div>
+      <div class="tc" style="color:${col}">${fmtChg(c)}</div>
+      <div class="tm" style="color:${m===null?'var(--txt3)':(m>=0?'var(--up)':'var(--down)')}">主力 ${fmtMain(m)}</div>
+    </div>`;
+  }).join("");
+  // flow bars
+  const arr=names.map(n=>({n, m:ind[n].main})).filter(x=>x.m!==null&&x.m!==undefined).sort((a,b)=>b.m-a.m);
+  const maxAbsM=Math.max(1,...arr.map(x=>Math.abs(x.m)));
+  $("#flow").innerHTML = arr.map(x=>{
+    const pct=Math.abs(x.m)/maxAbsM*50;
+    const pos=x.m>=0;
+    return `<div class="frow"><span class="fname">${x.n}</span>
+      <div class="ftrack"><div class="fbar ${pos?'pos':'neg'}" style="width:${pct}%"></div></div>
+      <span class="fval ${pos?'pos':'neg'}">${fmtMain(x.m)}</span></div>`;
+  }).join("");
+  renderNarrative(day, ind);
+}
+
+/* 资金主线文案（基于当天数据自动生成 + 关键结论） */
+function renderNarrative(day, ind){
+  const keys=["2026-08-12","2026-08-11","2026-08-10","2026-08-07","2026-08-06"];
+  $("#narrDay").textContent = day.label;
+  const get=(n,k)=>{const d=D.days[k];return d.industries[n];};
+  const names=Object.keys(ind);
+  const ups=names.filter(n=>(ind[n].chg||0)>0).length, downs=names.filter(n=>(ind[n].chg||0)<0).length;
+  if(curDay==="2026-08-12"){
+    $("#narr").innerHTML = `<b>科技制造主线强势回归。</b>通信(+2.46%/+129亿)、电子(+1.99%/+102亿)双核领涨，电力设备、汽车、机械设备同步获主力净流入，AI算力(CPO/PCB/半导体)仍是资金最密集方向；房地产(+3.10%)与食品饮料等消费午后走强。逆势净流出集中在医药生物(-34亿)、计算机(-15亿)、煤炭、石油石化、有色金属。全市场 31 个申万一级行业中 ${ups} 个上涨、${downs} 个下跌，风险偏好明显回暖。`;
+  } else if(curDay==="2026-08-11"){
+    $("#narr").innerHTML = `<b>指数分化、资金避险。</b>沪指跌 0.82%，仅 10 个行业主力净流入；通信(+1.13%/+13亿)居首，建筑装饰、汽车小幅流入。有色金属(-4.42%/-138亿)、电子(-0.87%/-102亿)、国防军工(-2.38%/-37亿)遭大幅抛售，两市主力净流出 305 亿。周期与高位科技同步退潮。`;
+  } else if(curDay==="2026-08-10"){
+    $("#narr").innerHTML = `<b>指数剧烈分化、成交 2.52 万亿。</b>农林牧渔(+3.14%)、食品饮料(+2.51%)领涨，电力设备(+0.71%/+18亿)获加仓；但通信(-3.16%/-170亿)、电子(-0.49%/-197亿)大幅净流出，CPO/算力赛道遭集中获利了结，两市主力净流出约 239–311 亿。`;
+  } else if(curDay==="2026-08-07"){
+    $("#narr").innerHTML = `<b>电子医药双轮驱动。</b>医药生物(+4.77%/+88亿)、电子(+3.53%/+283亿)领涨全场，机械设备(+2.08%/+40亿)、建筑材料(+3.33%/+29亿)、有色金属(+3.19%/+71亿)同步走强；计算机(-0.60%/-59亿)、通信(-0.13%/-24亿)净流出。两市主力净流入 427 亿，为近5日最强单日。`;
+  } else {
+    $("#narr").innerHTML = `<b>存量博弈、快速轮动。</b>煤炭(+4.42%)强势托底沪指重返 3900，通信(+1.30%/+20亿)、电子(+1.62%/+20亿)、基础化工获主力净流入；传媒、电力设备、计算机、非银金融等净流出，两市主力净流出约 207–311 亿。资金在超跌弹性与确定性红利间反复切换。`;
+  }
+}
+
+/* 风格轮动（使用最新 08-12 快照） */
+function renderStyle(){
+  const s=D.style;
+  const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","中证1000"];
+  $("#styleRow").innerHTML = order.map(n=>{
+    const [v,c]=s[n];
+    return `<div class="style-idx"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
+  }).join("");
+  const gv=s["大盘价值"][1], gc=s["大盘成长"][1], sc=s["小盘成长"][1], sv=s["小盘价值"][1];
+  const hs=D.indices["沪深300"][1];
+  const zz=s["中证1000"][1];
+  const chips=[
+    ["成长-价值(大盘)", (gc-gv).toFixed(2)+"%", gc-gv>=0],
+    ["小盘-大盘(成长)", (sc-gc).toFixed(2)+"%", sc-gc>=0],
+    ["小盘-大盘(价值)", (sv-gv).toFixed(2)+"%", sv-gv>=0],
+    ["中证1000-沪深300", (zz-hs).toFixed(2)+"%", zz-hs>=0],
+  ];
+  $("#spread").innerHTML = chips.map(([n,v,up])=>`<div class="chip">${n}<br><b class="${up?'':''}" style="color:${up?'var(--up)':'var(--down)'}">${up?'+':''}${v}</b></div>`).join("");
+}
+
+/* 北向 + 两融 */
+function renderNB(){
+  const n=D.north, m=D.margin;
+  $("#nbDate").textContent=n.date; $("#nbTurn").textContent=n.turnover.toLocaleString()+" 亿";
+  $("#nbCum").textContent=n.cumTrillion; $("#nbNote").textContent=n.note;
+  $("#mgDate").textContent=m.date; $("#mgBal").textContent=m.balance.toLocaleString()+" 亿";
+  $("#mgDelta").textContent=(m.delta>=0?"+":"")+m.delta;
+  $("#mgDelta").style.color = m.delta>=0?"var(--up)":"var(--down)";
+}
+
+/* 研判 + ETF */
+function renderStatic(){
+  $("#judge").innerHTML = D.judge.map(([t,b])=>`<div class="j"><div class="jt">${t}</div><div class="jb">${b}</div></div>`).join("");
+  const tb=$("#etfTbl tbody");
+  tb.innerHTML = D.etfs.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td><span class="code">${r[2]}</span></td><td style="color:var(--txt2)">${r[3]}</td></tr>`).join("");
+}
+
+/* 主题切换 */
+function setTheme(t){
+  document.documentElement.setAttribute("data-theme",t);
+  $("#themeBtn").textContent = t==="dark"?"🌙":"☀️";
+  localStorage.setItem("sector_theme",t);
+}
+$("#themeBtn").onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme"); setTheme(cur==="dark"?"light":"dark"); };
+setTheme(localStorage.getItem("sector_theme")||"dark");
+
+/* 实时刷新（经服务端代理 /api/sector_live，同源不受跨域限制） */
+function refreshLive(){
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),8000);
+  fetch("/api/sector_live",{signal:ctrl.signal}).then(r=>r.json()).then(res=>{
+    if(res && res.industries){
+      const cur=D.days[D.today].industries;
+      for(const [k,v] of Object.entries(res.industries)){ if(v && typeof v.chg==="number") cur[k]=v; }
+      D.days[D.today].source="东方财富实时行情接口(ulist.np) 实时刷新 · "+new Date().toLocaleTimeString();
+      if(curDay===D.today){ renderDay(); }
+      $("#liveTag").textContent="● 已更新 "+new Date().toLocaleTimeString();
+    } else {
+      $("#liveTag").textContent="实时刷新返回空，显示缓存数据";
+    }
+  }).catch(()=>{ $("#liveTag").textContent="实时接口不可用，显示缓存数据"; })
+  .finally(()=>clearTimeout(t));
+}
+$("#refreshBtn").onclick=refreshLive;
+
+/* PWA service worker（独立 /sw.js，可离线缓存） */
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); }
+
+renderIdx(); renderMini(); renderDates(); renderDay(); renderStyle(); renderNB(); renderStatic();
+$("#snapNote").innerHTML = `提示：热力网格 / 资金条形 / 主线叙事 按所选<b>交易日</b>展示；大盘概览 · 风格轮动 · 北向/两融 · 研判 为最新交易日 <b>(${D.today})</b> 快照。`;
+$("#narrToggle").onclick=()=>{ const n=$("#narr"); const hid=n.style.display==="none"; n.style.display=hid?"":"none"; $("#narrToggle").textContent=hid?"▾":"▸"; };
+setTimeout(refreshLive, 600);  // 首屏自动尝试拉取实时数据（best-effort）
+</script>
+</body>
+</html>
+"""
+
+html = TEMPLATE.replace("__DATA_JSON__", DATA_JSON)
+out = os.path.join(HERE, "sector_dashboard.html")
+with open(out, "w", encoding="utf-8") as f:
+    f.write(html)
+print("written", out, len(html), "bytes")
+print("08-12 industries:", len(day0812))
+print("indices:", list(INDICES.keys()))
