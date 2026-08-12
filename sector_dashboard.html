@@ -11,23 +11,25 @@
   --bg:#0b0f17; --bg2:#111827; --card:#151c2c; --card2:#1b2436; --line:#243049;
   --txt:#e6edf7; --txt2:#9fb0c8; --txt3:#64748b;
   --up:#ef4444; --down:#22c55e; --flat:#64748b;
-  --accent:#38bdf8; --gold:#f5b94a;
+  --accent:#2dd4bf; --gold:#f5b94a;
   --upbg:rgba(239,68,68,.16); --downbg:rgba(34,197,94,.16);
+  --up-rgb:239,68,68; --down-rgb:34,197,94; --flat-rgb:100,116,139;
   --shadow:0 6px 24px rgba(0,0,0,.35);
 }
 [data-theme="light"]{
-  --bg:#eef2f7; --bg2:#e3e9f2; --card:#ffffff; --card2:#f4f7fb; --line:#d7dfea;
-  --txt:#0f1b2d; --txt2:#44566e; --txt3:#8595a8;
+  --bg:#f5f1e8; --bg2:#efe9dc; --card:#fffdf8; --card2:#f3ede1; --line:#e3d9c6;
+  --txt:#2a2418; --txt2:#6b6151; --txt3:#9a8f7c;
   --up:#e11d48; --down:#16a34a; --flat:#94a3b8;
-  --accent:#0284c7; --gold:#c2820a;
+  --accent:#0d9488; --gold:#b8860b;
   --upbg:rgba(225,29,72,.12); --downbg:rgba(22,163,74,.12);
-  --shadow:0 6px 20px rgba(30,50,80,.12);
+  --up-rgb:225,29,72; --down-rgb:22,163,74; --flat-rgb:148,163,184;
+  --shadow:0 6px 20px rgba(120,90,40,.12);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   background:var(--bg);color:var(--txt);line-height:1.5;font-size:14px;
-  background-image:radial-gradient(1200px 600px at 80% -10%,rgba(56,189,248,.07),transparent),radial-gradient(900px 500px at 0% 0%,rgba(239,68,68,.06),transparent);
+  background-image:radial-gradient(1200px 600px at 80% -10%,rgba(45,212,191,.07),transparent),radial-gradient(900px 500px at 0% 0%,rgba(239,68,68,.06),transparent);
   min-height:100vh;}
 .wrap{max-width:1180px;margin:0 auto;padding:14px 14px 60px}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
@@ -136,6 +138,20 @@ tr:hover td{background:var(--card2)}
 .pagenav a{display:inline-flex;align-items:center;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
 .pagenav a:hover{border-color:var(--accent)}
 .pagenav a.active{background:var(--accent);color:#06243a;border-color:var(--accent)}
+
+.snap-note{font-size:11.5px;color:var(--txt3);line-height:1.6;background:var(--card2);border:1px dashed var(--line);border-radius:9px;padding:7px 11px;margin:4px 0 2px}
+.snap-note b{color:var(--gold)}
+.mini{position:sticky;top:0;z-index:30;display:flex;gap:12px;flex-wrap:nowrap;align-items:center;
+  background:color-mix(in srgb, var(--card) 86%, transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:10px;padding:7px 11px;margin:6px 0;font-size:12px;box-shadow:var(--shadow);overflow-x:auto}
+.mini .m{white-space:nowrap}
+.mini b{font-weight:800;font-variant-numeric:tabular-nums}
+.mini .up{color:var(--up)} .mini .down{color:var(--down)}
+.mini .sep{color:var(--txt3);margin:0 2px}
+.mini .lead{color:var(--accent);font-weight:700}
+
+.scroll-hint{display:none;font-size:11px;color:var(--txt3);text-align:center;padding:6px 0 2px}
+@media(max-width:620px){.scroll-hint{display:block}}
 </style>
 </head>
 <body>
@@ -159,6 +175,8 @@ tr:hover td{background:var(--card2)}
     <a href="/cb">可转债套利</a>
   </nav>
 
+  <div class="snap-note" id="snapNote"></div>
+  <div class="mini" id="mini"></div>
 
   <!-- 大盘概览 -->
   <div class="sect">
@@ -168,7 +186,8 @@ tr:hover td{background:var(--card2)}
 
   <!-- 资金主线 -->
   <div class="sect">
-    <div class="sect-h"><h2>② 今日资金主线</h2><span class="tag" id="narrDay"></span></div>
+    <div class="sect-h"><h2>② 今日资金主线</h2><span class="tag" id="narrDay"></span>
+      <button class="btn icon" id="narrToggle" title="展开/收起主线">▾</button></div>
     <div class="narr" id="narr"></div>
   </div>
 
@@ -225,6 +244,7 @@ tr:hover td{background:var(--card2)}
   <div class="sect">
     <div class="sect-h"><h2>⑧ 相关 ETF 推荐</h2><span class="tag">对应热点行业 · 代码仅供参考</span></div>
     <div class="card" style="padding:0;overflow:auto">
+      <div class="scroll-hint">← 左右滑动查看完整表格 →</div>
       <table id="etfTbl">
         <thead><tr><th>行业 / 主题</th><th>ETF</th><th>代码</th><th>逻辑</th></tr></thead>
         <tbody></tbody>
@@ -259,6 +279,21 @@ function renderIdx(){
   }).join("");
 }
 
+/* 吸顶迷你摘要条（下滑时常驻，便于快速抓取当日要点） */
+function renderMini(){
+  const d=D.days[D.today].industries;
+  const top=Object.keys(d).sort((a,b)=>(d[b].chg||0)-(d[a].chg||0))[0];
+  const short={"上证指数":"沪指","深证成指":"深成指","创业板指":"创业板","沪深300":"沪深300","科创50":"科创50","北证50":"北证50"};
+  const mk=n=>{const [v,c]=D.indices[n];const cc=cls(c);return `${short[n]} <b class="${cc}">${v.toLocaleString()}</b> <b class="${cc}">${fmtChg(c)}</b>`;};
+  let h="";
+  h+=`<span class="m">📅 <b>${D.today}</b></span><span class="sep">|</span>`;
+  h+=`<span class="m">${mk("上证指数")}</span><span class="sep">·</span>`;
+  h+=`<span class="m">${mk("深证成指")}</span><span class="sep">·</span>`;
+  h+=`<span class="m">${mk("创业板指")}</span>`;
+  h+=`<span class="sep">|</span><span class="m lead">主线：${top} ${fmtChg(d[top].chg)}</span>`;
+  $("#mini").innerHTML=h;
+}
+
 /* 日期按钮 */
 function renderDates(){
   const keys=Object.keys(D.days).sort().reverse();
@@ -283,7 +318,7 @@ function renderDay(){
     const o=ind[n]; const c=o.chg, m=o.main;
     const col = c===null? "var(--flat)" : (c>=0?"var(--up)":"var(--down)");
     const inten = c===null?0.12:Math.min(0.85, Math.abs(c)/maxAbs*0.8+0.12);
-    const bg = c===null? "var(--card2)" : (c>=0?`rgba(239,68,68,${inten})`:`rgba(34,197,94,${inten})`);
+    const bg = c===null? "var(--card2)" : (c>=0?`rgba(var(--up-rgb),${inten})`:`rgba(var(--down-rgb),${inten})`);
     return `<div class="tile" style="background:${bg};border-color:${c===null?'var(--line)':col}">
       <div class="tn" style="color:${c===null?'var(--txt2)':'var(--txt)'}">${n}</div>
       <div class="tc" style="color:${col}">${fmtChg(c)}</div>
@@ -308,8 +343,10 @@ function renderNarrative(day, ind){
   const keys=["2026-08-12","2026-08-11","2026-08-10","2026-08-07","2026-08-06"];
   $("#narrDay").textContent = day.label;
   const get=(n,k)=>{const d=D.days[k];return d.industries[n];};
+  const names=Object.keys(ind);
+  const ups=names.filter(n=>(ind[n].chg||0)>0).length, downs=names.filter(n=>(ind[n].chg||0)<0).length;
   if(curDay==="2026-08-12"){
-    $("#narr").innerHTML = `<b>科技制造主线强势回归。</b>通信(+2.46%/+129亿)、电子(+1.99%/+102亿)双核领涨，电力设备、汽车、机械设备同步获主力净流入，AI算力(CPO/PCB/半导体)仍是资金最密集方向；房地产(+3.10%)与食品饮料等消费午后走强。逆势净流出集中在医药生物(-34亿)、计算机(-15亿)、煤炭、石油石化、有色金属。全市场超 4100 只个股上涨、97 只涨停，风险偏好明显回暖。`;
+    $("#narr").innerHTML = `<b>科技制造主线强势回归。</b>通信(+2.46%/+129亿)、电子(+1.99%/+102亿)双核领涨，电力设备、汽车、机械设备同步获主力净流入，AI算力(CPO/PCB/半导体)仍是资金最密集方向；房地产(+3.10%)与食品饮料等消费午后走强。逆势净流出集中在医药生物(-34亿)、计算机(-15亿)、煤炭、石油石化、有色金属。全市场 31 个申万一级行业中 ${ups} 个上涨、${downs} 个下跌，风险偏好明显回暖。`;
   } else if(curDay==="2026-08-11"){
     $("#narr").innerHTML = `<b>指数分化、资金避险。</b>沪指跌 0.82%，仅 10 个行业主力净流入；通信(+1.13%/+13亿)居首，建筑装饰、汽车小幅流入。有色金属(-4.42%/-138亿)、电子(-0.87%/-102亿)、国防军工(-2.38%/-37亿)遭大幅抛售，两市主力净流出 305 亿。周期与高位科技同步退潮。`;
   } else if(curDay==="2026-08-10"){
@@ -330,7 +367,7 @@ function renderStyle(){
     return `<div class="style-idx"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
   }).join("");
   const gv=s["大盘价值"][1], gc=s["大盘成长"][1], sc=s["小盘成长"][1], sv=s["小盘价值"][1];
-  const hs=s["沪深300"]?0:(D.indices["沪深300"][1]);
+  const hs=D.indices["沪深300"][1];
   const zz=s["中证1000"][1];
   const chips=[
     ["成长-价值(大盘)", (gc-gv).toFixed(2)+"%", gc-gv>=0],
@@ -367,44 +404,32 @@ function setTheme(t){
 $("#themeBtn").onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme"); setTheme(cur==="dark"?"light":"dark"); };
 setTheme(localStorage.getItem("sector_theme")||"dark");
 
-/* 实时刷新（东方财富 JSONP，best-effort） */
-const EM_HOST="https://push2.eastmoney.com/api/qt/ulist.np/get";
-const SECIDS="90.BK1201,90.BK1215,90.BK1207,90.BK0486,90.BK1200,90.BK1205,90.BK1204,90.BK1211,90.BK0456,90.BK0438,90.BK0436,90.BK1212,90.BK1216,90.BK0427,90.BK1210,90.BK1202,90.BK1213,90.BK1214,90.BK1217,90.BK1208,90.BK1209,90.BK0433,90.BK1206,90.BK0479,90.BK0478,90.BK0464,90.BK0437,90.BK0728,90.BK1035,90.BK1283,90.BK1203";
+/* 实时刷新（经服务端代理 /api/sector_live，同源不受跨域限制） */
 function refreshLive(){
-  const cb="__emcb"+Date.now();
-  const url=`${EM_HOST}?fields=f2,f3,f12,f14,f62&secids=${SECIDS}&cb=${cb}`;
-  window[cb]=function(res){
-    try{
-      const diff=res.data.diff;
-      const ind={};
-      diff.forEach(x=>{ ind[x.f14]={chg:Math.round(x.f3)/100, main:Math.round((x.f62||0)/1e8*100)/100}; });
-      D.days[D.today].industries=ind;
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),8000);
+  fetch("/api/sector_live",{signal:ctrl.signal}).then(r=>r.json()).then(res=>{
+    if(res && res.industries){
+      const cur=D.days[D.today].industries;
+      for(const [k,v] of Object.entries(res.industries)){ if(v && typeof v.chg==="number") cur[k]=v; }
       D.days[D.today].source="东方财富实时行情接口(ulist.np) 实时刷新 · "+new Date().toLocaleTimeString();
-      if(curDay===D.today){renderDay();}
+      if(curDay===D.today){ renderDay(); }
       $("#liveTag").textContent="● 已更新 "+new Date().toLocaleTimeString();
-    }catch(e){ $("#liveTag").textContent="实时刷新失败，显示缓存数据"; }
-    delete window[cb];
-  };
-  const s=document.createElement("script"); s.src=url; s.onerror=()=>{ $("#liveTag").textContent="实时接口不可用（可能跨域），显示缓存数据"; };
-  document.body.appendChild(s);
-  setTimeout(()=>{ if(window[cb]){ $("#liveTag").textContent="实时接口超时，显示缓存数据"; delete window[cb]; } },8000);
+    } else {
+      $("#liveTag").textContent="实时刷新返回空，显示缓存数据";
+    }
+  }).catch(()=>{ $("#liveTag").textContent="实时接口不可用，显示缓存数据"; })
+  .finally(()=>clearTimeout(t));
 }
 $("#refreshBtn").onclick=refreshLive;
 
-/* PWA service worker (single-file, blob) */
-if("serviceWorker" in navigator){
-  const sw=`const C=self;let U;
-  C.addEventListener('install',e=>{U=new URL(C.location.href);C.skipWaiting();});
-  C.addEventListener('activate',e=>{e.waitUntil(C.clients.claim());});
-  C.addEventListener('fetch',e=>{ if(e.request.method!=='GET')return;
-    e.respondWith(fetch(e.request).then(r=>{const cp=r.clone();C.caches.open('sector-v1').then(c=>c.put(e.request,cp));return r;})
-      .catch(()=>C.caches.match(e.request).then(m=>m||C.caches.match(U)))); });`;
-  const blob=new Blob([sw],{type:"application/javascript"});
-  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
-}
+/* PWA service worker（独立 /sw.js，可离线缓存） */
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); }
 
-renderIdx(); renderDates(); renderDay(); renderStyle(); renderNB(); renderStatic();
-setTimeout(()=>{ if($("#liveTag").textContent===""){ $("#liveTag").textContent=""; } },500);
+renderIdx(); renderMini(); renderDates(); renderDay(); renderStyle(); renderNB(); renderStatic();
+$("#snapNote").innerHTML = `提示：热力网格 / 资金条形 / 主线叙事 按所选<b>交易日</b>展示；大盘概览 · 风格轮动 · 北向/两融 · 研判 为最新交易日 <b>(${D.today})</b> 快照。`;
+$("#narrToggle").onclick=()=>{ const n=$("#narr"); const hid=n.style.display==="none"; n.style.display=hid?"":"none"; $("#narrToggle").textContent=hid?"▾":"▸"; };
+setTimeout(refreshLive, 600);  // 首屏自动尝试拉取实时数据（best-effort）
 </script>
 </body>
 </html>
