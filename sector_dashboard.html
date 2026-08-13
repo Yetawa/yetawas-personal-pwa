@@ -405,9 +405,21 @@ $("#themeBtn").onclick=()=>{ const cur=document.documentElement.getAttribute("da
 setTheme(localStorage.getItem("sector_theme")||"dark");
 
 /* 实时刷新（经服务端代理 /api/sector_live，同源不受跨域限制） */
+let _REFRESH_MS = 20000;   // 自动刷新间隔(ms)
+let _liveTimer = null;     // 自动刷新 setInterval 句柄
+
+// 北京时间交易时段（含盘前 09:15 预热、盘中、至 15:00 收盘）
+function _inTrading(){
+  const now = new Date();
+  const bj = new Date(now.getTime() + now.getTimezoneOffset()*60000 + 8*3600000);
+  const t = bj.getHours()*60 + bj.getMinutes();
+  return (t >= 9*60+15 && t <= 11*60+30) || (t >= 13*60 && t <= 15*60);
+}
+
 function refreshLive(){
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),8000);
+  $("#liveTag").textContent="● 刷新中…";
   fetch("/api/sector_live",{signal:ctrl.signal}).then(r=>r.json()).then(res=>{
     if(res && res.industries){
       const cur=D.days[D.today].industries;
@@ -416,12 +428,22 @@ function refreshLive(){
       if(curDay===D.today){ renderDay(); }
       $("#liveTag").textContent="● 已更新 "+new Date().toLocaleTimeString();
     } else {
-      $("#liveTag").textContent="实时刷新返回空，显示缓存数据";
+      $("#liveTag").textContent="● 实时接口返回空，显示缓存数据 ("+new Date().toLocaleTimeString()+")";
     }
-  }).catch(()=>{ $("#liveTag").textContent="实时接口不可用，显示缓存数据"; })
-  .finally(()=>clearTimeout(t));
+  }).catch(()=>{ $("#liveTag").textContent="● 实时接口不可用，显示缓存数据 ("+new Date().toLocaleTimeString()+")"; })
+  .finally(()=>{ clearTimeout(t); scheduleNext(); });
 }
-$("#refreshBtn").onclick=refreshLive;
+$("#refreshBtn").onclick=function(){ if(_liveTimer){ clearInterval(_liveTimer); _liveTimer=null; } refreshLive(); };
+
+// 定时自动刷新（仅交易时段；非交易时段停止轮询）
+function scheduleNext(){
+  if(_liveTimer){ clearInterval(_liveTimer); _liveTimer=null; }
+  if(!_inTrading()){
+    $("#liveTag").textContent="● 已收盘";
+    return;
+  }
+  _liveTimer = setInterval(refreshLive, _REFRESH_MS);
+}
 
 /* PWA service worker（独立 /sw.js，可离线缓存） */
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); }
@@ -429,7 +451,7 @@ if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").cat
 renderIdx(); renderMini(); renderDates(); renderDay(); renderStyle(); renderNB(); renderStatic();
 $("#snapNote").innerHTML = `提示：热力网格 / 资金条形 / 主线叙事 按所选<b>交易日</b>展示；大盘概览 · 风格轮动 · 北向/两融 · 研判 为最新交易日 <b>(${D.today})</b> 快照。`;
 $("#narrToggle").onclick=()=>{ const n=$("#narr"); const hid=n.style.display==="none"; n.style.display=hid?"":"none"; $("#narrToggle").textContent=hid?"▾":"▸"; };
-setTimeout(refreshLive, 600);  // 首屏自动尝试拉取实时数据（best-effort）
+refreshLive();  // 首屏拉取实时数据并启动定时刷新
 </script>
 </body>
 </html>
