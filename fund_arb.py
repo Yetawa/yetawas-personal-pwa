@@ -492,6 +492,141 @@ def underlying_for(code, name, reg):
         return UNDERLYING_MAP[code]
     return infer_underlying(name)
 
+
+# ---------------------------------------------------------------------------
+# 国内指数 / 行业 LOF：用「跟踪指数日内涨跌」估算当日净值（对标 haoetf 实时估值）
+# 背景：原逻辑对无 QDII 标的的国内基金，est_nav 直接回退成官方净值，导致
+#       「估算净值」列与「净值」列恒等（用户反馈「估算净值=前一天净值」）。
+#       对指数 / 行业 LOF，其净值日内变动≈跟踪指数变动，故：
+#           est_nav = 官方净值 × (1 + 指数日内涨跌% × w)，w 默认 1.0（指数基金完全复制）
+# 取数：东财 push2 批量接口（与行业轮动 sector_live 同源），按「指数名称含预期关键词」
+#       确认 secid 命中，名称不符 / 缺数据则回退官方净值，绝不给出错误估算。
+# 说明：主动 / 混合 / FOF 类 LOF 无单一跟踪指数，est_nav 回退官方净值本就合理（其净值
+#       由持仓 EOD 计算、次日披露，盘中没有单一可代理的日内标的）。
+# ---------------------------------------------------------------------------
+DOMESTIC_INDEX_MAP = {
+    # 基金代码: (东财指数代码, 名称命中关键词, 仓位系数 w)
+    "160225": ("399976", "新能源车", 1.0),   # 国泰国证新能源汽车
+    "160221": ("399395", "有色金属", 1.0),   # 国泰国证有色金属
+    "160626": ("000935", "信息技术", 1.0),   # 鹏华中证信息技术
+    "160629": ("399971", "传媒", 1.0),       # 鹏华中证传媒
+    "160628": ("399965", "地产", 1.0),       # 鹏华中证800地产
+    "160630": ("399973", "国防", 1.0),       # 鹏华中证国防
+    "160625": ("399966", "保险", 1.0),       # 鹏华中证800证券保险
+    "160631": ("399986", "银行", 1.0),       # 鹏华中证银行
+    "160637": ("399006", "创业板", 1.0),     # 鹏华创业板
+    "160633": ("399975", "证券公司", 1.0),   # 鹏华中证全指证券公司
+    "161024": ("399967", "军工", 1.0),       # 富国中证军工
+    "161032": ("399998", "煤炭", 1.0),       # 富国中证煤炭
+    "161026": ("399974", "国企改革", 1.0),   # 富国中证国有企业改革
+    "161029": ("399986", "银行", 1.0),       # 富国中证银行
+    "161028": ("399976", "新能源车", 1.0),   # 富国中证新能源汽车
+    "161025": ("399970", "移动互联网", 1.0), # 富国中证移动互联网
+    "161037": ("930599", "高端制造", 1.0),   # 富国中证高端制造增强
+    "161039": ("000852", "中证1000", 1.0),  # 富国中证1000增强
+    "161122": ("399803", "生物科技", 1.0),   # 易方达中证万得生物科技
+    "161725": ("399997", "白酒", 1.0),       # 招商中证白酒
+    "161631": ("930713", "人工智能", 1.0),   # 融通人工智能
+    "161812": ("399330", "深证100", 1.0),    # 银华深证100
+    "161724": ("399998", "煤炭", 1.0),       # 招商中证煤炭等权
+    "161720": ("399975", "证券公司", 1.0),   # 招商中证全指证券公司
+    "161227": ("399330", "深证100", 1.0),    # 国投瑞银深证100
+    "163115": ("399967", "军工", 1.0),       # 申万菱信中证军工
+    "163113": ("399707", "申万证券", 1.0),   # 申万菱信中证申万证券行业
+    "163116": ("399814", "电子", 1.0),       # 申万中证申万电子行业
+    "163118": ("399809", "医药", 1.0),       # 申万菱信中证申万医药生物
+    "165525": ("399995", "基建", 1.0),       # 中信保诚中证基建工程
+    "501005": ("930707", "精准医疗", 1.0),   # 汇添富中证精准医疗
+    "501009": ("930743", "生物科技", 1.0),   # 汇添富中证生物科技A
+    "501010": ("930743", "生物科技", 1.0),   # 汇添富中证生物科技C
+    "501016": ("399707", "申万证券", 1.0),   # 国泰中证申万证券行业
+    "501019": ("399368", "航天军工", 1.0),   # 国泰国证航天军工
+    "501030": ("399806", "环境治理", 1.0),   # 汇添富中证环境治理
+    "501043": ("000300", "沪深300", 1.0),    # 汇添富沪深300
+    "501050": ("000016", "上证50", 1.0),     # 华夏上证50AH优选
+    "501057": ("930997", "新能源汽车", 1.0), # 汇添富中证新能源汽车产业A
+    "501058": ("930997", "新能源汽车", 1.0), # 汇添富中证新能源汽车产业C
+    "501059": ("000824", "国企红利", 1.0),   # 西部利得国企红利增强
+    "502000": ("000905", "中证500", 1.0),    # 西部利得中证500增强
+    "502010": ("399975", "证券公司", 1.0),   # 易方达中证全指证券公司
+    "502013": ("399991", "一带一路", 1.0),   # 长盛中证申万一带一路
+    "502048": ("000016", "上证50", 1.0),     # 易方达上证50
+    "502023": ("399440", "钢铁", 1.0),       # 鹏华国证钢铁行业
+    "502053": ("399975", "证券公司", 1.0),   # 长盛中证证券公司
+    # 其余有明确跟踪指数的非「指数」命名 LOF
+    "160222": ("399396", "食品饮料", 1.0),   # 国泰国证食品饮料
+    "160632": ("399987", "酒", 1.0),         # 鹏华酒
+    "160706": ("000300", "沪深300", 1.0),    # 嘉实沪深300ETF联接
+    "161033": ("930721", "智能汽车", 1.0),   # 富国中证智能汽车
+}
+
+_IDX_CHG_CACHE = {}          # index_code -> (chg_pct, ts)
+_IDX_CHG_LOCK = _threading.Lock()
+_IDX_CHG_TTL = 60            # 同一指数 60s 内复用（盘中变化快，短缓存）
+
+
+def _idx_push2_changes(idx_meta):
+    """批量取指数日内涨跌(%)。idx_meta: {index_code: (命中关键词, w)}。
+    返回 {index_code: chg_pct}。按 f12(代码) 精确命中 index_code（东财指数名常被缩写，
+    故不依赖名称关键词，直接信任代码映射）；对每个代码同时试 1.(SH)/0.(SZ) 两种前缀。
+    分块查询（每块≤20）避免 secids 过多被接口截断；多镜像轮询+重试。"""
+    import random as _random
+    if not idx_meta:
+        return {}
+    codes = list(idx_meta.keys())
+    hosts = ["%d.push2.eastmoney.com" % _random.randint(1, 99) for _ in range(8)]
+    hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
+    UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    out = {}
+    for i in range(0, len(codes), 20):
+        chunk = codes[i:i + 20]
+        secids = []
+        for ic in chunk:
+            secids.append("1." + ic)
+            secids.append("0." + ic)
+        for host in hosts:
+            try:
+                url = ("https://%s/api/qt/ulist.np/get?fields=%s&secids=%s"
+                       "&ut=fa5fd1943c7b386f172d6893bfba10b&_=%d" % (
+                           host, "f3,f12,f14", ",".join(secids), int(time.time() * 1000)))
+                req = urllib.request.Request(url, headers={
+                    "User-Agent": UA, "Referer": "https://quote.eastmoney.com/",
+                    "Accept": "application/json, text/plain, */*"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    j = json.loads(r.read().decode("utf-8", "replace"))
+                diff = ((j or {}).get("data") or {}).get("diff") or []
+                for x in diff:
+                    code = (x.get("f12") or "").strip()
+                    chg = x.get("f3")
+                    if chg is not None and code in idx_meta:
+                        out[code] = round(chg / 100.0, 4)
+            except Exception as e:
+                print(f"    [指数涨跌] {host} 取数失败: {e}")
+                continue
+    return out
+
+
+def get_index_chg(index_code):
+    """单只指数日内涨跌(%)，带缓存；失败返回 None（调用方回退官方净值）。"""
+    with _IDX_CHG_LOCK:
+        c = _IDX_CHG_CACHE.get(index_code)
+        if c and (time.time() - c[1]) < _IDX_CHG_TTL:
+            return c[0]
+    meta = {index_code: (DOMESTIC_INDEX_MAP.get(index_code) or ("", 1.0))[0:2]}
+    chg = _idx_push2_changes(meta).get(index_code)
+    with _IDX_CHG_LOCK:
+        _IDX_CHG_CACHE[index_code] = (chg, time.time())
+    return chg
+
+
+def get_index_chg_batch(idx_meta):
+    """top 扫描一次性批量取所有候选指数日内涨跌。返回 {index_code: chg_pct}。"""
+    if not idx_meta:
+        return {}
+    return _idx_push2_changes(idx_meta)
+
+
 def short_name(code, fullname):
     s = SHORT_NAME.get(code)
     if s:
@@ -2217,7 +2352,7 @@ def live_holdings_estimate(code, anchor_nav, target_date, fx_map):
         return None
 
 
-def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
+def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_map=None):
     """为排行表计算某基金在 target_date 这一天的快照。"""
     code = code.strip()
     reg = FUND_REGISTRY.get(code)
@@ -2363,10 +2498,29 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD):
                     index_change = pct(xop_t_eff, xop_t1)
         except Exception as e:
             print(f"    [{code}] 估算净值失败: {e}")
-    # 国内基金 / 无标的基金：估算净值、估算溢价回退为最近净值（填满两列，避免空白）
+    # 国内指数 / 行业 LOF：无 QDII 标的时，用「跟踪指数日内涨跌」估算当日净值（对标 haoetf 实时估值）
+    #   est_nav = 官方净值 × (1 + 指数日内涨跌% × w)；取数失败 / 无映射则回退官方净值（原行为）。
+    # 主动 / 混合 / FOF 无单一跟踪指数，自然走回退（其净值次日披露，盘中没有可代理的日内标的）。
     if est_nav is None and nav is not None and price is not None:
-        est_nav = nav
-        est_premium = premium
+        _dm = DOMESTIC_INDEX_MAP.get(code)
+        _chg = None
+        if _dm:
+            _ic = _dm[0]
+            try:
+                if index_chg_map is not None:
+                    _chg = index_chg_map.get(_ic)
+                else:
+                    _chg = get_index_chg(_ic)
+            except Exception:
+                _chg = None
+        if _chg is not None:
+            _w = _dm[2] if len(_dm) > 2 else 1.0
+            est_nav = nav * (1 + _chg / 100.0 * _w)
+            est_premium = (price - est_nav) / est_nav * 100
+            index_change = _chg
+        else:
+            est_nav = nav
+            est_premium = premium
 
     sig_premium = est_premium if est_premium is not None else premium
     sig_text, sig_cls = signal_for_premium(sig_premium, threshold,
@@ -3053,13 +3207,30 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         "candidates": len(cands),                       # 进入精算的候选（非债基 + 规模≥1亿 + 有净值）
     }
 
+    # -- 国内指数 LOF：一次性批量取跟踪指数日内涨跌，供 compute_one_rank 估算当日净值 --
+    _idx_meta = {}
+    for c in cands:
+        _dm = DOMESTIC_INDEX_MAP.get(c)
+        if _dm:
+            _idx_meta[_dm[0]] = (_dm[1], _dm[2] if len(_dm) > 2 else 1.0)
+    _idx_chg_map = {}
+    if _idx_meta:
+        try:
+            _idx_chg_map = get_index_chg_batch(_idx_meta)
+            print(f"    [TOP榜] 跟踪指数日内涨跌取数 {len(_idx_chg_map)}/{len(_idx_meta)} 只",
+                  flush=True)
+        except Exception as e:
+            print(f"    [TOP榜] 指数涨跌批量取数失败: {e}", flush=True)
+            _idx_chg_map = {}
+
     # -- 精算：复用排行表算法（估算溢价） --
     # 方案B冷启动优化：先并发预热所有候选的前十大重仓与持仓股实时快照，
     # 使下方精算循环内 fetch_holdings/快照均命中缓存、零额外请求，避免逐只打行情拖过 onrender 超时。
     _prefetch_top_holdings(cands)
     rows = []
     with ThreadPoolExecutor(max_workers=RANKING_MAX_WORKERS) as exe:
-        rk_futs = {exe.submit(compute_one_rank, c, target_date, fx_map, threshold): c for c in cands}
+        rk_futs = {exe.submit(compute_one_rank, c, target_date, fx_map, threshold,
+                              _idx_chg_map): c for c in cands}
         for f in as_completed(rk_futs):
             c = rk_futs[f]
             try:
@@ -3773,7 +3944,19 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 dgate = TOP_DISCOUNT_GATE
             dgate = max(-10.0, min(-0.1, dgate))
+            force = qs.get("force", ["0"])[0] in ("1", "true", "True")
             cache_key = f"top|{date}|{threshold}|{dgate}"
+            if force:
+                # 强制重算：绕过内存快照与缓存，确保数据刷新到「今天」（解决快照卡死旧日期问题）
+                try:
+                    out = compute_top_arbitrage(date, threshold, dgate, 20)
+                    out = dict(out); out["stale"] = False; out["forced"] = True
+                    with self._API_CACHE_LOCK:
+                        self._API_CACHE[cache_key] = (time.time() + Handler._API_CACHE_TTL_TOP, out)
+                    self._send(200, json.dumps(out, ensure_ascii=False))
+                except Exception as e:
+                    self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
+                return
             try:
                 data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL_TOP,
                                                     lambda: serve_top_from_snapshot(date, threshold, dgate))
