@@ -430,10 +430,10 @@ function refreshLive(){
       $("#liveTag").textContent="● 已实时更新 "+new Date().toLocaleTimeString();
       markLive(true);
     } else {
-      $("#liveTag").textContent="● 行情源不可达，显示缓存快照（"+D.today+"）";
+      $("#liveTag").textContent="● 行情源不可达，显示日更快快照（"+D.today+"）";
       markLive(false);
     }
-  }).catch(()=>{ $("#liveTag").textContent="● 行情源不可达，显示缓存快照（"+D.today+"）"; markLive(false); })
+  }).catch(()=>{ $("#liveTag").textContent="● 行情源不可达，显示日更快快照（"+D.today+"）"; markLive(false); })
   .finally(()=>{ clearTimeout(t); scheduleNext(); });
 }
 $("#refreshBtn").onclick=function(){ if(_liveTimer){ clearInterval(_liveTimer); _liveTimer=null; } refreshLive(); };
