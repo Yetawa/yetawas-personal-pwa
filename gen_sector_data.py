@@ -37,6 +37,16 @@ SECTOR_BK = {
     "非银金融": "BK1203",
 }
 
+# ---- 指数 / 风格指数 secid（东财 ulist.np，格式 market.code） ----
+INDEX_SECIDS = {
+    "1.000001": "上证指数", "0.399001": "深证成指", "0.399006": "创业板指",
+    "1.000300": "沪深300", "1.000688": "科创50", "0.899050": "北证50",
+    "0.399372": "大盘成长", "0.399373": "大盘价值", "0.399376": "小盘成长",
+    "0.399377": "小盘价值", "1.000016": "上证50", "1.000852": "中证1000",
+}
+INDEX_NAMES = ["上证指数", "深证成指", "创业板指", "沪深300", "科创50", "北证50"]
+STYLE_NAMES = ["大盘成长", "大盘价值", "小盘成长", "小盘价值", "上证50", "中证1000"]
+
 _WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
 
@@ -83,6 +93,110 @@ def fetch_today():
     return None
 
 
+def _fetch_quotes(secids_map):
+    """多镜像域名轮询，返回 {name:[price, chg%]} 或 {}。price=f2/100, chg=f3/100。"""
+    secids = ",".join(secids_map.keys())
+    # 东财返回 f12 为不带市场前缀的代码（如 000001），故按代码末段建映射
+    codemap = {s.split(".")[-1]: n for s, n in secids_map.items()}
+    fields = "f2,f3,f12,f14"
+    hosts = ["%d.push2.eastmoney.com" % random.randint(1, 99) for _ in range(8)]
+    hosts += ["push2delay.eastmoney.com", "push2.eastmoney.com"]
+    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    out = {}
+    for host in hosts:
+        try:
+            url = ("https://%s/api/qt/ulist.np/get?fields=%s&secids=%s"
+                   "&ut=fa5fd1943c7b386f172d6893dbfba10b&_=%d" % (
+                       host, fields, secids, int(time.time() * 1000)))
+            req = urllib.request.Request(url, headers={
+                "User-Agent": ua,
+                "Referer": "https://quote.eastmoney.com/",
+                "Accept": "application/json, text/plain, */*",
+            })
+            with urllib.request.urlopen(req, timeout=8) as r:
+                j = json.loads(r.read().decode("utf-8", "replace"))
+            diff = ((j or {}).get("data") or {}).get("diff") or []
+            for x in diff:
+                code = x.get("f12")
+                name = codemap.get(code)
+                if not name:
+                    continue
+                price = x.get("f2")
+                chg = x.get("f3")
+                if not isinstance(price, (int, float)):
+                    continue
+                out[name] = [round(price / 100, 2), round((chg or 0) / 100, 2)]
+            if out:
+                return out
+        except Exception:
+            continue
+    return out
+
+
+# 静态板块（北向/两融/研判/ETF 文案与参考）—— 北向、两融日期在生成时更新为当日
+_STATIC_JSON = """{
+ "north": {
+  "date": "2026-08-12",
+  "turnover": 2822.87,
+  "cumTrillion": 251.2,
+  "note": "2024-08-19 起北向资金不再披露每日净买入/净卖出，仅披露陆股通成交额；故无法提供每日净买入趋势，以下以成交额衡量活跃度。"
+ },
+ "margin": {
+  "date": "2026-08-11",
+  "balance": 26633.29,
+  "delta": 11.73
+ },
+ "judge": [
+  [
+   "科技制造主线未改，但警惕短期拥挤",
+   "通信、电子连续获主力集中加仓——08-07 电子单日净流入 282.97 亿、08-12 通信+129 亿/电子+101 亿，AI算力(CPO/PCB/半导体)仍是资金最密集方向。但 08-10、08-11 电子、通信曾单日大幅净流出(合计超 360 亿)，显示涨幅过快后分歧显著，追高需控仓，宜沿 5/10 日线分批。"
+  ],
+  [
+   "成长风格占优，价值提供防御底座",
+   "08-12 小盘成长 +1.05% 显著跑赢大盘价值 -0.50%，全周成长(大盘成长+1.24%/小盘成长+1.05%)持续占优；但银行、煤炭、石油石化等价值/红利板块在波动期展现抗跌属性。建议以成长(通信/电子ETF)为矛、红利(银行/煤炭ETF)为盾的哑铃配置。"
+  ],
+  [
+   "周期躁动持续性弱，消费复苏待验证",
+   "煤炭、有色等周期在 08-06/08-07 冲高后于 08-11 大幅回撤(有色金属 -4.42%/-138 亿)，说明周期行情多为事件/情绪驱动、持续性差；大消费(食品饮料/家电/医药)在 08-10 后分化，医药 08-07 大涨后回落。消费与医药宜等待基本面或资金面拐点信号，逢低布局优于追涨。"
+  ]
+ ],
+ "etfs": [
+  ["通信 / CPO", "通信ETF", "515880", "光模块、5.5G 主线，与电子联动最强"],
+  ["电子 / 半导体", "电子50ETF", "515320", "覆盖半导体、消费电子；或 半导体ETF 512480"],
+  ["科创芯片", "科创芯片ETF", "588290", "国产算力、先进制程核心标的"],
+  ["电力设备 / 新能源", "新能源ETF", "516160", "光伏、锂电、储能龙头集合"],
+  ["汽车", "汽车ETF", "516110", "含智能化、零部件；与机器人链重叠"],
+  ["机械设备 / 机器人", "机器人ETF", "562500", "人形机器人、工业自动化主题"],
+  ["国防军工", "军工ETF", "512660", "航空装备、军工电子，事件驱动型"],
+  ["有色金属", "有色ETF", "512940", "铜、铝、黄金、小金属；周期弹性"],
+  ["煤炭", "煤炭ETF", "515220", "高股息红利、低估值防御"],
+  ["医药生物", "生物医药ETF", "159508", "CXO、创新药、生物制品"],
+  ["食品饮料", "食品饮料ETF", "516900", "白酒+大众消费，复苏预期"],
+  ["房地产", "地产ETF", "159707", "政策博弈、估值修复"],
+  ["银行", "银行ETF", "512800", "高股息、低估值红利压舱石"],
+  ["非银金融 / 券商", "券商ETF", "512000", "行情β与资本市场改革受益"],
+  ["计算机 / 软件", "软件ETF", "561010", "AI应用、信创、工业软件"],
+  ["建筑材料", "建材ETF", "159745", "地产链后周期、基建催化"],
+  ["环保", "环保ETF", "159861", "水务、固废、绿电运营"],
+  ["农林牧渔", "养殖ETF", "159865", "生猪养殖周期+饲料"],
+  ["钢铁", "钢铁ETF", "515210", "特钢、普钢，并购重组主题"],
+  ["基础化工", "化工ETF", "516020", "钛白粉、化肥、新材料"],
+  ["交通运输", "交运ETF", "561320", "快递、航运、高股息公路铁路"]
+ ]
+}"""
+
+
+def _static_sections(today):
+    try:
+        s = json.loads(_STATIC_JSON)
+    except Exception:
+        return {}
+    s["north"]["date"] = today.isoformat()
+    s["margin"]["date"] = today.isoformat()
+    return s
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--push", action="store_true", help="生成后 git add/commit/push 到 main")
@@ -121,6 +235,12 @@ def main():
         sys.stderr.write("WARN: 东财取数失败，未覆盖现有 sector_data.json\n")
         sys.exit(2)
 
+    # 指数 + 风格指数（失败则缺省，前端会用内置兜底补齐，不影响行业数据）
+    idx_style = _fetch_quotes(INDEX_SECIDS)
+    indices = {k: idx_style[k] for k in INDEX_NAMES if k in idx_style}
+    style = {k: idx_style[k] for k in STYLE_NAMES if k in idx_style}
+    static = _static_sections(today)
+
     label = today.strftime("%m-%d") + " " + _WEEKDAYS[today.weekday()]
     entry = {
         "label": label,
@@ -150,10 +270,18 @@ def main():
         "bk": SECTOR_BK,
         "days": days,
     }
+    if indices:
+        D["indices"] = indices
+    if style:
+        D["style"] = style
+    if static:
+        for _k in ("north", "margin", "judge", "etfs"):
+            if static.get(_k):
+                D[_k] = static[_k]
     with open(path, "w", encoding="utf-8") as f:
         json.dump(D, f, ensure_ascii=False, indent=1)
-    print("OK sector_data.json today=%s industries=%d (保留%d天)" % (
-        today.isoformat(), len(ind), len(days)))
+    print("OK sector_data.json today=%s industries=%d indices=%d style=%d (保留%d天)" % (
+        today.isoformat(), len(ind), len(indices), len(style), len(days)))
 
     if args.push:
         import subprocess
