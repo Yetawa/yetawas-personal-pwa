@@ -94,6 +94,11 @@ def main():
     else:
         today = datetime.date.today()
 
+    # 周末非交易日：跳过，避免把上周五收盘误写成「今日」
+    if today.weekday() >= 5:
+        sys.stderr.write("SKIP: %s 为周末，非交易日，不更新快照\n" % today.isoformat())
+        sys.exit(0)
+
     ind = fetch_today()
     if not ind:
         # 取数失败：保留现有文件，避免覆盖成空数据
