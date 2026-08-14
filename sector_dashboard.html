@@ -273,6 +273,7 @@ function cls(c,suffix){ if(c===null||c===undefined) return ""; return c>=0?(suff
 
 /* 大盘概览 */
 function renderIdx(){
+  if(!D || !D.indices){ $("#idxRow").innerHTML="<div class='src-note'>指数快照暂缺</div>"; return; }
   const order=["上证指数","深证成指","创业板指","沪深300","科创50","北证50"];
   $("#idxRow").innerHTML = order.map(n=>{
     const [v,c]=D.indices[n];
@@ -340,27 +341,24 @@ function renderDay(){
   renderNarrative(day, ind);
 }
 
-/* 资金主线文案（基于当天数据自动生成 + 关键结论） */
+/* 资金主线文案（完全基于当天数据动态生成，避免写死旧日期文案） */
 function renderNarrative(day, ind){
   $("#narrDay").textContent = day.label;
-  const get=(n,k)=>{const d=D.days[k];return d.industries[n];};
   const names=Object.keys(ind);
   const ups=names.filter(n=>(ind[n].chg||0)>0).length, downs=names.filter(n=>(ind[n].chg||0)<0).length;
-  if(curDay===D.today){
-    $("#narr").innerHTML = `<b>科技制造主线强势回归。</b>通信(+2.46%/+129亿)、电子(+1.99%/+102亿)双核领涨，电力设备、汽车、机械设备同步获主力净流入，AI算力(CPO/PCB/半导体)仍是资金最密集方向；房地产(+3.10%)与食品饮料等消费午后走强。逆势净流出集中在医药生物(-34亿)、计算机(-15亿)、煤炭、石油石化、有色金属。全市场 31 个申万一级行业中 ${ups} 个上涨、${downs} 个下跌，风险偏好明显回暖。`;
-  } else if(curDay==="2026-08-11"){
-    $("#narr").innerHTML = `<b>指数分化、资金避险。</b>沪指跌 0.82%，仅 10 个行业主力净流入；通信(+1.13%/+13亿)居首，建筑装饰、汽车小幅流入。有色金属(-4.42%/-138亿)、电子(-0.87%/-102亿)、国防军工(-2.38%/-37亿)遭大幅抛售，两市主力净流出 305 亿。周期与高位科技同步退潮。`;
-  } else if(curDay==="2026-08-10"){
-    $("#narr").innerHTML = `<b>指数剧烈分化、成交 2.52 万亿。</b>农林牧渔(+3.14%)、食品饮料(+2.51%)领涨，电力设备(+0.71%/+18亿)获加仓；但通信(-3.16%/-170亿)、电子(-0.49%/-197亿)大幅净流出，CPO/算力赛道遭集中获利了结，两市主力净流出约 239–311 亿。`;
-  } else if(curDay==="2026-08-07"){
-    $("#narr").innerHTML = `<b>电子医药双轮驱动。</b>医药生物(+4.77%/+88亿)、电子(+3.53%/+283亿)领涨全场，机械设备(+2.08%/+40亿)、建筑材料(+3.33%/+29亿)、有色金属(+3.19%/+71亿)同步走强；计算机(-0.60%/-59亿)、通信(-0.13%/-24亿)净流出。两市主力净流入 427 亿，为近5日最强单日。`;
-  } else {
-    $("#narr").innerHTML = `<b>存量博弈、快速轮动。</b>煤炭(+4.42%)强势托底沪指重返 3900，通信(+1.30%/+20亿)、电子(+1.62%/+20亿)、基础化工获主力净流入；传媒、电力设备、计算机、非银金融等净流出，两市主力净流出约 207–311 亿。资金在超跌弹性与确定性红利间反复切换。`;
-  }
+  const byChg=[...names].sort((a,b)=>(ind[b].chg||0)-(ind[a].chg||0));
+  const byMain=[...names].filter(n=>typeof ind[n].main==="number").sort((a,b)=>ind[b].main-ind[a].main);
+  const topUp=byChg.slice(0,3).map(n=>`${n}(${fmtChg(ind[n].chg)})`).join("、");
+  const topDown=byChg.slice(-3).reverse().map(n=>`${n}(${fmtChg(ind[n].chg)})`).join("、");
+  const inLead=byMain.slice(0,3).map(n=>`${n}(${fmtMain(ind[n].main)})`).join("、");
+  const outLead=byMain.slice(-3).reverse().map(n=>`${n}(${fmtMain(ind[n].main)})`).join("、");
+  const mood = ups>=downs ? "回暖" : "偏弱";
+  $("#narr").innerHTML = `<b>${day.label} 行业强弱。</b>领涨：${topUp}；领跌：${topDown}。主力净流入居前：${inLead}；净流出居前：${outLead}。全市场 31 个申万一级行业中 ${ups} 个上涨、${downs} 个下跌，风险偏好${mood}。`;
 }
 
 /* 风格轮动（使用最新交易日快照） */
 function renderStyle(){
+  if(!D || !D.style){ $("#styleRow").innerHTML="<div class='src-note'>风格快照暂缺</div>"; return; }
   const s=D.style;
   const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","中证1000"];
   $("#styleRow").innerHTML = order.map(n=>{
@@ -381,6 +379,7 @@ function renderStyle(){
 
 /* 北向 + 两融 */
 function renderNB(){
+  if(!D || !D.north || !D.margin){ $("#nbTurn").textContent="—"; $("#mgBal").textContent="—"; return; }
   const n=D.north, m=D.margin;
   $("#nbDate").textContent=n.date; $("#nbTurn").textContent=n.turnover.toLocaleString()+" 亿";
   $("#nbCum").textContent=n.cumTrillion; $("#nbNote").textContent=n.note;
@@ -463,13 +462,25 @@ function fillDateTags(){
   $("#idxTag").textContent = D.today.slice(5)+" 收盘 · 东方财富";
   $("#styleTag").textContent = D.today.slice(5)+" 收盘 · 巨潮风格指数";
 }
+/* 渲染整体包裹：任一子模块缺字段也不致整页崩溃（缺的字段由内置兜底补齐） */
+function safeRender(){
+  try{ renderIdx(); }catch(e){ console.warn("renderIdx",e); }
+  try{ renderMini(); }catch(e){ console.warn("renderMini",e); }
+  try{ renderDates(); }catch(e){ console.warn("renderDates",e); }
+  try{ renderDay(); }catch(e){ console.warn("renderDay",e); }
+  try{ renderStyle(); }catch(e){ console.warn("renderStyle",e); }
+  try{ renderNB(); }catch(e){ console.warn("renderNB",e); }
+  try{ renderStatic(); }catch(e){ console.warn("renderStatic",e); }
+  try{ fillDateTags(); }catch(e){ console.warn("fillDateTags",e); }
+}
+
 (async function bootstrap(){
   // 方案A：优先加载在线数据源（onrender 静态托管，CORS 已放开；本地 http server 打开亦可取数）
   try {
     const r = await fetch("https://fund-arb.onrender.com/sector_data.json", {cache:"no-store"});
     if(r.ok){
       const j = await r.json();
-      if(j && j.days && j.today && j.days[j.today]){ D = j; _dataFromJson = true; }
+      if(j && j.days && j.today && j.days[j.today]){ D = Object.assign({}, D_FALLBACK, j); _dataFromJson = true; }
     }
   } catch(e){ /* 跨域/网络不可达时退回同源或内置兜底 */ }
   // 兜底：同源相对路径（部署在 onrender 时）
@@ -478,12 +489,12 @@ function fillDateTags(){
       const r = await fetch("/sector_data.json", {cache:"no-store"});
       if(r.ok){
         const j = await r.json();
-        if(j && j.days && j.today && j.days[j.today]){ D = j; _dataFromJson = true; }
+        if(j && j.days && j.today && j.days[j.today]){ D = Object.assign({}, D_FALLBACK, j); _dataFromJson = true; }
       }
     } catch(e){ /* 网络不可达时退回内置兜底 D_FALLBACK */ }
   }
   curDay = D.today;
-  renderIdx(); renderMini(); renderDates(); renderDay(); renderStyle(); renderNB(); renderStatic(); fillDateTags();
+  safeRender();
   $("#snapNote").innerHTML = `提示：本页行业轮动数据为每日收盘后自动生成的快照（由 /sector_data.json 提供，自动日更）；右上角「实时刷新」走 /api/sector_live，仅在本地或国内网络可连通东方财富。当前展示 <b>(${D.today})</b> 快照（数据生成于 ${D.generatedAt||'—'}）。`;
   $("#narrToggle").onclick=()=>{ const n=$("#narr"); const hid=n.style.display==="none"; n.style.display=hid?"":"none"; $("#narrToggle").textContent=hid?"▾":"▸"; };
   markLive(false); // 默认按快照呈现，实时刷新成功后再翻为「实时」
