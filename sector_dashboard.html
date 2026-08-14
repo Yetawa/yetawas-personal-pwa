@@ -448,8 +448,10 @@ function scheduleNext(){
   _liveTimer = setInterval(refreshLive, _REFRESH_MS);
 }
 
-/* PWA service worker（独立 /sw.js，可离线缓存） */
-if("serviceWorker" in navigator){ navigator.serviceWorker.register("/sw.js").catch(()=>{}); }
+/* PWA service worker：注销所有已注册 SW，避免旧缓存(v1 cache-first)持续喂旧数据；本页改用纯网络取最新快照 */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.getRegistrations().then((rs)=>{ rs.forEach((r)=>r.unregister()); }).catch(()=>{});
+}
 
 function markLive(ok){
   const el=$("#dataState"); if(!el) return;
@@ -462,14 +464,24 @@ function fillDateTags(){
   $("#styleTag").textContent = D.today.slice(5)+" 收盘 · 巨潮风格指数";
 }
 (async function bootstrap(){
-  // 方案A：优先加载每日收盘后生成的同源快照 /sector_data.json（onrender 静态托管，日更）
+  // 方案A：优先加载在线数据源（onrender 静态托管，CORS 已放开；本地 http server 打开亦可取数）
   try {
-    const r = await fetch("/sector_data.json", {cache:"no-store"});
+    const r = await fetch("https://fund-arb.onrender.com/sector_data.json", {cache:"no-store"});
     if(r.ok){
       const j = await r.json();
       if(j && j.days && j.today && j.days[j.today]){ D = j; _dataFromJson = true; }
     }
-  } catch(e){ /* 网络不可达时退回内置兜底 D_FALLBACK */ }
+  } catch(e){ /* 跨域/网络不可达时退回同源或内置兜底 */ }
+  // 兜底：同源相对路径（部署在 onrender 时）
+  if(!_dataFromJson){
+    try {
+      const r = await fetch("/sector_data.json", {cache:"no-store"});
+      if(r.ok){
+        const j = await r.json();
+        if(j && j.days && j.today && j.days[j.today]){ D = j; _dataFromJson = true; }
+      }
+    } catch(e){ /* 网络不可达时退回内置兜底 D_FALLBACK */ }
+  }
   curDay = D.today;
   renderIdx(); renderMini(); renderDates(); renderDay(); renderStyle(); renderNB(); renderStatic(); fillDateTags();
   $("#snapNote").innerHTML = `提示：本页行业轮动数据为每日收盘后自动生成的快照（由 /sector_data.json 提供，自动日更）；右上角「实时刷新」走 /api/sector_live，仅在本地或国内网络可连通东方财富。当前展示 <b>(${D.today})</b> 快照（数据生成于 ${D.generatedAt||'—'}）。`;
