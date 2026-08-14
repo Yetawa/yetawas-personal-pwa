@@ -3884,6 +3884,14 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/sector_live":
             self._send(200, json.dumps(self._sector_live_payload(), ensure_ascii=False), "application/json; charset=utf-8")
             return
+        if parsed.path == "/sector_data.json":
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sector_data.json")
+            try:
+                with open(_fp, encoding="utf-8") as _f:
+                    self._send(200, _f.read(), "application/json; charset=utf-8")
+            except Exception:
+                self._send(404, "{}", "application/json; charset=utf-8")
+            return
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
             return
