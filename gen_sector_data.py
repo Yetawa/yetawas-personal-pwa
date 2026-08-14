@@ -87,6 +87,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--push", action="store_true", help="生成后 git add/commit/push 到 main")
     ap.add_argument("--date", default=None, help="指定交易日 YYYY-MM-DD（默认今天）")
+    ap.add_argument("--force-preclose", action="store_true",
+                    help="强制在15:00收盘前也抓取（仅盘前/昨收快照，慎用）")
     args = ap.parse_args()
 
     if args.date:
@@ -98,6 +100,20 @@ def main():
     if today.weekday() >= 5:
         sys.stderr.write("SKIP: %s 为周末，非交易日，不更新快照\n" % today.isoformat())
         sys.exit(0)
+
+    # 收盘前保护：今日真实收盘数据在 15:00 后才产生；在此之前抓取到的
+    # 实为盘前/昨收，写入会被误标为「今日收盘」，造成「日期对、数值错」。
+    # 目标是今天(或未来)且当前早于 15:00 时，默认拒绝更新（除非显式 --force-preclose）。
+    now = datetime.datetime.now()
+    if (not args.force_preclose) and today == datetime.date.today() and now.hour < 15:
+        sys.stderr.write(
+            "REFUSE: 当前 %02d:%02d 早于收盘15:00，今日真实收盘数据尚未产生。\n"
+            % (now.hour, now.minute))
+        sys.stderr.write(
+            "        此刻抓取到的实为盘前/昨收数据，写入会被误标为今日收盘。已拒绝更新。\n")
+        sys.stderr.write(
+            "        补跑历史交易日请用 --date YYYY-MM-DD；确要抓盘前快照请加 --force-preclose。\n")
+        sys.exit(4)
 
     ind = fetch_today()
     if not ind:
