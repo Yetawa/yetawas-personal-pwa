@@ -141,11 +141,21 @@ def main():
 
     if args.push:
         import subprocess
+        # GH_PROXY 环境变量（由 bat 注入）：指定镜像代理地址，避免直连 github.com。
+        # 例：https://ghproxy.net  —— 留空则信任本机 git 全局配置。
+        proxy = (os.environ.get("GH_PROXY") or "").strip().rstrip("/")
+        git_base = ["git"]
+        if proxy:
+            git_base += ["-c",
+                         "url.%s/https://github.com/.insteadOf=https://github.com/" % proxy]
+        # 非交互（任务计划）环境下，强制 GCM 静默读取 Windows 凭据管理器缓存的 PAT，
+        # 避免 helper-selector 弹窗导致挂起。若报 credential.helper 找不到，改成 manager。
+        git_base += ["-c", "credential.helper=manager-core"]
         try:
-            subprocess.run(["git", "add", "sector_data.json"], check=True, cwd=here)
+            subprocess.run(git_base + ["add", "sector_data.json"], check=True, cwd=here)
             msg = "chore: 更新行业轮动快照 %s" % today.isoformat()
-            subprocess.run(["git", "commit", "-m", msg], check=True, cwd=here)
-            subprocess.run(["git", "push", "origin", "main"], check=True, cwd=here)
+            subprocess.run(git_base + ["commit", "-m", msg], check=True, cwd=here)
+            subprocess.run(git_base + ["push", "origin", "main"], check=True, cwd=here)
             print("PUSHED -> origin/main")
         except subprocess.CalledProcessError as e:
             sys.stderr.write("git push 失败: %s\n" % e)
