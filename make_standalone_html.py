@@ -1,9 +1,21 @@
 # -*- coding: utf-8 -*-
-"""从 fund_arb.py 导出可独立打开的 fund_arb.html 与 fund_arb_ranking.html
+"""从 fund_arb.py 导出可独立打开的 fund_arb.html / fund_arb_ranking.html / fund_arb_top.html
 （数据仍由本地服务 http://localhost:8000 提供，避免 CORS/跨域问题）
 """
 import os
 import fund_arb
+
+
+# 全站统一导航：6 个入口映射到同目录下的独立 HTML
+# （口袋支点无本地独立文件，指向线上 onrender 页面）
+NAV_MAP = [
+    ('href="/sector"', 'href="sector_dashboard.html"'),
+    ('href="/arb"', 'href="fund_arb.html"'),
+    ('href="/ranking"', 'href="fund_arb_ranking.html"'),
+    ('href="/top"', 'href="fund_arb_top.html"'),
+    ('href="/pivot"', 'href="https://fund-arb.onrender.com/pivot"'),
+    ('href="/cb"', 'href="cb.html"'),
+]
 
 
 def make_page(html, out_name, fetch_replacements, nav_replacements):
@@ -31,10 +43,7 @@ make_page(
         ("let url='/api/data?code='", "let url=BASE+'/api/data?code='"),
         ("fetch('/api/validate?code='", "fetch(BASE+'/api/validate?code='"),
     ],
-    [
-        ('href="/top"', 'href="fund_arb_top.html"'),
-        ('href="/ranking"', 'href="fund_arb_ranking.html"'),
-    ],
+    NAV_MAP,
 )
 
 # 界面二：基金溢价排行表
@@ -42,11 +51,7 @@ make_page(
     fund_arb.PAGE2_HTML,
     "fund_arb_ranking.html",
     [("const url='/api/ranking?date='", "const url=BASE+'/api/ranking?date='")],
-    [
-        ('href="/top"', 'href="fund_arb_top.html"'),
-        ('href="/"', 'href="fund_arb.html"'),
-        ('href="/?code=', 'href="fund_arb.html?code='),
-    ],
+    NAV_MAP,
 )
 
 # 界面三：全市场 LOF TOP20 套利榜
@@ -54,9 +59,5 @@ make_page(
     fund_arb.PAGE3_HTML,
     "fund_arb_top.html",
     [("const url='/api/top?date='", "const url=BASE+'/api/top?date='")],
-    [
-        ('href="/ranking"', 'href="fund_arb_ranking.html"'),
-        ('href="/"', 'href="fund_arb.html"'),
-        ('href="/?code=', 'href="fund_arb.html?code='),
-    ],
+    NAV_MAP,
 )
