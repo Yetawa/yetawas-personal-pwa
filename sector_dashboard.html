@@ -31,7 +31,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Micr
   background:var(--bg);color:var(--txt);line-height:1.5;font-size:14px;
   background-image:radial-gradient(1200px 600px at 80% -10%,rgba(45,212,191,.07),transparent),radial-gradient(900px 500px at 0% 0%,rgba(239,68,68,.06),transparent);
   min-height:100vh;}
-.wrap{max-width:1180px;margin:0 auto;padding:14px 14px 60px}
+.wrap{max-width:1180px;margin:0 auto;padding:64px 14px 60px}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .h-title{font-size:19px;font-weight:800;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
 .h-title .dot{width:10px;height:10px;border-radius:3px;background:var(--up);box-shadow:0 0 12px var(--up)}
@@ -80,6 +80,8 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .tile .tm{font-size:11px;font-weight:600;opacity:.92;margin-top:1px}
 .legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txt3);margin-top:10px;flex-wrap:wrap}
 .legend .bar{height:10px;width:160px;border-radius:6px;background:linear-gradient(90deg,var(--down),var(--flat) 50%,var(--up))}
+.spk{margin-top:5px;line-height:0;opacity:.9}
+.spk svg{display:block}
 
 /* flow bars */
 .flow{display:flex;flex-direction:column;gap:5px}
@@ -134,14 +136,14 @@ tr:hover td{background:var(--card2)}
 .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
 .pill.up{background:var(--upbg);color:var(--up)} .pill.down{background:var(--downbg);color:var(--down)} .pill.flat{background:rgba(100,116,139,.16);color:var(--flat)}
 
-.pagenav{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 2px}
-.pagenav a{display:inline-flex;align-items:center;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
+.pagenav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;flex-wrap:nowrap;gap:8px;margin:0;padding:8px 12px;background:color-mix(in srgb,var(--bg) 88%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);overflow-x:auto}
+.pagenav a{display:inline-flex;align-items:center;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap;flex:none}
 .pagenav a:hover{border-color:var(--accent)}
 .pagenav a.active{background:var(--accent);color:#06243a;border-color:var(--accent)}
 
 .snap-note{font-size:11.5px;color:var(--txt3);line-height:1.6;background:var(--card2);border:1px dashed var(--line);border-radius:9px;padding:7px 11px;margin:4px 0 2px}
 .snap-note b{color:var(--gold)}
-.mini{position:sticky;top:0;z-index:30;display:flex;gap:12px;flex-wrap:nowrap;align-items:center;
+.mini{position:sticky;top:50px;z-index:30;display:flex;gap:12px;flex-wrap:nowrap;align-items:center;
   background:color-mix(in srgb, var(--card) 86%, transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:10px;padding:7px 11px;margin:6px 0;font-size:12px;box-shadow:var(--shadow);overflow-x:auto}
 .mini .m{white-space:nowrap}
@@ -308,6 +310,25 @@ function renderDates(){
   document.querySelectorAll(".date-btn").forEach(b=>b.onclick=()=>{curDay=b.dataset.k;renderDates();renderDay();});
 }
 
+/* 行业近5日涨跌 sparkline（取 days 历史中该行业的 chg 序列） */
+function sparkSVG(name){
+  const ds = Object.keys(D.days).sort();
+  const pts = ds.map(d=>{ const o=(D.days[d].industries||{})[name]; return o?o.chg:null; })
+                 .filter(v=>typeof v==="number");
+  if(pts.length < 2) return "";
+  const w=72,h=18,pad=2;
+  const min=Math.min(...pts), max=Math.max(...pts), rng=(max-min)||1;
+  const coords=pts.map((v,i)=>{
+    const x=pad + i*(w-2*pad)/(pts.length-1);
+    const y=h-pad - (v-min)/rng*(h-2*pad);
+    return [x,y];
+  });
+  const col = pts[pts.length-1]>=0 ? "var(--up)" : "var(--down)";
+  const d = coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  return `<div class="spk"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px">`
+       + `<path d="${d}" fill="none" style="stroke:${col}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
+}
+
 /* 行业热力 + 资金条形 + 主线（按当前日） */
 function renderDay(){
   const day=D.days[curDay];
@@ -315,17 +336,27 @@ function renderDay(){
   $("#datestr").textContent = curDay;
   const ind = day.industries;
   // heatmap
-  const names=Object.keys(ind);
-  const maxAbs=Math.max(0.5,...names.map(n=>Math.abs(ind[n].chg||0)));
+  // 热力图：按涨跌幅降序排列（涨多在前），色块越深越用白字保证对比度，并附近5日走势 sparkline
+  const names=Object.keys(ind).sort((a,b)=>(ind[b].chg||0)-(ind[a].chg||0));
+  const maxAbs=Math.max(0.6,...names.map(n=>Math.abs(ind[n].chg||0)));
   $("#heat").innerHTML = names.map(n=>{
     const o=ind[n]; const c=o.chg, m=o.main;
-    const col = c===null? "var(--flat)" : (c>=0?"var(--up)":"var(--down)");
-    const inten = c===null?0.12:Math.min(0.85, Math.abs(c)/maxAbs*0.8+0.12);
-    const bg = c===null? "var(--card2)" : (c>=0?`rgba(var(--up-rgb),${inten})`:`rgba(var(--down-rgb),${inten})`);
-    return `<div class="tile" style="background:${bg};border-color:${c===null?'var(--line)':col}">
-      <div class="tn" style="color:${c===null?'var(--txt2)':'var(--txt)'}">${n}</div>
-      <div class="tc" style="color:${col}">${fmtChg(c)}</div>
-      <div class="tm" style="color:${m===null?'var(--txt3)':(m>=0?'var(--up)':'var(--down)')}">主力 ${fmtMain(m)}</div>
+    let bg, txtCol, bdCol;
+    if(c===null){ bg="var(--card2)"; txtCol="var(--txt2)"; bdCol="var(--line)"; }
+    else {
+      const up = c>=0;
+      const inten = Math.min(0.92, Math.abs(c)/maxAbs*0.82 + 0.16);
+      // 色块越深越用白字，避免「大红字压大红底」看不清；浅色块用涨跌色字更跳
+      txtCol = inten>=0.5 ? "#ffffff" : (up?"var(--up)":"var(--down)");
+      bdCol = up?"var(--up)":"var(--down)";
+      bg = up ? `rgba(var(--up-rgb),${inten.toFixed(3)})` : `rgba(var(--down-rgb),${inten.toFixed(3)})`;
+    }
+    const mCol = m===null?"var(--txt3)":(m>=0?"var(--up)":"var(--down)");
+    return `<div class="tile" style="background:${bg};border-color:${bdCol}">
+      <div class="tn" style="color:${txtCol}">${n}</div>
+      <div class="tc" style="color:${txtCol}">${fmtChg(c)}</div>
+      <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">主力 ${fmtMain(m)}</div>
+      ${sparkSVG(n)}
     </div>`;
   }).join("");
   // flow bars
