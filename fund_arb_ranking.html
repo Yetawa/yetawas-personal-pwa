@@ -22,7 +22,7 @@
   --sb-info-bg:#f5f7fa; --sb-info-border:#e3e8ef; --sb-info-label:#6b7280;
 }
 *{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;transition:background .2s,color .2s}
+body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:60px 20px 20px;transition:background .2s,color .2s}
 .wrap{max-width:1280px;margin:0 auto}
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
 .tzline{font-size:13px;color:var(--muted);background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin:6px 0 14px}
@@ -34,6 +34,14 @@ h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 a.theme-btn{text-decoration:none}
 .theme-btn:hover{border-color:var(--btn);color:var(--btn)}
+/* 全站统一固定顶部导航：6 个入口 + 主题切换，位置固定且各页一致 */
+.topnav{position:fixed;top:0;left:0;right:0;z-index:2000;display:flex;align-items:center;gap:6px;padding:7px 10px;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.topnav::-webkit-scrollbar{display:none}
+.topnav .navlink{display:inline-flex;align-items:center;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13.5px;font-weight:600;text-decoration:none;white-space:nowrap;flex:none;cursor:pointer}
+.topnav .navlink:hover{border-color:var(--btn);color:var(--btn)}
+.topnav .navlink.active{background:var(--btn);border-color:var(--btn);color:#fff}
+.topnav .navspacer{flex:1 1 auto}
+.topnav .navtheme{margin-left:6px}
 .stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
 .stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
 @keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
@@ -91,7 +99,7 @@ tbody tr:hover{background:var(--row-hover)}
 code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--code-text)}
 /* 响应式布局：窄屏（手机）自适应 */
 @media (max-width:760px){
-  body{padding:12px;padding-top:max(12px,env(safe-area-inset-top))}
+  body{padding:12px;padding-top:max(60px,env(safe-area-inset-top))}
   .topbar{flex-direction:column;align-items:stretch;gap:10px}
   .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
   .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
@@ -166,12 +174,16 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   <div class="titles">
     <h1>LOF / ETF 基金溢价排行表 <span class="ver">V1.3</span></h1>
   </div>
-  <div class="top-actions">
-    <a class="theme-btn" href="/sector" title="A股行业轮动与资金流向监控">行业轮动</a><a class="theme-btn" href="/arb" title="返回单基金套利看板">套利看板</a>
-    <a class="theme-btn" href="fund_arb_top.html" title="全市场 LOF TOP 套利机会">TOP套利</a>
-    <a class="theme-btn" href="/pivot" title="口袋支点量化选股">口袋支点</a><a class="theme-btn" href="/cb">可转债套利</a>
+  <div class="topnav">
+    <a class="navlink" href="sector_dashboard.html">行业轮动</a>
+    <a class="navlink" href="fund_arb.html">套利看板</a>
+    <a class="navlink active" href="fund_arb_ranking.html">排行表</a>
+    <a class="navlink" href="fund_arb_top.html">TOP套利</a>
+    <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
+    <a class="navlink" href="cb.html">可转债套利</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
-    <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
+    <span class="navspacer"></span>
+    <button id="themeBtn" class="navlink navtheme" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
   </div>
 </div>
 
@@ -440,7 +452,7 @@ function renderBody(){
     const limitTxt = r.purchase_limit!=null ? esc(r.purchase_limit+'元') : '—';
     const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':((r.signal_cls==='premium_lock'||r.signal_cls==='discount_lock')?'lock':''));
     return '<tr>'
-      +'<td class="code"><a class="codelink" href="fund_arb.html?code='+esc(r.code)+'">'+esc(r.code)+'</a></td>'
+      +'<td class="code"><a class="codelink" href="/?code='+esc(r.code)+'">'+esc(r.code)+'</a></td>'
       +'<td class="name" title="'+esc(r.name)+'">'+esc(r.short||r.name)+'</td>'
       +'<td>'+esc(r.date)+'</td>'
       +'<td>'+fmtNum(r.price,4)+'</td>'
