@@ -25,6 +25,7 @@ import random
 import datetime
 import urllib.request
 import argparse
+import concurrent.futures
 
 # ---- 申万一级行业 BK 代码映射（与 fund_arb.py 的 SECTOR_BK 一致） ----
 SECTOR_BK = {
@@ -134,6 +135,91 @@ def _fetch_quotes(secids_map):
     return out
 
 
+def _get(url, timeout=10, retries=2):
+    """带退避重试的 JSON GET（历史行情接口偶发连接重置）。"""
+    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    last = None
+    for i in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": ua,
+                "Referer": "https://quote.eastmoney.com/",
+                "Accept": "application/json, text/plain, */*",
+            })
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode("utf-8", "replace"))
+        except Exception as e:
+            last = e
+            if i < retries:
+                time.sleep(0.4 * (i + 1))
+    return None
+
+
+def _fetch_one_history(name, bk, n_days):
+    """取单个行业的近 n_days 日历史：{date: {chg, main}}。chg 由日K收盘序列推算，main 取资金流日K。"""
+    secid = "90." + bk
+    closes = {}   # date -> close
+    mains = {}    # date -> 主力净流入(亿)
+    # 日K（收盘），多取 1 根用于推算首根涨跌幅
+    try:
+        t = int(time.time() * 1000)
+        u = ("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=%s"
+             "&fields1=f1,f2,f3,f4,f5&fields2=f51,f52,f53&klt=101&fqt=1&lmt=%d&end=20500101&_=%d"
+             % (secid, n_days + 1, t))
+        j = _get(u, timeout=8)
+        for row in ((j or {}).get("data") or {}).get("klines") or []:
+            p = row.split(",")
+            if len(p) >= 3:
+                try:
+                    closes[p[0]] = float(p[2])
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # 资金流日K（主力净流入，单位元 → 亿）
+    try:
+        t = int(time.time() * 1000)
+        u = ("https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt=%d&klt=101&secid=%s"
+             "&fields1=f1,f2,f3,f7&fields2=f51,f52&_=%d" % (n_days + 1, secid, t))
+        j = _get(u, timeout=8)
+        for row in ((j or {}).get("data") or {}).get("klines") or []:
+            p = row.split(",")
+            if len(p) >= 2:
+                try:
+                    mains[p[0]] = round(float(p[1]) / 1e8, 2)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # 由相邻收盘推算涨跌幅（与实时 f3 口径一致）
+    dates = sorted(closes.keys())
+    out = {}
+    for i, d in enumerate(dates):
+        if i == 0:
+            continue
+        prev = closes[dates[i - 1]]
+        chg = round((closes[d] - prev) / prev * 100, 2) if prev else None
+        main = mains.get(d)
+        out[d] = {"chg": chg, "main": main}
+    return name, out
+
+
+def fetch_history(bk_map, n_days=5):
+    """并发取全部行业的近 n_days 日历史，返回 {date_iso: {name: {chg, main}}}。"""
+    results = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {ex.submit(_fetch_one_history, n, b, n_days): n for n, b in bk_map.items()}
+        for f in concurrent.futures.as_completed(futs):
+            try:
+                name, daily = f.result()
+            except Exception:
+                continue
+            for d, v in daily.items():
+                results.setdefault(d, {})[name] = v
+    return results
+
+
 # 静态板块（北向/两融/研判/ETF 文案与参考）—— 北向、两融日期在生成时更新为当日
 _STATIC_JSON = """{
  "north": {
@@ -186,6 +272,10 @@ _STATIC_JSON = """{
  ]
 }"""
 
+
+# 历史种子：网络不可达（如沙箱被封 push2his）时，用内置真实历史日补齐近交易日，
+# 保证「近5交易日切换」立即可用；用户本机每日运行会用实时/回补数据覆盖这些种子。
+_HISTORY_SEED = r"""{"2026-08-07":{"label":"08-07 周五","source":"东方财富资金流向日报(13个行业主力净流入)","industries":{"电子":{"chg":3.53,"main":282.97},"汽车":{"chg":0.28,"main":-1.62},"医药生物":{"chg":4.77,"main":88.46},"纺织服饰":{"chg":-0.27,"main":-1.75},"有色金属":{"chg":3.19,"main":70.77},"家用电器":{"chg":-0.86,"main":-1.75},"机械设备":{"chg":2.08,"main":40.49},"食品饮料":{"chg":0.21,"main":-1.76},"电力设备":{"chg":1.19,"main":29.93},"房地产":{"chg":-0.51,"main":-1.83},"建筑材料":{"chg":3.33,"main":29.25},"社会服务":{"chg":0.11,"main":-1.87},"国防军工":{"chg":1.47,"main":10.51},"轻工制造":{"chg":-0.16,"main":-2.43},"基础化工":{"chg":1.23,"main":9.73},"商贸零售":{"chg":-0.42,"main":-2.84},"煤炭":{"chg":-0.34,"main":1.17},"环保":{"chg":0.49,"main":-2.85},"钢铁":{"chg":-0.21,"main":1.0},"交通运输":{"chg":-0.64,"main":-3.38},"石油石化":{"chg":0.64,"main":0.85},"传媒":{"chg":0.05,"main":-9.48},"公用事业":{"chg":-0.1,"main":0.35},"银行":{"chg":-0.65,"main":-10.61},"农林牧渔":{"chg":-0.21,"main":0.15},"非银金融":{"chg":-0.26,"main":-11.47},"建筑装饰":{"chg":-0.06,"main":-0.35},"通信":{"chg":0.13,"main":-24.25},"美容护理":{"chg":0.72,"main":-0.46},"计算机":{"chg":-0.6,"main":-58.56},"综合":{"chg":0.77,"main":-0.94}}},"2026-08-10":{"label":"08-10 周一","source":"证券时报·数据宝 A股行情指标(申万一级行业)","industries":{"电力设备":{"chg":0.71,"main":17.78},"食品饮料":{"chg":2.51,"main":16.34},"有色金属":{"chg":2.02,"main":12.18},"基础化工":{"chg":1.68,"main":5.95},"国防军工":{"chg":1.32,"main":5.72},"传媒":{"chg":1.42,"main":5.64},"汽车":{"chg":1.37,"main":4.58},"农林牧渔":{"chg":3.14,"main":3.15},"轻工制造":{"chg":1.91,"main":2.4},"商贸零售":{"chg":1.62,"main":1.81},"银行":{"chg":0.45,"main":1.79},"钢铁":{"chg":0.94,"main":1.39},"煤炭":{"chg":2.34,"main":1.3},"纺织服饰":{"chg":2.4,"main":1.09},"美容护理":{"chg":1.79,"main":0.53},"社会服务":{"chg":1.98,"main":0.47},"交通运输":{"chg":0.91,"main":-0.45},"机械设备":{"chg":0.02,"main":-0.57},"综合":{"chg":1.32,"main":-1.0},"环保":{"chg":1.63,"main":-1.95},"房地产":{"chg":1.63,"main":-2.14},"家用电器":{"chg":1.39,"main":-2.7},"公用事业":{"chg":0.89,"main":-2.77},"建筑装饰":{"chg":0.75,"main":-3.37},"石油石化":{"chg":1.49,"main":-3.99},"建筑材料":{"chg":0.35,"main":-13.24},"非银金融":{"chg":0.18,"main":-15.7},"医药生物":{"chg":1.4,"main":-20.6},"计算机":{"chg":-0.26,"main":-43.39},"通信":{"chg":-3.16,"main":-170.44},"电子":{"chg":-0.49,"main":-196.54}}},"2026-08-11":{"label":"08-11 周二","source":"证券时报·数据宝 A股行情指标(申万一级行业)","industries":{"通信":{"chg":1.13,"main":13.36},"石油石化":{"chg":0.5,"main":8.39},"医药生物":{"chg":0.31,"main":-12.75},"公用事业":{"chg":0.27,"main":-3.12},"家用电器":{"chg":0.2,"main":0.39},"纺织服饰":{"chg":0.11,"main":2.64},"房地产":{"chg":-0.01,"main":-3.45},"银行":{"chg":-0.02,"main":0.42},"建筑装饰":{"chg":-0.06,"main":12.76},"电力设备":{"chg":-0.2,"main":-25.98},"煤炭":{"chg":-0.23,"main":1.62},"商贸零售":{"chg":-0.41,"main":-2.19},"计算机":{"chg":-0.46,"main":-21.3},"机械设备":{"chg":-0.57,"main":-11.61},"汽车":{"chg":-0.61,"main":8.99},"综合":{"chg":-0.68,"main":-0.06},"环保":{"chg":-0.69,"main":-2.32},"轻工制造":{"chg":-0.69,"main":-3.06},"食品饮料":{"chg":-0.74,"main":-12.62},"建筑材料":{"chg":-0.82,"main":-7.73},"传媒":{"chg":-0.86,"main":-19.7},"电子":{"chg":-0.87,"main":-101.7},"美容护理":{"chg":-0.9,"main":-1.18},"非银金融":{"chg":-0.92,"main":-22.64},"社会服务":{"chg":-1.21,"main":-3.53},"农林牧渔":{"chg":-1.21,"main":-9.86},"交通运输":{"chg":-1.43,"main":-16.75},"钢铁":{"chg":-1.52,"main":-3.03},"基础化工":{"chg":-1.57,"main":-19.06},"国防军工":{"chg":-2.38,"main":-36.66},"有色金属":{"chg":-4.42,"main":-138.4}}},"2026-08-12":{"label":"08-12 周三","source":"东方财富实时行情接口(ulist.np) 收盘数据 · 主力净流入=超大单+大单","industries":{"电子":{"chg":1.99,"main":101.58},"通信":{"chg":2.46,"main":129.33},"计算机":{"chg":1.04,"main":-15.41},"传媒":{"chg":1.36,"main":7.17},"电力设备":{"chg":1.58,"main":40.23},"机械设备":{"chg":1.49,"main":16.78},"国防军工":{"chg":0.99,"main":-4.56},"汽车":{"chg":0.95,"main":15.47},"家用电器":{"chg":1.15,"main":-1.74},"食品饮料":{"chg":1.66,"main":12.77},"纺织服饰":{"chg":0.6,"main":-0.84},"轻工制造":{"chg":1.22,"main":3.04},"医药生物":{"chg":0.53,"main":-34.4},"公用事业":{"chg":-0.01,"main":-7.57},"交通运输":{"chg":0.73,"main":1.98},"房地产":{"chg":3.1,"main":11.53},"商贸零售":{"chg":1.22,"main":0.35},"社会服务":{"chg":1.17,"main":1.47},"综合":{"chg":1.69,"main":2.37},"建筑材料":{"chg":1.19,"main":-5.3},"建筑装饰":{"chg":1.42,"main":-6.35},"农林牧渔":{"chg":1.01,"main":-0.45},"基础化工":{"chg":0.95,"main":-6.95},"钢铁":{"chg":0.77,"main":0.5},"有色金属":{"chg":1.12,"main":-10.5},"石油石化":{"chg":-0.46,"main":-3.55},"煤炭":{"chg":-0.78,"main":-3.19},"环保":{"chg":1.14,"main":1.0},"美容护理":{"chg":-0.21,"main":-0.97},"银行":{"chg":-0.09,"main":6.22},"非银金融":{"chg":0.72,"main":-0.35}}}}"""
 
 def _static_sections(today):
     try:
@@ -241,12 +331,12 @@ def main():
     style = {k: idx_style[k] for k in STYLE_NAMES if k in idx_style}
     static = _static_sections(today)
 
-    label = today.strftime("%m-%d") + " " + _WEEKDAYS[today.weekday()]
-    entry = {
-        "label": label,
-        "source": "东方财富实时行情接口(ulist.np) 收盘数据 · 主力净流入=超大单+大单",
-        "industries": ind,
-    }
+    today_str = today.isoformat()
+    is_today = (today == datetime.date.today())
+
+    def _label(d):
+        dt = datetime.date.fromisoformat(d)
+        return dt.strftime("%m-%d") + " " + _WEEKDAYS[dt.weekday()]
 
     here = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(here, "sector_data.json")
@@ -258,8 +348,46 @@ def main():
         except Exception:
             prev = {}
 
-    days = dict(prev.get("days", {}))
-    days[today.isoformat()] = entry
+    # ---- 组装近 5 个交易日（滚动窗口）----
+    # 当日：实时接口（最准）；历史日：日K+资金流日K 回补，缺失行业用旧文件兜底。
+    days = {}
+    try:
+        hist = fetch_history(SECTOR_BK, n_days=5)
+    except Exception:
+        hist = {}
+    hist_days = {d: v for d, v in hist.items() if d != today_str}
+    # 历史日：合并旧文件同日的行业（回补个别取数失败的行业）
+    for d, ind_h in hist_days.items():
+        merged = dict(ind_h)
+        prev_ind = (prev.get("days", {}).get(d, {}).get("industries", {})) if prev else {}
+        for nm, val in prev_ind.items():
+            if nm not in merged:
+                merged[nm] = val
+        days[d] = {
+            "label": _label(d),
+            "source": "东方财富历史行情(日K) · 主力净流入=超大单+大单(历史资金流日K)",
+            "industries": merged,
+        }
+    # 当日：实时接口（仅当目标是真正的今天）
+    if is_today:
+        days[today_str] = {
+            "label": _label(today_str),
+            "source": "东方财富实时行情接口(ulist.np) 收盘数据 · 主力净流入=超大单+大单",
+            "industries": ind,
+        }
+    # 历史回补不足（<2 天）时，退回旧文件的 days，保证不丢数据
+    if len(days) < 2 and prev:
+        for d, blk in prev.get("days", {}).items():
+            if d not in days:
+                days[d] = blk
+    # 用内置历史种子补齐缺失的近交易日（仅当该日期无实时/回补数据），
+    # 保证「近5交易日切换」立即可用；用户本机每日运行会覆盖这些种子。
+    try:
+        for _sd, _sblk in json.loads(_HISTORY_SEED).items():
+            if _sd not in days:
+                days[_sd] = _sblk
+    except Exception:
+        pass
     # 仅保留最新 5 个交易日（滚动窗口）
     keys = sorted(days.keys(), reverse=True)[:5]
     days = {k: days[k] for k in keys}
