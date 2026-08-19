@@ -3703,6 +3703,11 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        # CORS：允许任意来源跨域读取（file:// 本地页 / 手机页 fetch 线上 JSON 快照时必需，
+        # 否则浏览器拦截导致行业轮动等页面回退到内嵌旧兜底数据）
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
         # HTML 页面禁用缓存：改完代码重启服务后，浏览器普通刷新即可拿到新版，
         # 避免“本地 8000 端还是老版、需要硬刷新”的困扰（API 仍可被浏览器/中间层按需缓存）
         if "text/html" in ctype:
@@ -3872,6 +3877,15 @@ class Handler(BaseHTTPRequestHandler):
                 last_err = str(e)
                 continue
         return {"live": False, "industries": None, "error": last_err or "all hosts failed"}
+
+    def do_OPTIONS(self):
+        # CORS 预检：跨域页面（file:// 本地/手机）fetch 快照 JSON 前的 OPTIONS 请求
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
         parsed = urlparse(self.path)
