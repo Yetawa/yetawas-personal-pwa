@@ -561,6 +561,36 @@
         localStorage.setItem(KLINE_KEY, JSON.stringify(slim));
       } catch (e) { /* 容量超限则忽略 */ }
     }
+
+    // ---------- 收盘快照（每日自动生成，onrender 同域 fetch，无代理问题）----------
+    async function loadSnapshot() {
+      try {
+        const r = await fetch('fish_snapshot.json', { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!j || !j.items) return;
+        const map = {};
+        etfs.forEach(e => { map[e.code.toLowerCase()] = e; });
+        let cnt = 0;
+        Object.keys(j.items).forEach(code => {
+          const it = j.items[code];
+          const e = map[code.toLowerCase()];
+          if (!e || !it || !isFinite(it.price) || it.price <= 0) return;
+          e.change = it.change;
+          e.changePrice = it.price;
+          const kc = klineCache[e.code];
+          if (kc && kc.bars && kc.bars.length) {
+            const m2 = computeModel(e, e.changePrice, kc.bars);
+            if (m2) Object.assign(e, m2);
+          }
+          cnt++;
+        });
+        if (cnt > 0) {
+          saveEtfs(); applyFilters(); computeStats();
+          setLastUpdate('已载入收盘快照 ' + (j.date || '') + ' ' + (j.ts || '').slice(11) + ' · ' + cnt + ' 只', false);
+        }
+      } catch (e) { /* file:// 或非同域时静默 */ }
+    }
     function secid(code) {
       return (code.startsWith('sh') ? '1.' : '0.') + code.slice(2);
     }
@@ -1028,6 +1058,7 @@
     applyFilters();
     computeStats();
     document.getElementById('dataDate').textContent = new Date().toISOString().slice(0, 10);
+    loadSnapshot(); // 异步载入收盘快照（每日自动生成；file:// 下自动静默跳过）
 
     // 解释卡片折叠
     document.getElementById('guideToggle').addEventListener('click', () => {
