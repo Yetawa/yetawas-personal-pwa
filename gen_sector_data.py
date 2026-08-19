@@ -282,8 +282,9 @@ def _static_sections(today):
         s = json.loads(_STATIC_JSON)
     except Exception:
         return {}
-    s["north"]["date"] = today.isoformat()
-    s["margin"]["date"] = today.isoformat()
+    # 注意：不要用 today 覆盖 north/margin 的 date —— 静态数值是各自抓取日的，
+    # 若把日期改成"今天"会导致「日期=今天、数值=旧」的误导（曾因此被用户指出数据不对）。
+    # north/margin 保留 _STATIC_JSON 中各自的真实数据日期。
     return s
 
 
