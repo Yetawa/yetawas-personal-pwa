@@ -43,6 +43,14 @@ import statistics
 import collections
 from fund_arb_tpl import (COMMON_CSS, PAGE_HTML, PAGE2_HTML, PAGE3_HTML, PAGE4_HTML, PAGE5_HTML, MANIFEST_JSON, ICON_SVG, SW_JS)
 
+# 导出表格/图片浮动条（来源：公众号 航城大叔），在线页面统一注入
+EXPORT_BAR_HTML = ""
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "export_bar.html"), encoding="utf-8") as _eb:
+        EXPORT_BAR_HTML = _eb.read()
+except Exception:
+    EXPORT_BAR_HTML = ""
+
 
 # 界面版本（用于页面展示与 PWA 缓存区分）
 VERSION = "V1.3"
@@ -3895,20 +3903,28 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
             return
+        if parsed.path in ("/yupen", "/yupen.html"):
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fish_basin.html")
+            try:
+                with open(_fp, encoding="utf-8") as _f:
+                    self._send(200, _f.read(), "text/html; charset=utf-8")
+            except Exception:
+                self._send(404, "Not Found", "text/plain; charset=utf-8")
+            return
         if parsed.path in ("/arb", "/arb.html"):
-            self._send(200, PAGE_HTML, "text/html; charset=utf-8")
+            self._send(200, PAGE_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
         if parsed.path in ("/ranking", "/ranking.html"):
-            self._send(200, PAGE2_HTML, "text/html; charset=utf-8")
+            self._send(200, PAGE2_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
         if parsed.path in ("/top", "/top.html"):
-            self._send(200, PAGE3_HTML, "text/html; charset=utf-8")
+            self._send(200, PAGE3_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
         if parsed.path in ("/pivot", "/pivot.html"):
-            self._send(200, PAGE4_HTML, "text/html; charset=utf-8")
+            self._send(200, PAGE4_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
         elif parsed.path in ("/cb", "/cb.html"):
-            self._send(200, PAGE5_HTML, "text/html; charset=utf-8")
+            self._send(200, PAGE5_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
         if parsed.path in ("/", "/index.html", "/sector_dashboard.html", "/sector"):
             try:
