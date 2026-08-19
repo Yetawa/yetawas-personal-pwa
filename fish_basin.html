@@ -462,7 +462,10 @@
     const DEFAULT_PROXY_CANDIDATES = [
       'https://api.allorigins.win/raw?url=',
       'https://api.codetabs.com/v1/proxy/?quest=',
-      'https://cors.eu.org/'
+      'https://cors.eu.org/',
+      'https://api.codetabs.com/v1/proxy?quest=',
+      'https://corsproxy.io/?url=',
+      'https://thingproxy.freeboard.io/fetch/'
     ];
 
     let etfs = [];
@@ -988,7 +991,12 @@
         if (cnt > 0) { saveEtfs(); applyFilters(); computeStats(); }
         setLastUpdate('已更新 ' + cnt + ' 只 · ' + new Date().toLocaleTimeString('zh-CN'));
       } catch (e) {
-        setLastUpdate('刷新失败：' + (e ? e.message : '无可用代理'), true);
+        // 把浏览器原生 TypeError("Failed to fetch") 翻译成中文，并给可操作的解决方案
+        const msg = (e && e.message) || '';
+        const hint = (msg === 'Failed to fetch' || msg === 'Load failed' || msg === 'NetworkError when attempting to fetch resource.')
+          ? '⚠ 代理/网络不可达（onrender 美国节点→公共 CORS 代理→东财/腾讯行情链路被 GFW 拦截或超时，公共 CORS 代理可达性不稳定）。如需实时刷新：①在本机运行 `python fund_arb.py` 后访问 http://127.0.0.1:8000/fish_basin.html；②或在上方「数据代理」填一个您可达的代理前缀后重试。'
+          : ('刷新失败：' + msg);
+        setLastUpdate(hint, true);
       } finally {
         btn.disabled = false; btn.textContent = oldText;
       }
