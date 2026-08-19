@@ -1,0 +1,48 @@
+<style>
+  #arbExportBar{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;gap:8px}
+  .arb-exp-btn{background:var(--bg-3,#161f2c);color:var(--text,#e6edf7);border:1px solid var(--border,#1f2d3d);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:inherit}
+  .arb-exp-btn:hover{border-color:var(--btn,var(--accent,#2dd4bf));color:var(--btn,var(--accent,#2dd4bf))}
+</style>
+<div id="arbExportBar">
+  <button class="arb-exp-btn" data-act="csv">⬇ 导出表格</button>
+  <button class="arb-exp-btn" data-act="img">🖼 导出图片</button>
+</div>
+<script>
+(function(){
+  var SOURCE='公众号 航城大叔';
+  var bar=document.getElementById('arbExportBar'); if(!bar) return;
+  function getTable(){
+    var ids=['tbl','grid','etfTbl'];
+    for(var i=0;i<ids.length;i++){var el=document.getElementById(ids[i]); if(el){ return el.tagName==='TABLE'?el:(el.querySelector('table')||null);} }
+    return null;
+  }
+  function stamp(){var d=new Date();function p(n){return (n<10?'0':'')+n;}return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());}
+  function download(name,content,mime){var b=new Blob([content],{type:mime});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(function(){try{URL.revokeObjectURL(a.href);}catch(e){}},2000);}
+  function csvFromTable(t){var rows=t.querySelectorAll('tr');var out=['来源：'+SOURCE];for(var i=0;i<rows.length;i++){var cells=rows[i].querySelectorAll('th,td');var r=[];for(var j=0;j<cells.length;j++){var txt=(cells[j].innerText||'').replace(/\s+/g,' ').replace(/"/g,'""').trim();r.push('"'+txt+'"');}out.push(r.join(','));}return String.fromCharCode(65279)+out.join('\n');}
+  function exportCsv(){var t=getTable();if(!t){alert('未找到表格数据');return;}download('fund_arb_'+stamp()+'.csv',csvFromTable(t),'text/csv;charset=utf-8');}
+  function isDark(c){var m=c.match(/\d+/g);if(!m)return true;var r=+m[0],g=+m[1],b=+m[2];return (0.299*r+0.587*g+0.114*b)<128;}
+  function exportImage(){var t=getTable();if(!t){alert('未找到表格数据');return;}var rows=Array.prototype.slice.call(t.querySelectorAll('tr'));if(!rows.length){alert('表格为空');return;}
+    var colCount=0;rows.forEach(function(r){colCount=Math.max(colCount,r.children.length);});
+    var pad=10,fs=13,headerH=36,rowH=30,titleH=46,footerH=30,scale=2;
+    var widths=[];for(var c=0;c<colCount;c++){var max=44;rows.forEach(function(r){var cell=r.children[c];if(!cell)return;var txt=(cell.innerText||'').replace(/\s+/g,' ').trim();var w=Math.min(txt.length*fs*0.62+pad*2,300);if(w>max)max=w;});widths.push(max);}
+    var totalW=widths.reduce(function(a,b){return a+b;},0);
+    var totalH=titleH+headerH+(rows.length-1)*rowH+footerH+8;
+    var canvas=document.createElement('canvas');canvas.width=totalW*scale;canvas.height=totalH*scale;
+    var ctx=canvas.getContext('2d');ctx.scale(scale,scale);
+    var dark=isDark(getComputedStyle(document.body).backgroundColor);
+    var bg=dark?'#0d1117':'#ffffff';var fg=dark?'#e6edf7':'#1e293b';var line=dark?'#1f2d3d':'#e2e8f0';var headBg=dark?'#161f2c':'#f0f4f8';
+    ctx.fillStyle=bg;ctx.fillRect(0,0,totalW,totalH);
+    ctx.textBaseline='middle';ctx.textAlign='left';
+    ctx.fillStyle=fg;ctx.font='bold 16px sans-serif';ctx.fillText(document.title||'基金数据',14,titleH/2);
+    var y=titleH;ctx.fillStyle=headBg;ctx.fillRect(0,y,totalW,headerH);
+    var x=0;for(var c=0;c<colCount;c++){var hcell=rows[0].children[c];var htxt=hcell?(hcell.innerText||'').replace(/\s+/g,' ').trim():'';ctx.fillStyle=fg;ctx.font='bold '+fs+'px sans-serif';ctx.fillText(htxt,x+pad,y+headerH/2);x+=widths[c];}
+    ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(0,y+headerH);ctx.lineTo(totalW,y+headerH);ctx.stroke();
+    y+=headerH;
+    for(var i=1;i<rows.length;i++){var rr=rows[i];x=0;for(var c=0;c<colCount;c++){var cell=rr.children[c];if(!cell)continue;var txt=(cell.innerText||'').replace(/\s+/g,' ').trim();try{ctx.fillStyle=getComputedStyle(cell).color;}catch(e){ctx.fillStyle=fg;}ctx.font=fs+'px sans-serif';ctx.textAlign='left';ctx.fillText(txt,x+pad,y+rowH/2);ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+rowH);ctx.stroke();x+=widths[c];}
+      ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(0,y+rowH);ctx.lineTo(totalW,y+rowH);ctx.stroke();y+=rowH;}
+    ctx.fillStyle=fg;ctx.font=fs+'px sans-serif';ctx.textAlign='left';ctx.fillText('来源：'+SOURCE+'　导出时间：'+new Date().toLocaleString('zh-CN'),14,y+footerH/2);
+    try{var a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='fund_arb_'+stamp()+'.png';a.click();}catch(e){alert('导出图片失败：'+e.message);}
+  }
+  bar.querySelectorAll('.arb-exp-btn').forEach(function(b){b.addEventListener('click',function(){var act=b.getAttribute('data-act');if(act==='csv')exportCsv();else if(act==='img')exportImage();});});
+})();
+</script>
