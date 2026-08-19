@@ -3903,7 +3903,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
             return
-        if parsed.path in ("/yupen", "/yupen.html"):
+        if parsed.path in ("/yupen", "/yupen.html", "/fish_basin.html"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fish_basin.html")
             try:
                 with open(_fp, encoding="utf-8") as _f:
