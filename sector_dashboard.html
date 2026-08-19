@@ -572,6 +572,23 @@ function safeRender(){
   function csvFromTable(t){var rows=t.querySelectorAll('tr');var out=['来源：'+SOURCE];for(var i=0;i<rows.length;i++){var cells=rows[i].querySelectorAll('th,td');var r=[];for(var j=0;j<cells.length;j++){var txt=(cells[j].innerText||'').replace(/\s+/g,' ').replace(/"/g,'""').trim();r.push('"'+txt+'"');}out.push(r.join(','));}return String.fromCharCode(65279)+out.join('\n');}
   function exportCsv(){var t=getTable();if(!t){alert('未找到表格数据');return;}download('fund_arb_'+stamp()+'.csv',csvFromTable(t),'text/csv;charset=utf-8');}
   function isDark(c){var m=c.match(/\d+/g);if(!m)return true;var r=+m[0],g=+m[1],b=+m[2];return (0.299*r+0.587*g+0.114*b)<128;}
+  function cellColor(cell, fg, dark){
+  // 导出图片颜色与网页一致：看涨(多头/趋多)红系，看跌(空头/趋空)绿系，中性灰
+  var upC=dark?'#ff6b6e':'#d93026', downC=dark?'#2dd4a7':'#13855c';
+  try{
+    var els=cell.querySelectorAll('span,b,strong');
+    for(var i=0;i<els.length;i++){
+      var cc=getComputedStyle(els[i]).color;
+      if(cc && cc!=='transparent' && cc!=='rgba(0, 0, 0, 0)' && cc!==fg){return cc;}
+    }
+  }catch(e){}
+  var t=(cell.innerText||'').replace(/\s+/g,' ').trim();
+  if(/确立多头|趋势趋多|多头|趋多|突破|强势|向上|看涨|↑|▲/.test(t)) return upC;
+  if(/确立空头|趋势趋空|空头|趋空|弱势|背离|向下|看跌|↓|▼/.test(t)) return downC;
+  var m=t.match(/([+-]\d+(?:\.\d+)?)%/);
+  if(m) return (parseFloat(m[1])>=0)?upC:downC;
+  try{return getComputedStyle(cell).color;}catch(e){return fg;}
+}
   function exportImage(){var t=getTable();if(!t){alert('未找到表格数据');return;}var rows=Array.prototype.slice.call(t.querySelectorAll('tr'));if(!rows.length){alert('表格为空');return;}
     var colCount=0;rows.forEach(function(r){colCount=Math.max(colCount,r.children.length);});
     var pad=10,fs=13,headerH=36,rowH=30,titleH=46,footerH=30,scale=2;
@@ -589,7 +606,7 @@ function safeRender(){
     var x=0;for(var c=0;c<colCount;c++){var hcell=rows[0].children[c];var htxt=hcell?(hcell.innerText||'').replace(/\s+/g,' ').trim():'';ctx.fillStyle=fg;ctx.font='bold '+fs+'px sans-serif';ctx.fillText(htxt,x+pad,y+headerH/2);x+=widths[c];}
     ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(0,y+headerH);ctx.lineTo(totalW,y+headerH);ctx.stroke();
     y+=headerH;
-    for(var i=1;i<rows.length;i++){var rr=rows[i];x=0;for(var c=0;c<colCount;c++){var cell=rr.children[c];if(!cell)continue;var txt=(cell.innerText||'').replace(/\s+/g,' ').trim();try{ctx.fillStyle=getComputedStyle(cell).color;}catch(e){ctx.fillStyle=fg;}ctx.font=fs+'px sans-serif';ctx.textAlign='left';ctx.fillText(txt,x+pad,y+rowH/2);ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+rowH);ctx.stroke();x+=widths[c];}
+    for(var i=1;i<rows.length;i++){var rr=rows[i];x=0;for(var c=0;c<colCount;c++){var cell=rr.children[c];if(!cell)continue;var txt=(cell.innerText||'').replace(/\s+/g,' ').trim();ctx.fillStyle=cellColor(cell,fg,dark);ctx.font=fs+'px sans-serif';ctx.textAlign='left';ctx.fillText(txt,x+pad,y+rowH/2);ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+rowH);ctx.stroke();x+=widths[c];}
       ctx.strokeStyle=line;ctx.beginPath();ctx.moveTo(0,y+rowH);ctx.lineTo(totalW,y+rowH);ctx.stroke();y+=rowH;}
     ctx.fillStyle=fg;ctx.font=fs+'px sans-serif';ctx.textAlign='left';ctx.fillText('来源：'+SOURCE+'　导出时间：'+new Date().toLocaleString('zh-CN'),14,y+footerH/2);
     try{var a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='fund_arb_'+stamp()+'.png';a.click();}catch(e){alert('导出图片失败：'+e.message);}
