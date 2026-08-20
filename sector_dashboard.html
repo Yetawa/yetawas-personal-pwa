@@ -179,8 +179,7 @@ tr:hover td{background:var(--card2)}
 </div>
 
   <div class="topnav">
-    <a class="navlink" href="fish_basin.html">鱼盆模型</a>
-    <a class="navlink active" href="sector_dashboard.html">行业轮动</a>
+    <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink active" href="fish_basin.html">鱼盆模型</a>
     <a class="navlink" href="fund_arb.html">套利看板</a>
     <a class="navlink" href="fund_arb_ranking.html">排行表</a>
     <a class="navlink" href="fund_arb_top.html">TOP套利</a>
@@ -189,6 +188,24 @@ tr:hover td{background:var(--card2)}
     <span class="navspacer"></span>
     <button id="themeBtn" class="navlink navtheme" onclick="setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')" title="切换主题">🌙</button>
   </div>
+  <script>
+    // 线上(onrender)环境：把相对链接改成站点绝对路由；本地 file:// 保持相对链接
+    (function(){
+      if (location.hostname.indexOf('onrender.com') < 0) return;
+      var map = {
+        'fish_basin.html': '/yupen',
+        'sector_dashboard.html': '/sector',
+        'fund_arb.html': '/arb',
+        'fund_arb_ranking.html': '/ranking',
+        'fund_arb_top.html': '/top',
+        'cb.html': '/cb'
+      };
+      document.querySelectorAll('.topnav .navlink').forEach(function(a){
+        var h = a.getAttribute('href');
+        if (map[h]) a.setAttribute('href', map[h]);
+      });
+    })();
+  </script>
 
 <div class="wrap">
   <header>
