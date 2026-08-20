@@ -165,6 +165,14 @@ tr:hover td{background:var(--card2)}
   .topnav .navspacer{flex:1 1 auto}
   .topnav .navtheme{margin-left:6px}
 
+  /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
+  @media(max-width:760px){
+    .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
+    .topnav .navlink{padding:4px 8px;font-size:12px}
+    .wrap{padding:88px 10px 60px}
+    .mini{top:82px}
+  }
+
 
   /* ---- 导出表格/图片 浮动条（来源：公众号 航城大叔） ---- */
   #arbExportBar{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;gap:8px}
