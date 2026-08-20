@@ -128,15 +128,15 @@
     /* Table */
     .table-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
     .table-wrap { overflow-x: auto; overflow-y: auto; max-height: 70vh; }
-    .grid { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 980px; }
-    .grid thead th { position: sticky; top: 0; z-index: 10; background: var(--bg-3); color: var(--text-3); font-weight: 600; padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
-    .grid thead th:first-child, .grid thead th:nth-child(2), .grid thead th:nth-child(3) { text-align: left; }
+    .grid { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 860px; }
+    .grid thead th { position: sticky; top: 0; z-index: 10; background: var(--bg-3); color: var(--text-3); font-weight: 600; padding: 7px 6px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .grid thead th:first-child, .grid thead th:nth-child(2) { text-align: left; }
     .grid thead th:first-child { left: 0; top: 0; z-index: 12; }
     .grid tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
     .grid tbody tr:hover { background: rgba(255,255,255,0.03); }
     [data-theme="light"] .grid tbody tr:hover { background: rgba(0,0,0,0.02); }
-    .grid td { padding: 6px 7px; text-align: right; white-space: nowrap; color: var(--text-2); }
-    .grid td:first-child, .grid td:nth-child(2), .grid td:nth-child(3) { text-align: left; color: var(--text); }
+    .grid td { padding: 5px 6px; text-align: right; white-space: nowrap; color: var(--text-2); }
+    .grid td:first-child, .grid td:nth-child(2) { text-align: left; color: var(--text); }
     .grid td:first-child { position: sticky; left: 0; z-index: 1; background: var(--bg-card); }
     .grid tbody tr:hover td:first-child { background: var(--bg-card); }
     .idx { color: var(--text-3); font-variant-numeric: tabular-nums; width: 36px; }
@@ -204,7 +204,10 @@
     .io-text { width: 100%; min-height: 160px; background: var(--bg-3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); padding: 12px; font-family: monospace; font-size: 12px; resize: vertical; }
     
     @media (max-width: 768px) {
-      .page { padding: 60px 12px 32px; }
+      /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
+      .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
+      .topnav .navlink{padding:4px 8px;font-size:12px}
+      .page { padding: 88px 12px 32px; }
       .top-header { flex-direction: column; }
       .header-right { align-items: flex-start; width: 100%; }
       .disclaimer { text-align: left; max-width: none; }
@@ -334,7 +337,6 @@
         <table class="grid" id="grid">
           <thead>
             <tr>
-              <th>序号</th>
               <th>名称</th>
               <th>代码</th>
               <th>涨幅</th>
@@ -749,7 +751,6 @@
         const sm = signalMeta(e.signal);
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td class="idx">${i + 1}</td>
           <td class="name"><a class="codelink" href="${arbHref(e.code)}">${esc(e.name)}</a></td>
           <td class="code"><a class="codelink" href="${arbHref(e.code)}">${esc(plainCode(e.code))}</a></td>
           <td class="num ${classByChange(e.change)}">${fmtPct(e.change)}</td>
