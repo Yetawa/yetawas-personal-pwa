@@ -82,13 +82,16 @@ button:disabled{opacity:.6;cursor:wait}
 .neg{color:var(--neg);font-weight:600}
 .lock{color:var(--lock);font-weight:600}
 .est{color:var(--est);font-style:italic}
-.tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:13px;table-layout:auto}
-th,td{border:1px solid var(--border);padding:8px 10px;text-align:right;vertical-align:middle;white-space:nowrap}
-th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0}
-td:first-child{text-align:left}
+/* 集思录式紧密表格：紧凑行高、仅底边线、首行+首列锁定 */
+.tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow:auto;max-height:65vh}
+table{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:auto}
+th,td{border:0;border-bottom:1px solid var(--border);padding:5px 8px;text-align:right;vertical-align:middle;white-space:nowrap}
+th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0;z-index:3}
+td:first-child{text-align:left;position:sticky;left:0;z-index:1;background:var(--panel)}
+th:first-child{left:0;top:0;z-index:5}
+tbody tr:hover td:first-child{background:var(--row-hover)}
 .op-cell{width:64px;text-align:center;white-space:nowrap}
-.sig-cell{white-space:normal;min-width:104px;text-align:center;line-height:1.35}
+.sig-cell{white-space:nowrap;min-width:96px;text-align:center;line-height:1.3}
 .ver{display:inline-block;margin-left:8px;font-size:12px;font-weight:600;color:var(--th-text);background:var(--th-bg);border-radius:999px;padding:1px 10px;vertical-align:middle}
 tbody tr:hover{background:var(--row-hover)}
 .badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;white-space:nowrap}
@@ -116,8 +119,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .sitem .v{font-size:16px}
   .statusbar{font-size:12px;gap:8px}
   .tablebox{padding:4px}
-  th,td{padding:6px 8px;font-size:12px}
-  #tbl .grid th, #tbl .grid td{padding:6px 8px;font-size:12px}
+  th,td{padding:4px 6px;font-size:12px}
+  #tbl .grid th, #tbl .grid td{padding:4px 6px;font-size:12px}
 }
 @media (max-width:420px){
   .summary{grid-template-columns:1fr}
@@ -762,6 +765,9 @@ function setFilter(type){
   renderBody();      // 按筛选重绘表格
 }
 
+// 跳转套利看板（近10日）：线上 /arb?code=，file:// 独立包 fund_arb.html?code=
+function arbHref(code){ code=String(code||'').replace(/^(sh|sz|bj)/i,''); return (location.protocol==='file:' ? 'fund_arb.html' : '/arb') + '?code=' + encodeURIComponent(code); }
+
 function renderBody(){
   const head=[
     {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
@@ -784,8 +790,8 @@ function renderBody(){
     const limitTxt = r.purchase_limit!=null ? esc(r.purchase_limit+'元') : '—';
     const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':((r.signal_cls==='premium_lock'||r.signal_cls==='discount_lock')?'lock':''));
     return '<tr>'
-      +'<td class="code"><a class="codelink" href="/?code='+esc(r.code)+'">'+esc(r.code)+'</a></td>'
-      +'<td class="name" title="'+esc(r.name)+'">'+esc(r.short||r.name)+'</td>'
+      +'<td class="code"><a class="codelink" href="'+arbHref(r.code)+'">'+esc(r.code)+'</a></td>'
+      +'<td class="name" title="'+esc(r.name)+'"><a class="codelink" href="'+arbHref(r.code)+'">'+esc(r.short||r.name)+'</a></td>'
       +'<td>'+esc(r.date)+'</td>'
       +'<td>'+fmtNum(r.price,4)+'</td>'
       +'<td class="'+cls(r.price_change)+'">'+fmtPct(r.price_change,true)+'</td>'
@@ -1011,6 +1017,9 @@ function render(meta){
   defaultSort();
 }
 
+// 跳转套利看板（近10日）：线上 /arb?code=，file:// 独立包 fund_arb.html?code=
+function arbHref(code){ code=String(code||'').replace(/^(sh|sz|bj)/i,''); return (location.protocol==='file:' ? 'fund_arb.html' : '/arb') + '?code=' + encodeURIComponent(code); }
+
 function renderBody(){
   const head=[
     {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
@@ -1027,8 +1036,8 @@ function renderBody(){
     const rdCol = (r.redeem_status==='开放赎回')?'#52c41a':'#ff4d4f';
     return '<tr>'
       +'<td>'+(i+1)+'</td>'
-      +'<td class="code"><a class="codelink" href="/?code='+esc(r.code)+'">'+esc(r.code)+'</a></td>'
-      +'<td class="name" title="'+esc(r.name)+'">'+esc(r.short||r.name)+'</td>'
+      +'<td class="code"><a class="codelink" href="'+arbHref(r.code)+'">'+esc(r.code)+'</a></td>'
+      +'<td class="name" title="'+esc(r.name)+'"><a class="codelink" href="'+arbHref(r.code)+'">'+esc(r.short||r.name)+'</a></td>'
       +'<td>'+esc(r.date)+'</td>'
       +'<td>'+fmtNum(r.price,4)+'</td>'
       +'<td class="'+cls(r.price_change)+'">'+fmtPct(r.price_change,true)+'</td>'
@@ -1086,9 +1095,12 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 /* ===== 可转债页专属样式（表格 / 卡片 / 角标）===== */
 :root{--bg2:#0d1117;--link:#79c0ff}
 :root[data-theme="light"]{--bg2:#f5f7fa;--link:#2563eb}
-.grid{width:100%;border-collapse:collapse;font-size:13px;margin-top:0}
-.grid th,.grid td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:0}
+.grid th,.grid td{padding:5px 7px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
 .grid thead th{color:var(--muted);font-weight:600;background:var(--bg2);position:sticky;top:0;z-index:3}
+.grid thead th:first-child{left:0;top:0;z-index:5;background:var(--bg2)}
+.grid td:first-child{background:var(--panel)}
+#tbl .grid tbody tr:hover td:first-child{background:var(--row-hover)}
 .grid td.num{text-align:right;font-variant-numeric:tabular-nums}
 .grid td.rank{text-align:center;color:var(--muted);width:34px}
 .grid .pos{color:#16a34a;font-weight:600}
@@ -1220,7 +1232,7 @@ function cbRenderTable(){
     var rateCls = p.arb>=0 ? "pos" : "neg";
     return '<tr class="row-hover">'
       + '<td class="rank">'+p.rank+'</td>'
-      + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><span class="c-sub">'+p.market+p.code+'</span></td>'
+      + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><span class="c-sub">'+p.code+'</span></td>'
       + '<td class="num">'+fmt(p.price)+'</td>'
       + '<td class="num">'+fmt(p.convert_value)+'</td>'
       + '<td class="num '+(p.premium<0?"pos":"neg")+'">'+fmt(p.premium)+'%</td>'
