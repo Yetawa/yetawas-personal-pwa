@@ -3922,6 +3922,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send(404, "{}", "application/json; charset=utf-8")
             return
+        if parsed.path == "/fish_model.json":
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fish_model.json")
+            try:
+                with open(_fp, encoding="utf-8") as _f:
+                    self._send(200, _f.read(), "application/json; charset=utf-8")
+            except Exception:
+                self._send(404, "{}", "application/json; charset=utf-8")
+            return
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
             return
