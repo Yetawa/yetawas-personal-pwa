@@ -2,6 +2,7 @@
 <html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
+<script>(function(){try{var h=new Date().getHours(),t=localStorage.getItem("arb_theme")||((h>=18||h<6)?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f17">
 <title>A股行业轮动与资金流向监控</title>
@@ -179,7 +180,7 @@ tr:hover td{background:var(--card2)}
 </div>
 
   <div class="topnav">
-    <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink active" href="fish_basin.html">鱼盆模型</a>
+    <a class="navlink active" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
     <a class="navlink" href="fund_arb.html">套利看板</a>
     <a class="navlink" href="fund_arb_ranking.html">排行表</a>
     <a class="navlink" href="fund_arb_top.html">TOP套利</a>
@@ -454,10 +455,12 @@ function renderStatic(){
 function setTheme(t){
   document.documentElement.setAttribute("data-theme",t);
   $("#themeBtn").textContent = t==="dark"?"🌙":"☀️";
-  localStorage.setItem("sector_theme",t);
+  localStorage.setItem("arb_theme",t);   // 全站统一主题键
 }
 $("#themeBtn").onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme"); setTheme(cur==="dark"?"light":"dark"); };
-setTheme(localStorage.getItem("sector_theme")||"dark");
+// 无用户选择时按当前时间自动定主题：6:00-17:59 白天，18:00-5:59 夜间
+function arbAutoTheme(){ var h=new Date().getHours(); return (h>=18||h<6)?"dark":"light"; }
+setTheme(localStorage.getItem("arb_theme")||arbAutoTheme());
 
 /* 实时刷新（经服务端代理 /api/sector_live，同源不受跨域限制） */
 let _REFRESH_MS = 20000;   // 自动刷新间隔(ms)
