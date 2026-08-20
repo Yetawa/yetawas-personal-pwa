@@ -203,6 +203,16 @@
     .io-actions { display: flex; gap: 10px; margin-bottom: 12px; }
     .io-text { width: 100%; min-height: 160px; background: var(--bg-3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); padding: 12px; font-family: monospace; font-size: 12px; resize: vertical; }
     
+    /* ---- fund_arb 顶格导航（鱼盆模型接入） ---- */
+    .topnav{position:fixed;top:0;left:0;right:0;z-index:2000;display:flex;align-items:center;gap:6px;padding:7px 10px;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+    .topnav::-webkit-scrollbar{display:none}
+    .topnav .navlink{display:inline-flex;align-items:center;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13.5px;font-weight:600;text-decoration:none;white-space:nowrap;flex:none;cursor:pointer}
+    .topnav .navlink:hover{border-color:var(--btn);color:var(--btn)}
+    .topnav .navlink.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
+    [data-theme="light"] .topnav .navlink.active{background:#2563eb;border-color:#2563eb;color:#fff}
+    .topnav .navspacer{flex:1 1 auto}
+    .topnav .navtheme{margin-left:6px}
+
     @media (max-width: 768px) {
       /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
       .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
@@ -219,21 +229,13 @@
       /* 手机端：改为 TOP 套利风格紧凑表格（表头固定、每行一行显示完），隐藏卡片列表 */
       .table-wrap { display: block; }
       .cards { display: none; }
-      .grid { font-size: 12px; }
-      .grid thead th { padding: 6px 6px; }
-      .grid td { padding: 5px 6px; }
+      /* 列宽=内容宽度，不留多余空隙（图片导出版效果） */
+      .grid { font-size: 12px; width: auto; min-width: 0; }
+      .grid thead th { padding: 5px 4px; }
+      .grid td { padding: 4px 4px; }
       .signal-detail { display: none; }
       .status-badge, .trend-bull, .trend-bear, .trend-neutral { padding: 2px 6px; font-size: 11px; }
     }
-    /* ---- fund_arb 顶格导航（鱼盆模型接入） ---- */
-    .topnav{position:fixed;top:0;left:0;right:0;z-index:2000;display:flex;align-items:center;gap:6px;padding:7px 10px;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
-    .topnav::-webkit-scrollbar{display:none}
-    .topnav .navlink{display:inline-flex;align-items:center;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13.5px;font-weight:600;text-decoration:none;white-space:nowrap;flex:none;cursor:pointer}
-    .topnav .navlink:hover{border-color:var(--btn);color:var(--btn)}
-    .topnav .navlink.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
-    [data-theme="light"] .topnav .navlink.active{background:#2563eb;border-color:#2563eb;color:#fff}
-    .topnav .navspacer{flex:1 1 auto}
-    .topnav .navtheme{margin-left:6px}
   
   /* ---- 导出表格/图片 浮动条（来源：公众号 航城大叔） ---- */
   #arbExportBar{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;gap:8px;flex-wrap:nowrap}
@@ -258,7 +260,6 @@
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
     <a class="navlink" href="cb.html">可转债套利</a>
     <span class="navspacer"></span>
-    <button id="btnTheme" class="navlink navtheme" title="切换主题">🌙</button>
   </div>
   <script>
     // 线上(onrender)环境：把相对链接改成站点绝对路由；本地 file:// 保持相对链接
@@ -287,6 +288,7 @@
       <div class="header-right">
         <div class="disclaimer">⚠ 使用范围：本表用于市场风险趋势观察，仅作指标数据交流</div>
         <div class="header-tools">
+          <button class="btn-mini" id="btnTheme" title="切换主题">🌙</button>
           <button class="btn-mini" id="btnCustom" title="自定义 ETF">⚙</button>
           <button class="btn-mini" id="btnIO" title="导入/导出">⇅</button>
         </div>
