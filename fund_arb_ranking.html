@@ -102,7 +102,10 @@ tbody tr:hover{background:var(--row-hover)}
 code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--code-text)}
 /* 响应式布局：窄屏（手机）自适应 */
 @media (max-width:760px){
-  body{padding:12px;padding-top:max(60px,env(safe-area-inset-top))}
+  body{padding:12px;padding-top:max(82px,env(safe-area-inset-top))}
+  /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
+  .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
+  .topnav .navlink{padding:4px 8px;font-size:12px}
   .topbar{flex-direction:column;align-items:stretch;gap:10px}
   .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
   .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
