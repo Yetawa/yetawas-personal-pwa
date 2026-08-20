@@ -102,7 +102,10 @@ tbody tr:hover{background:var(--row-hover)}
 code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--code-text)}
 /* 响应式布局：窄屏（手机）自适应 */
 @media (max-width:760px){
-  body{padding:12px;padding-top:max(60px,env(safe-area-inset-top))}
+  body{padding:12px;padding-top:max(82px,env(safe-area-inset-top))}
+  /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
+  .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
+  .topnav .navlink{padding:4px 8px;font-size:12px}
   .topbar{flex-direction:column;align-items:stretch;gap:10px}
   .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
   .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
@@ -313,7 +316,7 @@ function arbHref(code){ code=String(code||'').replace(/^(sh|sz|bj)/i,''); return
 
 function renderBody(){
   const head=[
-    {k:'',l:'#'},{k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
+    {k:'code',l:'代码'},{k:'name',l:'名称'},{k:'date',l:'日期'},
     {k:'price',l:'价格'},{k:'price_change',l:'涨幅%'},{k:'nav',l:'净值'},{k:'nav_date',l:'净值日期'},
     {k:'premium',l:'官方溢价'},{k:'est_nav',l:'估算净值'},{k:'est_premium',l:'估算溢价'},{k:'index_change',l:'指数涨跌'},
     {k:'scale',l:'场内规模(亿)'},{k:'turnover',l:'成交额(万元)'},{k:'subscribe_status',l:'申购状态'},{k:'purchase_limit',l:'限购金额'},
@@ -326,7 +329,6 @@ function renderBody(){
     const sigC = r.signal_cls==='premium'?'pos':(r.signal_cls==='discount'?'neg':((r.signal_cls==='premium_lock'||r.signal_cls==='discount_lock')?'lock':''));
     const rdCol = (r.redeem_status==='开放赎回')?'#52c41a':'#ff4d4f';
     return '<tr>'
-      +'<td>'+(i+1)+'</td>'
       +'<td class="code"><a class="codelink" href="'+arbHref(r.code)+'">'+esc(r.code)+'</a></td>'
       +'<td class="name" title="'+esc(r.name)+'"><a class="codelink" href="'+arbHref(r.code)+'">'+esc(r.short||r.name)+'</a></td>'
       +'<td>'+esc(r.date)+'</td>'
@@ -347,7 +349,7 @@ function renderBody(){
       +'</tr>';
   }).join('');
   const emptyMsg = currentFilter ? '当前筛选条件下没有符合条件的 LOF 基金' : '当前没有满足全部四个条件的 LOF 基金';
-  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+(rows.length? rowsHtml : '<tr><td colspan="18" style="text-align:center;color:var(--muted);padding:18px">'+emptyMsg+'</td></tr>');
+  document.getElementById('tbl').innerHTML='<tr>'+hHtml+'</tr>'+(rows.length? rowsHtml : '<tr><td colspan="17" style="text-align:center;color:var(--muted);padding:18px">'+emptyMsg+'</td></tr>');
   document.getElementById('tablebox').style.display='block';
 }
 
