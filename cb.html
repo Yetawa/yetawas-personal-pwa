@@ -137,8 +137,10 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 
   /* ---- 导出表格/图片 浮动条（来源：公众号 航城大叔） ---- */
   #arbExportBar{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;gap:8px}
-  .arb-exp-btn{background:var(--bg-3,var(--card,#161f2c));color:var(--text,var(--txt,#e6edf7));border:1px solid var(--border,var(--line,#1f2d3d));border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:inherit}
-  .arb-exp-btn:hover{border-color:var(--btn,var(--accent,#2dd4bf));color:var(--btn,var(--accent,#2dd4bf))}
+  .arb-exp-btn{background:#161f2c;color:#e6edf7;border:1px solid #1f2d3d;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:inherit}
+  .arb-exp-btn:hover{border-color:#2dd4bf;color:#2dd4bf}
+  [data-theme="light"] .arb-exp-btn{background:#fffdf8;color:#2a2418;border-color:#e3d9c6;box-shadow:0 2px 10px rgba(120,90,40,.12)}
+  [data-theme="light"] .arb-exp-btn:hover{border-color:#0d9488;color:#0d9488}
 
 </style></head><body>
 <div id="arbExportBar">
