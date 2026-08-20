@@ -10,6 +10,7 @@ import fund_arb
 # （口袋支点无本地独立文件，指向线上 onrender 页面）
 NAV_MAP = [
     ('href="/sector"', 'href="sector_dashboard.html"'),
+    ('href="/yupen"', 'href="fish_basin.html"'),
     ('href="/arb"', 'href="fund_arb.html"'),
     ('href="/ranking"', 'href="fund_arb_ranking.html"'),
     ('href="/top"', 'href="fund_arb_top.html"'),
