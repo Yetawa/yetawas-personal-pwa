@@ -76,7 +76,7 @@ button:disabled{opacity:.6;cursor:wait}
 .neg{color:var(--neg);font-weight:600}
 .lock{color:var(--lock);font-weight:600}
 .est{color:var(--est);font-style:italic}
-.tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow-x:auto}
+.tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow:auto;max-height:65vh}
 table{border-collapse:collapse;width:100%;font-size:13px;table-layout:auto}
 th,td{border:1px solid var(--border);padding:8px 10px;text-align:right;vertical-align:middle;white-space:nowrap}
 th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0}
@@ -110,16 +110,19 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .sitem .v{font-size:16px}
   .statusbar{font-size:12px;gap:8px}
   .tablebox{padding:4px}
-  th,td{padding:6px 8px;font-size:12px}
-  #tbl .grid th, #tbl .grid td{padding:6px 8px;font-size:12px}
+  th,td{padding:4px 6px;font-size:12px}
+  #tbl .grid th, #tbl .grid td{padding:4px 6px;font-size:12px}
 }
 @media (max-width:420px){
   .summary{grid-template-columns:1fr}
 }
 
-.grid{width:100%;border-collapse:collapse;font-size:13px;margin-top:0}
-.grid th,.grid td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:0}
+.grid th,.grid td{padding:5px 7px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
 .grid thead th{color:var(--muted);font-weight:600;background:var(--bg2);position:sticky;top:0;z-index:3}
+.grid thead th:first-child{left:0;top:0;z-index:5;background:var(--bg2)}
+.grid td:first-child{background:var(--panel)}
+#tbl .grid tbody tr:hover td:first-child{background:var(--row-hover)}
 .grid td.num{text-align:right;font-variant-numeric:tabular-nums}
 .grid td.rank{text-align:center;color:var(--muted);width:34px}
 .grid .pos{color:#16a34a;font-weight:600}
@@ -228,7 +231,7 @@ function render(d){
       var rateCls = p.arb>=0 ? "pos" : "neg";
       return '<tr class="row-hover">'
         + '<td class="rank">'+p.rank+'</td>'
-        + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><span class="c-sub">'+p.market+p.code+'</span></td>'
+        + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><span class="c-sub">'+p.code+'</span></td>'
         + '<td class="num">'+fmt(p.price)+'</td>'
         + '<td class="num">'+fmt(p.convert_value)+'</td>'
         + '<td class="num '+(p.premium<0?"pos":"neg")+'">'+fmt(p.premium)+'%</td>'
