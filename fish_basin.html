@@ -208,16 +208,14 @@
       .toolbar { flex-direction: column; align-items: stretch; }
       .search, .select { width: 100%; }
       .count-label { margin-left: 0; }
-      .table-wrap { display: none; }
-      .cards { display: block; padding: 12px; }
-      .card { background: var(--bg-3); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
-      .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-      .card-title { font-weight: 700; font-size: 15px; }
-      .card-code { color: var(--text-3); font-size: 12px; }
-      .card-row { display: flex; justify-content: space-between; margin-bottom: 6px; color: var(--text-2); font-size: 13px; }
-      .card-row span:last-child { font-weight: 600; color: var(--text); }
-      .card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-      .card-tag { padding: 3px 8px; border-radius: 5px; font-size: 12px; background: var(--bg-2); border: 1px solid var(--border); }
+      /* 手机端：改为 TOP 套利风格紧凑表格（表头固定、每行一行显示完），隐藏卡片列表 */
+      .table-wrap { display: block; }
+      .cards { display: none; }
+      .grid { font-size: 12px; }
+      .grid thead th { padding: 8px 8px; }
+      .grid td { padding: 7px 8px; }
+      .signal-detail { display: none; }
+      .status-badge, .trend-bull, .trend-bear, .trend-neutral { padding: 2px 6px; font-size: 11px; }
     }
     /* ---- fund_arb 顶格导航（鱼盆模型接入） ---- */
     .topnav{position:fixed;top:0;left:0;right:0;z-index:2000;display:flex;align-items:center;gap:6px;padding:7px 10px;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
