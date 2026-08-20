@@ -1,8 +1,10 @@
 <style>
-  #arbExportBar{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;gap:8px}
+  #arbExportBar{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;gap:8px;flex-wrap:nowrap}
   /* 导出按钮统一配色：夜间=鱼盆模型夜间风(#161f2c/#e6edf7)，白天=行业轮动白天风(#fffdf8/#2a2418)
      不依赖各页面 CSS 变量，避免 fund_arb 系列页面白天模式变量缺失导致“黑底黑字” */
-  .arb-exp-btn{background:#161f2c;color:#e6edf7;border:1px solid #1f2d3d;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:inherit}
+  /* width:auto / flex:none / nowrap 三件套：抵消 fund_arb 系列页面 @media(max-width:760px) 里的
+     button{width:100%}，否则手机端导出按钮被拉满宽而折成两行 */
+  .arb-exp-btn{background:#161f2c;color:#e6edf7;border:1px solid #1f2d3d;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:inherit;width:auto;min-width:0;flex:0 0 auto;white-space:nowrap;line-height:1.2}
   .arb-exp-btn:hover{border-color:#2dd4bf;color:#2dd4bf}
   [data-theme="light"] .arb-exp-btn{background:#fffdf8;color:#2a2418;border-color:#e3d9c6;box-shadow:0 2px 10px rgba(120,90,40,.12)}
   [data-theme="light"] .arb-exp-btn:hover{border-color:#0d9488;color:#0d9488}
