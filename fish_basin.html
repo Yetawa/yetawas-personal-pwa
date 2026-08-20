@@ -128,7 +128,7 @@
     /* Table */
     .table-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
     .table-wrap { overflow-x: auto; overflow-y: auto; max-height: 70vh; }
-    .grid { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 860px; }
+    .grid { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 860px; table-layout: auto; }
     .grid thead th { position: sticky; top: 0; z-index: 10; background: var(--bg-3); color: var(--text-3); font-weight: 600; padding: 7px 6px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
     .grid thead th:first-child, .grid thead th:nth-child(2) { text-align: left; }
     .grid thead th:first-child { left: 0; top: 0; z-index: 12; }
@@ -217,24 +217,41 @@
       /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
       .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
       .topnav .navlink{padding:4px 8px;font-size:12px}
-      .page { padding: 88px 12px 32px; }
+      .page { padding: 88px 10px 58px; }
       .top-header { flex-direction: column; }
       .header-right { align-items: flex-start; width: 100%; }
-      .disclaimer { text-align: left; max-width: none; }
+      .disclaimer { text-align: left; max-width: none; font-size: 11px; padding: 4px 8px; }
+      .header-tools { gap: 6px; }
+      .btn-mini { width: 30px; height: 30px; font-size: 14px; }
       .guide-grid { grid-template-columns: 1fr; }
       .guide-step-wide { grid-column: auto; }
-      .toolbar { flex-direction: column; align-items: stretch; }
-      .search, .select { width: 100%; }
-      .count-label { margin-left: 0; }
+      /* 筛选/操作区紧凑 */
+      .stats-pills { gap: 6px; margin-bottom: 10px; }
+      .pill { padding: 4px 8px; font-size: 11px; }
+      .toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+      .toolbar .search { grid-column: 1 / -1; min-width: 0; width: 100%; padding: 6px 8px; font-size: 12px; }
+      .toolbar .select { min-width: 0; width: 100%; padding: 6px 6px; font-size: 11px; }
+      .toolbar .btn { padding: 6px 8px; font-size: 11px; }
+      .toolbar .chk { font-size: 11px; }
+      .toolbar .count-label { grid-column: 1 / -1; margin-left: 0; font-size: 11px; }
+      #lastUpdate { grid-column: 1 / -1; font-size: 11px; }
       /* 手机端：改为 TOP 套利风格紧凑表格（表头固定、每行一行显示完），隐藏卡片列表 */
-      .table-wrap { display: block; }
+      .table-wrap { display: block; max-height: 58vh; }
       .cards { display: none; }
       /* 列宽=内容宽度，不留多余空隙（图片导出版效果） */
-      .grid { font-size: 12px; width: auto; min-width: 0; }
-      .grid thead th { padding: 5px 4px; }
-      .grid td { padding: 4px 4px; }
+      .grid { font-size: 11px; width: auto; min-width: 0; table-layout: auto; }
+      .grid thead th { padding: 3px 2px; font-size: 11px; }
+      .grid td { padding: 2px 3px; }
+      .grid td:first-child { padding-left: 4px; }
+      .grid td:first-child, .grid td:nth-child(2) { max-width: 78px; overflow: hidden; text-overflow: ellipsis; }
+      .grid .name a { max-width: 78px; display: inline-block; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
       .signal-detail { display: none; }
-      .status-badge, .trend-bull, .trend-bear, .trend-neutral { padding: 2px 6px; font-size: 11px; }
+      .status-badge, .trend-bull, .trend-bear, .trend-neutral { padding: 1px 4px; font-size: 10px; border-radius: 3px; }
+      .signal { gap: 2px; }
+      .signal-arrow { font-size: 11px; }
+      /* 导出条改为底部通栏，不再遮挡表格 */
+      #arbExportBar { position: fixed; left: 0; right: 0; bottom: 0; justify-content: center; gap: 24px; padding: 6px 10px; background: var(--bg-card); border-top: 1px solid var(--border); border-radius: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.25); }
+      .arb-exp-btn { padding: 5px 10px; font-size: 12px; }
     }
   
   /* ---- 导出表格/图片 浮动条（来源：公众号 航城大叔） ---- */
@@ -342,12 +359,12 @@
               <th>名称</th>
               <th>代码</th>
               <th>涨幅</th>
-              <th>PE百分位</th>
+              <th>PE%</th>
               <th>MA5</th>
-              <th>偏离率</th>
+              <th>偏离</th>
               <th>量比</th>
-              <th>鱼盆状态</th>
-              <th>变盘预警</th>
+              <th>状态</th>
+              <th>变盘</th>
               <th>趋势</th>
             </tr>
           </thead>
