@@ -223,7 +223,8 @@
     .topnav::-webkit-scrollbar{display:none}
     .topnav .navlink{display:inline-flex;align-items:center;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13.5px;font-weight:600;text-decoration:none;white-space:nowrap;flex:none;cursor:pointer}
     .topnav .navlink:hover{border-color:var(--btn);color:var(--btn)}
-    .topnav .navlink.active{background:var(--btn);border-color:var(--btn);color:#fff}
+    .topnav .navlink.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
+    [data-theme="light"] .topnav .navlink.active{background:#2563eb;border-color:#2563eb;color:#fff}
     .topnav .navspacer{flex:1 1 auto}
     .topnav .navtheme{margin-left:6px}
   
@@ -490,7 +491,7 @@
     function loadTheme() {
       const theme = localStorage.getItem(THEME_KEY) || 'dark';
       document.documentElement.setAttribute('data-theme', theme);
-      document.getElementById('btnTheme').textContent = theme === 'dark' ? '☾' : '☀';
+      document.getElementById('btnTheme').textContent = theme === 'dark' ? '🌙' : '☀️';
       document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#0d1424' : '#f6f8fb');
     }
 
@@ -499,7 +500,7 @@
       const next = cur === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem(THEME_KEY, next);
-      document.getElementById('btnTheme').textContent = next === 'dark' ? '☾' : '☀';
+      document.getElementById('btnTheme').textContent = next === 'dark' ? '🌙' : '☀️';
       document.querySelector('meta[name="theme-color"]').setAttribute('content', next === 'dark' ? '#0d1424' : '#f6f8fb');
     }
 
