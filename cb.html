@@ -36,6 +36,9 @@ a.theme-btn{text-decoration:none}
 .topnav .navlink.active{background:var(--btn);border-color:var(--btn);color:#fff}
 .topnav .navspacer{flex:1 1 auto}
 .topnav .navtheme{margin-left:6px}
+/* 主题切换小块：标题行右侧（替代导航栏按钮，避免手机端占一行/挡标题） */
+.theme-mini{flex:none;align-self:flex-start;margin-left:auto;border:1px solid var(--border);background:var(--panel);color:var(--title);border-radius:8px;padding:4px 10px;font-size:14px;line-height:1.2;cursor:pointer;font-family:inherit}
+.theme-mini:hover{border-color:var(--btn);color:var(--btn)}
 .stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
 .stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
 @keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
@@ -161,6 +164,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <h1>可转债套利 <span class="ver">V1.0</span></h1>
     <div class="sub">转股溢价率 &lt; 0（折价）即具备"买入转债 + 融券卖空正股 + 转股"的折价套利条件；榜单按套利收益率降序取前 10。</div>
   </div>
+  <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   <div class="topnav">
     <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
     <a class="navlink" href="fund_arb.html">套利看板</a>
@@ -169,7 +173,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
     <a class="navlink active" href="cb.html">可转债套利</a>
     <span class="navspacer"></span>
-    <button id="themeBtn" class="navlink navtheme" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   </div>
 </div>
   <div id="statusbar" class="statusbar"></div>
