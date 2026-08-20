@@ -144,7 +144,7 @@ tr:hover td{background:var(--card2)}
 
 .snap-note{font-size:11.5px;color:var(--txt3);line-height:1.6;background:var(--card2);border:1px dashed var(--line);border-radius:9px;padding:7px 11px;margin:4px 0 2px}
 .snap-note b{color:var(--gold)}
-.mini{position:sticky;top:50px;z-index:30;display:flex;gap:12px;flex-wrap:nowrap;align-items:center;
+.mini{position:static;z-index:30;display:flex;gap:12px;flex-wrap:nowrap;align-items:center;
   background:color-mix(in srgb, var(--card) 86%, transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:10px;padding:7px 11px;margin:6px 0;font-size:12px;box-shadow:var(--shadow);overflow-x:auto}
 .mini .m{white-space:nowrap}
@@ -170,7 +170,6 @@ tr:hover td{background:var(--card2)}
     .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
     .topnav .navlink{padding:4px 8px;font-size:12px}
     .wrap{padding:88px 10px 60px}
-    .mini{top:82px}
   }
 
 
@@ -195,7 +194,6 @@ tr:hover td{background:var(--card2)}
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
     <a class="navlink" href="cb.html">可转债套利</a>
     <span class="navspacer"></span>
-    <button id="themeBtn" class="navlink navtheme" onclick="setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')" title="切换主题">🌙</button>
   </div>
 
 <div class="wrap">
@@ -206,6 +204,7 @@ tr:hover td{background:var(--card2)}
     </div>
     <div class="spacer"></div>
     <span class="live" id="liveTag"></span>
+    <button class="btn icon" id="themeBtn" onclick="setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')" title="切换主题">🌙</button>
     <button class="btn icon" id="refreshBtn" title="尝试拉取东方财富实时数据">⟳</button>
   </header>
 
