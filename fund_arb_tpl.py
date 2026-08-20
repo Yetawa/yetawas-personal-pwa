@@ -117,6 +117,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .statusbar{font-size:12px;gap:8px}
   .tablebox{padding:4px}
   th,td{padding:6px 8px;font-size:12px}
+  #tbl .grid th, #tbl .grid td{padding:6px 8px;font-size:12px}
 }
 @media (max-width:420px){
   .summary{grid-template-columns:1fr}
@@ -1085,15 +1086,16 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 /* ===== 可转债页专属样式（表格 / 卡片 / 角标）===== */
 :root{--bg2:#0d1117;--link:#79c0ff}
 :root[data-theme="light"]{--bg2:#f5f7fa;--link:#2563eb}
-.grid{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
-.grid th,.grid td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
-.grid th{color:var(--muted);font-weight:600;background:var(--bg2)}
+.grid{width:100%;border-collapse:collapse;font-size:13px;margin-top:0}
+.grid th,.grid td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.grid thead th{color:var(--muted);font-weight:600;background:var(--bg2);position:sticky;top:0;z-index:3}
 .grid td.num{text-align:right;font-variant-numeric:tabular-nums}
 .grid td.rank{text-align:center;color:var(--muted);width:34px}
 .grid .pos{color:#16a34a;font-weight:600}
 .grid .neg{color:#dc2626}
 .grid .codelink{color:var(--link);text-decoration:none}
 .grid .codelink:hover{text-decoration:underline}
+.grid .c-sub{color:var(--muted);font-size:11px;font-weight:400;margin-left:6px;font-variant-numeric:tabular-nums}
 .badge.disc{background:rgba(22,163,74,.15);color:#16a34a}
 .badge.crit{background:rgba(100,116,139,.18);color:var(--muted)}
 .card{display:inline-block;min-width:84px;padding:10px 14px;margin:6px 8px 6px 0;border:1px solid var(--border);border-radius:10px;background:var(--bg2)}
@@ -1130,7 +1132,7 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
     <span id="scanState" class="tzline"></span>
     <span class="tzline" style="margin-left:auto">每交易日 14:45 自动更新</span>
   </div>
-  <div id="tbl"></div>
+  <div id="tbl" class="tablebox"></div>
   <div class="note">
     <b>套利逻辑</b>：转股溢价率 &lt; 0（折价）即具备"买入转债 + 融券卖空正股 + 转股"的折价套利条件，
     套利收益率(粗略，未扣费) = (转股价值 - 转债现价) / 转债现价。
@@ -1218,14 +1220,14 @@ function cbRenderTable(){
     var rateCls = p.arb>=0 ? "pos" : "neg";
     return '<tr class="row-hover">'
       + '<td class="rank">'+p.rank+'</td>'
-      + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><div class="tzline">'+p.market+p.code+'</div></td>'
+      + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><span class="c-sub">'+p.market+p.code+'</span></td>'
       + '<td class="num">'+fmt(p.price)+'</td>'
       + '<td class="num">'+fmt(p.convert_value)+'</td>'
       + '<td class="num '+(p.premium<0?"pos":"neg")+'">'+fmt(p.premium)+'%</td>'
       + '<td class="num '+rateCls+'"><b>'+fmt(p.arb)+'%</b></td>'
-      + '<td><a class="codelink" href="https://quote.eastmoney.com/'+p.market+p.stock_code+'.html" target="_blank">'+p.stock_name+'</a><div class="tzline">'+p.stock_code+'</div></td>'
+      + '<td><a class="codelink" href="https://quote.eastmoney.com/'+p.market+p.stock_code+'.html" target="_blank">'+p.stock_name+'</a><span class="c-sub">'+p.stock_code+'</span></td>'
       + '<td class="num">'+fmt(p.double_low)+'</td>'
-      + '<td class="tzline">'+fmtConvStart(p.convert_start)+'</td>'
+      + '<td>'+fmtConvStart(p.convert_start)+'</td>'
       + '<td><span class="badge '+(disc?"disc":"crit")+'">'+(disc?"折价":"临界")+'</span></td>'
       + '</tr>';
   }).join("");
