@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8">
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8"><script>(function(){try{var h=new Date().getHours(),t=localStorage.getItem("arb_theme")||((h>=18||h<6)?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
 <link rel="manifest" href="/manifest.json">
@@ -108,7 +108,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .panel{flex-direction:column;align-items:stretch;gap:10px}
   .field{width:100%}
   .field input,.field textarea,.field select{width:100%}
-  button{width:100%}
+  button:not(.arb-exp-btn){width:100%}
   .fund-title{margin-left:0;margin-top:2px;font-size:18px}
   h1{font-size:18px}
   .sub{font-size:12px}
@@ -183,7 +183,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <a class="navlink" href="cb.html">可转债套利</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
     <span class="navspacer"></span>
-    <button id="themeBtn" class="navlink navtheme" onclick="toggleTheme()" title="切换日间 / 夜间模式"><span id="themeIcon">🌙</span><span id="themeLbl">夜间</span></button>
+    <button id="themeBtn" class="navlink navtheme" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   </div>
 </div>
 
@@ -242,7 +242,8 @@ function applyTheme(t){
   try{ localStorage.setItem('arb_theme', t); }catch(e){}
 }
 function toggleTheme(){ applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light'); }
-function initTheme(){ let t='dark'; try{ t=localStorage.getItem('arb_theme')||'dark'; }catch(e){} applyTheme(t); }
+function arbAutoTheme(){ var h=new Date().getHours(); return (h>=18||h<6)?'dark':'light'; }
+function initTheme(){ let t=arbAutoTheme(); try{ t=localStorage.getItem('arb_theme')||arbAutoTheme(); }catch(e){} applyTheme(t); }
 initTheme();
 function fmtNum(v,d=4){ return v==null?"—":Number(v).toFixed(d); }
 function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+v.toFixed(2)+"%"; }
