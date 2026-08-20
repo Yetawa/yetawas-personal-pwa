@@ -33,6 +33,9 @@ h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .top-actions{display:flex;align-items:flex-start;gap:8px;flex:none}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 a.theme-btn{text-decoration:none}
+/* 主题切换小块：标题行右侧（替代导航栏按钮，避免手机端占一行/挡标题） */
+.theme-mini{flex:none;align-self:flex-start;margin-left:auto;border:1px solid var(--border);background:var(--panel);color:var(--title);border-radius:8px;padding:4px 10px;font-size:14px;line-height:1.2;cursor:pointer;font-family:inherit}
+.theme-mini:hover{border-color:var(--btn);color:var(--btn)}
 .theme-btn:hover{border-color:var(--btn);color:var(--btn)}
 /* 全站统一固定顶部导航：6 个入口 + 主题切换，位置固定且各页一致 */
 .topnav{position:fixed;top:0;left:0;right:0;z-index:2000;display:flex;align-items:center;gap:6px;padding:7px 10px;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
@@ -135,6 +138,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.3</span></h1>
     <div class="sub">填基金代码 → 拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
   </div>
+  <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   <div class="topnav">
     <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
     <a class="navlink active" href="fund_arb.html">套利看板</a>
@@ -143,8 +147,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
     <a class="navlink" href="cb.html">可转债套利</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
-    <span class="navspacer"></span>
-    <button id="themeBtn" class="navlink navtheme" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   </div>
 </div>
 
