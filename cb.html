@@ -93,7 +93,10 @@ tbody tr:hover{background:var(--row-hover)}
 code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--code-text)}
 /* 响应式布局：窄屏（手机）自适应 */
 @media (max-width:760px){
-  body{padding:12px;padding-top:max(60px,env(safe-area-inset-top))}
+  body{padding:12px;padding-top:max(82px,env(safe-area-inset-top))}
+  /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
+  .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
+  .topnav .navlink{padding:4px 8px;font-size:12px}
   .topbar{flex-direction:column;align-items:stretch;gap:10px}
   .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
   .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
@@ -230,7 +233,6 @@ function render(d){
       var disc = p.is_discount;
       var rateCls = p.arb>=0 ? "pos" : "neg";
       return '<tr class="row-hover">'
-        + '<td class="rank">'+p.rank+'</td>'
         + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><span class="c-sub">'+p.code+'</span></td>'
         + '<td class="num">'+fmt(p.price)+'</td>'
         + '<td class="num">'+fmt(p.convert_value)+'</td>'
@@ -244,7 +246,7 @@ function render(d){
     }).join("");
     document.getElementById("tbl").innerHTML =
       '<table class="grid"><thead><tr>'
-      + '<th>排名</th><th>转债</th><th>现价</th><th>转股价值</th><th>溢价率</th><th>套利收益率</th><th>正股</th><th>双低</th><th>转股起始</th><th>状态</th>'
+      + '<th>转债</th><th>现价</th><th>转股价值</th><th>溢价率</th><th>套利收益率</th><th>正股</th><th>双低</th><th>转股起始</th><th>状态</th>'
       + '</tr></thead><tbody>'+rows+'</tbody></table>';
   }
   if(cbTimer) clearTimeout(cbTimer);
