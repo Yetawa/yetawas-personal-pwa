@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0d1424">
-  <title>鱼盆趋势模型 v1 · 核心指数</title>
-  <meta name="description" content="鱼盆趋势模型 v1 · 核心指数 · 50 只 ETF 趋势监控">
+  <title>鱼盆趋势模型 v1.3</title>
+  <meta name="description" content="鱼盆趋势模型 v1.3 · 50 只 ETF 趋势监控">
   <style>
     :root {
       --bg: #0d1117;
@@ -61,7 +61,8 @@
     /* Header */
     .top-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
     .title-block h1 { margin: 0 0 6px; font-size: 26px; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .version { color: var(--accent); font-weight: 600; }
+    .version { display:inline-block; margin-left:8px; font-size:12px; font-weight:600; color:#fff; background:#1f6feb; border-radius:999px; padding:1px 10px; vertical-align:middle; }
+    [data-theme="light"] .version { background:#2563eb; }
     .subtitle-tag { color: var(--text-2); font-weight: 500; }
     .subtitle { margin: 0; color: var(--text-3); font-size: 13px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
@@ -228,8 +229,10 @@
   
   /* ---- 导出表格/图片 浮动条（来源：公众号 航城大叔） ---- */
   #arbExportBar{position:fixed;right:14px;bottom:14px;z-index:3000;display:flex;gap:8px}
-  .arb-exp-btn{background:var(--bg-3,var(--card,#161f2c));color:var(--text,var(--txt,#e6edf7));border:1px solid var(--border,var(--line,#1f2d3d));border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:inherit}
-  .arb-exp-btn:hover{border-color:var(--btn,var(--accent,#2dd4bf));color:var(--btn,var(--accent,#2dd4bf))}
+  .arb-exp-btn{background:#161f2c;color:#e6edf7;border:1px solid #1f2d3d;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:inherit}
+  .arb-exp-btn:hover{border-color:#2dd4bf;color:#2dd4bf}
+  [data-theme="light"] .arb-exp-btn{background:#fffdf8;color:#2a2418;border-color:#e3d9c6;box-shadow:0 2px 10px rgba(120,90,40,.12)}
+  [data-theme="light"] .arb-exp-btn:hover{border-color:#0d9488;color:#0d9488}
 
 </style>
 </head>
@@ -247,7 +250,7 @@
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
     <a class="navlink" href="cb.html">可转债套利</a>
     <span class="navspacer"></span>
-    <button id="btnTheme" class="navlink navtheme" onclick="toggleTheme()" title="切换主题">🌙</button>
+    <button id="btnTheme" class="navlink navtheme" title="切换主题">🌙</button>
   </div>
   <script>
     // 线上(onrender)环境：把相对链接改成站点绝对路由；本地 file:// 保持相对链接
@@ -270,7 +273,7 @@
   <main class="page">
     <header class="top-header">
       <div class="title-block">
-        <h1>鱼盆趋势模型 <span class="version">v1</span> <span class="subtitle-tag">· 核心指数</span></h1>
+        <h1>鱼盆趋势模型 <span class="version">v1.3</span></h1>
         <p class="subtitle">日期：<span id="dataDate">2026-08-19</span> · 覆盖 <b id="totalCount">50</b> 只核心 ETF</p>
       </div>
       <div class="header-right">
@@ -346,7 +349,7 @@
     </section>
 
     <section class="guide-card collapsed" id="guideCard">
-      <h3 class="guide-title" id="guideToggle"><span class="bolt">⚡</span> 信号解读：吃药？3 分钟看这张「鱼盆趋势模型 v1」<span class="toggle">▾</span></h3>
+      <h3 class="guide-title" id="guideToggle"><span class="bolt">⚡</span> 信号解读：吃药？3 分钟看这张「鱼盆趋势模型 v1.3」<span class="toggle">▾</span></h3>
       <div class="guide-grid">
         <div class="guide-step">
           <p><span class="step-num step-1">①</span><strong>一句话看懂</strong>：把每只 ETF 想像成一条鱼，把近 60 个交易日一直「贴」着走的盆沿——3 成在交易的中间成本（<b>20 日均线</b>）。鱼贴着圈里游动，鱼跌出了圈就报跌，跑出圈就买涨，跑出圈就破圈。</p>
@@ -561,13 +564,45 @@
       } catch (e) { /* 容量超限则忽略 */ }
     }
 
-    // ---------- 收盘快照（每日自动生成，onrender 同域 fetch，无代理问题）----------
+    // ---------- 模型快照（每日自动生成，onrender 同域 fetch，无代理问题）----------
+    // fish_model.json 含全部模型字段（pe/ma5/dev/volRatio/status/trend/signal），
+    // 由 gen_fish_model.py 服务端用公开 ETF K线+行情算好，线上直接全字段刷新。
+    async function loadModel() {
+      try {
+        const r = await fetch('fish_model.json', { cache: 'no-store' });
+        if (!r.ok) return false;
+        const j = await r.json();
+        if (!j || !j.items) return false;
+        const map = {};
+        etfs.forEach(e => { map[e.code.toLowerCase()] = e; });
+        let cnt = 0;
+        Object.keys(j.items).forEach(code => {
+          const it = j.items[code];
+          const e = map[code.toLowerCase()];
+          if (!e || !it) return;
+          if (isFinite(it.change)) e.change = it.change;
+          if (isFinite(it.price)) e.changePrice = it.price;
+          if (it.status && it.trend && it.signal) {
+            e.pe = it.pe; e.ma5 = it.ma5; e.dev = it.dev; e.volRatio = it.volRatio;
+            e.status = it.status; e.trend = it.trend; e.signal = it.signal; e.signalDetail = it.signalDetail || '';
+            cnt++;
+          }
+        });
+        if (cnt > 0) {
+          saveEtfs(); applyFilters(); computeStats();
+          setLastUpdate('已载入模型快照 ' + (j.date || '') + ' ' + (j.ts || '').slice(11) + ' · ' + cnt + ' 只', false);
+          return true;
+        }
+      } catch (e) { /* file:// 或非同域时静默 */ }
+      return false;
+    }
+    // 兜底：仅刷新涨幅（fish_snapshot.json）
     async function loadSnapshot() {
       try {
         const r = await fetch('fish_snapshot.json', { cache: 'no-store' });
-        if (!r.ok) return;
+        if (!r.ok) return false;
         const j = await r.json();
-        if (!j || !j.items) return;
+        if (!j || !j.items) return false;
         const map = {};
         etfs.forEach(e => { map[e.code.toLowerCase()] = e; });
         let cnt = 0;
@@ -577,18 +612,15 @@
           if (!e || !it || !isFinite(it.price) || it.price <= 0) return;
           e.change = it.change;
           e.changePrice = it.price;
-          const kc = klineCache[e.code];
-          if (kc && kc.bars && kc.bars.length) {
-            const m2 = computeModel(e, e.changePrice, kc.bars);
-            if (m2) Object.assign(e, m2);
-          }
           cnt++;
         });
         if (cnt > 0) {
           saveEtfs(); applyFilters(); computeStats();
           setLastUpdate('已载入收盘快照 ' + (j.date || '') + ' ' + (j.ts || '').slice(11) + ' · ' + cnt + ' 只', false);
+          return true;
         }
       } catch (e) { /* file:// 或非同域时静默 */ }
+      return false;
     }
     function secid(code) {
       return (code.startsWith('sh') ? '1.' : '0.') + code.slice(2);
@@ -1057,7 +1089,7 @@
     applyFilters();
     computeStats();
     document.getElementById('dataDate').textContent = new Date().toISOString().slice(0, 10);
-    loadSnapshot(); // 异步载入收盘快照（每日自动生成；file:// 下自动静默跳过）
+    loadModel().then(ok => { if (!ok) loadSnapshot(); }); // 优先全模型快照，失败兜底涨幅快照
 
     // 解释卡片折叠
     document.getElementById('guideToggle').addEventListener('click', () => {
