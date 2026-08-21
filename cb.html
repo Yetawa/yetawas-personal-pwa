@@ -177,12 +177,12 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 </div>
   <div id="statusbar" class="statusbar"></div>
   <div id="summary" class="summary"></div>
+  <div id="tbl" class="tablebox"></div>
   <div class="ops">
     <button class="btn" id="rescanBtn" onclick="rescan()">立即重扫</button>
     <span id="scanState" class="tzline"></span>
     <span class="tzline" style="margin-left:auto">每交易日 14:45 自动更新</span>
   </div>
-  <div id="tbl" class="tablebox"></div>
   <div class="note">
     <b>套利逻辑</b>：转股溢价率 &lt; 0（折价）即具备"买入转债 + 融券卖空正股 + 转股"的折价套利条件，
     套利收益率(粗略，未扣费) = (转股价值 − 转债现价) / 转债现价。
