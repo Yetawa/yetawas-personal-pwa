@@ -87,8 +87,8 @@ button:disabled{opacity:.6;cursor:wait}
 .est{color:var(--est);font-style:italic}
 /* 集思录式紧密表格：紧凑行高、仅底边线、首行+首列锁定 */
 .tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow:auto;max-height:65vh}
-table{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:auto}
-th,td{border:0;border-bottom:1px solid var(--border);padding:5px 8px;text-align:right;vertical-align:middle;white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:12px;table-layout:auto}
+th,td{border:0;border-bottom:1px solid var(--border);padding:4px 7px;text-align:right;vertical-align:middle;white-space:nowrap}
 th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0;z-index:3}
 td:first-child{text-align:left;position:sticky;left:0;z-index:1;background:var(--panel)}
 th:first-child{left:0;top:0;z-index:5}
@@ -125,8 +125,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .sitem .v{font-size:16px}
   .statusbar{font-size:12px;gap:8px}
   .tablebox{padding:4px}
-  th,td{padding:4px 6px;font-size:12px}
-  #tbl .grid th, #tbl .grid td{padding:4px 6px;font-size:12px}
+  th,td{padding:3px 4px;font-size:11.5px}
+  #tbl .grid th, #tbl .grid td{padding:3px 4px;font-size:11.5px}
 }
 @media (max-width:420px){
   .summary{grid-template-columns:1fr}
@@ -152,6 +152,14 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b><span id="btinline"></span></div>
 
+<div id="statusbar" class="statusbar" style="display:none"></div>
+<div id="baseinfo" class="baseinfo" style="display:none;margin:8px 0;color:#8b949e;font-size:13px"></div>
+<div id="summary" class="summary"></div>
+<div id="validate" class="summary" style="display:none"></div>
+<div id="loading">加载中…</div>
+<div id="err"></div>
+<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>
+
 <div class="panel">
   <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
   <div class="field"><label>显示近 N 个交易日</label><input id="days" value="10" type="number" min="3" max="60" title="仅控制表格展示行数；估算/校准固定用 30 个交易日"></div>
@@ -164,14 +172,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   <button id="btn" onclick="load()">查询</button>
   <div id="fund-title" class="fund-title"></div>
 </div>
-
-<div id="statusbar" class="statusbar" style="display:none"></div>
-<div id="baseinfo" class="baseinfo" style="display:none;margin:8px 0;color:#8b949e;font-size:13px"></div>
-<div id="summary" class="summary"></div>
-<div id="validate" class="summary" style="display:none"></div>
-<div id="loading">加载中…</div>
-<div id="err"></div>
-<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>
 
 <div class="note">
 <b>说明</b>
