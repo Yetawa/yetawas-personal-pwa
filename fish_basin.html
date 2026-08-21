@@ -327,16 +327,17 @@
         <table class="grid" id="grid">
           <thead>
             <tr>
-              <th>名称</th>
-              <th>代码</th>
-              <th>涨幅</th>
-              <th>PE%</th>
-              <th>MA5</th>
-              <th>偏离</th>
-              <th>量比</th>
-              <th>状态</th>
-              <th>变盘</th>
-              <th>趋势</th>
+              <th data-k="name" onclick="sortBy('name')" title="点击排序">名称</th>
+              <th data-k="code" onclick="sortBy('code')" title="点击排序">代码</th>
+              <th data-k="change" onclick="sortBy('change')" title="点击排序">涨幅</th>
+              <th data-k="pe" onclick="sortBy('pe')" title="点击排序">PE%</th>
+              <th data-k="ma5" onclick="sortBy('ma5')" title="点击排序">MA5</th>
+              <th data-k="ma20" onclick="sortBy('ma20')" title="点击排序">MA20</th>
+              <th data-k="dev" onclick="sortBy('dev')" title="点击排序">偏离</th>
+              <th data-k="volRatio" onclick="sortBy('volRatio')" title="点击排序">量比</th>
+              <th data-k="status" onclick="sortBy('status')" title="点击排序">状态</th>
+              <th data-k="signal" onclick="sortBy('signal')" title="点击排序">变盘</th>
+              <th data-k="trend" onclick="sortBy('trend')" title="点击排序">趋势</th>
             </tr>
           </thead>
           <tbody id="gridBody"></tbody>
@@ -617,6 +618,7 @@
           if (isFinite(it.price)) e.changePrice = it.price;
           if (it.status && it.trend && it.signal) {
             e.pe = it.pe; e.ma5 = it.ma5; e.dev = it.dev; e.volRatio = it.volRatio;
+            if (isFinite(it.ma20)) e.ma20 = it.ma20;
             e.status = it.status; e.trend = it.trend; e.signal = it.signal; e.signalDetail = it.signalDetail || '';
             cnt++;
           }
@@ -727,7 +729,7 @@
       if (score > 0.3) { signal = (price > hh) ? '趋势趋多' : '偏多'; signalDetail = (price > hh) ? '突破确认' : '蓄势待跳'; }
       else if (score < -0.3) { signal = (price < ll) ? '趋势趋空' : '偏空'; signalDetail = (price < ll) ? '破位确认' : '临界转弱'; }
       else { signal = '震荡'; signalDetail = ''; }
-      return { ma5, dev, volRatio, pe, status, trend, signal, signalDetail };
+      return { ma5, ma20, dev, volRatio, pe, status, trend, signal, signalDetail };
     }
     function candidatesList() {
       const userProxy = document.getElementById('proxyInput').value.trim();
@@ -779,6 +781,7 @@
           <td class="num ${classByChange(e.change)}">${fmtPct(e.change)}</td>
           <td class="num ${peClass(e.pe)}">${e.pe}%</td>
           <td class="num">${e.ma5.toFixed(3)}</td>
+          <td class="num">${e.ma20 != null ? e.ma20.toFixed(3) : '—'}</td>
           <td class="num ${classByChange(e.dev)}">${fmtPct(e.dev)}</td>
           <td class="num ${volClass(e.volRatio)}">${e.volRatio.toFixed(2)}</td>
           <td><span class="status-badge" style="${statusClass(e.status)}">${e.status}</span></td>
@@ -803,6 +806,7 @@
           <div class="card-row"><span>涨幅</span><span class="${classByChange(e.change)}">${fmtPct(e.change)}</span></div>
           <div class="card-row"><span>PE百分位</span><span class="${peClass(e.pe)}">${e.pe}%</span></div>
           <div class="card-row"><span>MA5</span><span>${e.ma5.toFixed(3)}</span></div>
+          <div class="card-row"><span>MA20</span><span>${e.ma20 != null ? e.ma20.toFixed(3) : '—'}</span></div>
           <div class="card-row"><span>偏离率</span><span class="${classByChange(e.dev)}">${fmtPct(e.dev)}</span></div>
           <div class="card-row"><span>量比</span><span class="${volClass(e.volRatio)}">${e.volRatio.toFixed(2)}</span></div>
           <div class="card-tags">
@@ -888,8 +892,43 @@
       });
     }
 
-    function applyFilters() {
+    // ---------- 表头点击排序（默认按偏离度由大到小）----------
+    let sortKey = 'dev';          // 默认排序列：偏离度
+    let sortDesc = true;          // 默认降序（由大到小）
+    function sortBy(key) {
+      if (sortKey === key) sortDesc = !sortDesc; else { sortKey = key; sortDesc = true; }
+      markSortHead();
       renderTable(getFiltered());
+    }
+    function markSortHead() {
+      document.querySelectorAll('#grid thead th').forEach(th => {
+        const k = th.dataset.k;
+        if (!k) return;
+        if (k === sortKey) {
+          th.style.color = 'var(--accent)';
+          th.innerHTML = th.innerHTML.replace(/\s*[▲▼]$/, '') + (sortDesc ? ' ▼' : ' ▲');
+        } else {
+          th.style.color = '';
+          th.innerHTML = th.innerHTML.replace(/\s*[▲▼]$/, '');
+        }
+      });
+    }
+    // 数字列：dev/change/pe/ma5/ma20/volRatio 数值比较；其余按文本
+    function applySort(arr) {
+      const numKeys = ['dev', 'change', 'pe', 'ma5', 'ma20', 'volRatio'];
+      const numeric = numKeys.includes(sortKey);
+      return arr.slice().sort((a, b) => {
+        let av = a[sortKey], bv = b[sortKey];
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        if (numeric) return sortDesc ? (bv - av) : (av - bv);
+        return sortDesc ? String(bv).localeCompare(String(av), 'zh') : String(av).localeCompare(String(bv), 'zh');
+      });
+    }
+
+    function applyFilters() {
+      renderTable(applySort(getFiltered()));
     }
 
     // Custom modal
@@ -984,7 +1023,7 @@
       if (!/^(sh|sz)\d{6}$/.test(code)) { msg.textContent = '代码格式应为 sh/sz + 6 位数字'; return; }
       if (etfs.some(e => e.code === code)) { msg.textContent = '该 ETF 已存在'; return; }
       const live = document.getElementById('addLive').checked;
-      let newEtf = { name, code, change: 0, pe: 50, ma5: 1, dev: 0, volRatio: 1, status: '盆沿上方', signal: '震荡', signalDetail: '', trend: '震荡中' };
+      let newEtf = { name, code, change: 0, pe: 50, ma5: 1, ma20: 1, dev: 0, volRatio: 1, status: '盆沿上方', signal: '震荡', signalDetail: '', trend: '震荡中' };
       if (live) {
         const data = await fetchLiveData(code);
         if (data) newEtf.change = data.change;
@@ -1130,6 +1169,7 @@
     window.addEventListener('DOMContentLoaded', loadTheme);
     loadEtfs();
     loadKlineCache();
+    markSortHead();   // 默认按偏离度(dev)降序，先标记表头箭头
     applyFilters();
     computeStats();
     document.getElementById('dataDate').textContent = new Date().toISOString().slice(0, 10);
