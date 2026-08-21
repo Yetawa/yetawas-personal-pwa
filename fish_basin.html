@@ -313,7 +313,6 @@
         <p class="subtitle">日期：<span id="dataDate">2026-08-19</span> · 覆盖 <b id="totalCount">50</b> 只核心 ETF</p>
       </div>
       <div class="header-right">
-        <div class="disclaimer">⚠ 使用范围：本表用于市场风险趋势观察，仅作指标数据交流</div>
         <div class="header-tools">
           <button class="btn-mini" id="btnTheme" title="切换主题">🌙</button>
           <button class="btn-mini" id="btnCustom" title="自定义 ETF">⚙</button>
@@ -324,7 +323,28 @@
 
     <section class="stats-pills" id="statsPills"></section>
 
-    
+    <section class="table-section">
+      <div class="table-wrap">
+        <table class="grid" id="grid">
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>代码</th>
+              <th>涨幅</th>
+              <th>PE%</th>
+              <th>MA5</th>
+              <th>偏离</th>
+              <th>量比</th>
+              <th>状态</th>
+              <th>变盘</th>
+              <th>趋势</th>
+            </tr>
+          </thead>
+          <tbody id="gridBody"></tbody>
+        </table>
+      </div>
+      <div class="cards" id="cards"></div>
+    </section>
 
     <section class="toolbar">
       <input class="search" id="search" placeholder="搜索名称 / 代码">
@@ -359,29 +379,6 @@
         <option value="300">5分钟</option>
       </select>
       <span class="count-label" id="lastUpdate" style="margin-left:0">最近更新：—</span>
-    </section>
-
-    <section class="table-section">
-      <div class="table-wrap">
-        <table class="grid" id="grid">
-          <thead>
-            <tr>
-              <th>名称</th>
-              <th>代码</th>
-              <th>涨幅</th>
-              <th>PE%</th>
-              <th>MA5</th>
-              <th>偏离</th>
-              <th>量比</th>
-              <th>状态</th>
-              <th>变盘</th>
-              <th>趋势</th>
-            </tr>
-          </thead>
-          <tbody id="gridBody"></tbody>
-        </table>
-      </div>
-      <div class="cards" id="cards"></div>
     </section>
 
     <section class="guide-card collapsed" id="guideCard">
@@ -449,8 +446,6 @@
       <div class="warning-line">⚠ 风险提示与免责声明：本表所列所有数据均为辅助工具，盈亏自负，请独立判断。本工具不构成任何投资建议，所有数据仅供参考，请勿作为投资依据。</div>
       <div class="footer-bottom">
         <span>鱼盆趋势模型 · 数据每日收盘后自动更新</span>
-        <span class="dot">·</span>
-        <span id="updateDate">2026-08-19 19:00</span>
       </div>
     </footer>
   </main>
