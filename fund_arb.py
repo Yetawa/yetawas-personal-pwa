@@ -2372,6 +2372,7 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
             name = alt
     control = info["control"]
     em_sec, tx_sym = deduce_exchange(code)
+    und = underlying_for(code, name, reg)
     n = 15
     try:
         nav_rows = fetch_nav(code, n)
@@ -2383,6 +2384,19 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
         price_map = dict(price_rows)
     except Exception as e:
         return {"code": code, "name": name, "error": f"价格获取失败: {e}"}
+
+    # —— 今日行补充（与套利看板 compute() 完全一致）——
+    # K线未含当日时，用盘中实时价补今日，使 TOP/排行与看板的估算溢价基于同一天价格，
+    # 避免「看板显示今日盘中、TOP 停在上交易日收盘」造成的溢价口径差异。
+    today = bj_now().strftime("%Y-%m-%d")
+    if und and today not in price_map:
+        try:
+            _q = _fetch_lof_quotes_tencent([code])
+            if _q.get(code, {}).get("price"):
+                price_map[today] = _q[code]["price"]
+                print(f"    [{code}] 今日行补盘中价 {price_map[today]}")
+        except Exception as e:
+            print(f"    [{code}] 今日行实时价失败: {e}")
 
     all_dates = sorted(price_map.keys())
     if not all_dates:
@@ -2428,7 +2442,7 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
             est_mode = "index"
             print(f"    [{code}] 持仓择优失败，回退指数代理: {e}")
 
-    und = underlying_for(code, name, reg)
+    # und 已在上方解析（今日行补充用）
     # 方案B：国内基金(无明确指数映射)优先用「前十大重仓 + 腾讯实时行情」合成盘中实时估值；
     # 已在 UNDERLYING_MAP 的指数基金(如161725白酒)保留更准的指数代理。仅最新交易日生效，
     # 锚点取「该日之前最近一个已披露净值」，避免与今日涨跌重复计。
@@ -2464,6 +2478,20 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
                 else:
                     w = weight_for(und, code=code)
                     lag = lag_for(und, code=code)
+            # 今日行补充：与套利看板一致，盘中把今日实时标的价/汇率补进 map，
+            # 使 P 的日期对齐到今日（实时标的失败时回退上一交易日，行为同看板）
+            if d == bj_now().strftime("%Y-%m-%d"):
+                if code not in COMPOSITE_UNDERLYING and today not in xop_map:
+                    _lx = _live_xop_price(und)
+                    if _lx is not None:
+                        xop_map[today] = _lx
+                if use_fx and today not in fx_map:
+                    try:
+                        _lfx = fetch_fx_sina_latest()
+                        if _lfx is not None:
+                            fx_map[today] = _lfx
+                    except Exception:
+                        pass
             # 严格 T-1 对齐：以目标日 d 为 T，取 T-1 日官方净值作锚
             # FV(T) = NAV(T-1) × [1 + w × (P - 1)]
             # P = XOP(T)/XOP(T-1) × (FX(T)/FX(T-1) if use_fx else 1)
