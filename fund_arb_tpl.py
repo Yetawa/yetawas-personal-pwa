@@ -88,7 +88,7 @@ button:disabled{opacity:.6;cursor:wait}
 /* 集思录式紧密表格：紧凑行高、仅底边线、首行+首列锁定 */
 .tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow:auto;max-height:65vh}
 table{border-collapse:collapse;width:100%;font-size:12px;table-layout:auto}
-th,td{border:0;border-bottom:1px solid var(--border);padding:4px 7px;text-align:right;vertical-align:middle;white-space:nowrap}
+th,td{border:0;border-bottom:1px solid var(--border);padding:3px 5px;text-align:right;vertical-align:middle;white-space:nowrap}
 th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0;z-index:3}
 td:first-child{text-align:left;position:sticky;left:0;z-index:1;background:var(--panel)}
 th:first-child{left:0;top:0;z-index:5}
@@ -125,8 +125,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .sitem .v{font-size:16px}
   .statusbar{font-size:12px;gap:8px}
   .tablebox{padding:4px}
-  th,td{padding:3px 4px;font-size:11.5px}
-  #tbl .grid th, #tbl .grid td{padding:3px 4px;font-size:11.5px}
+  th,td{padding:2px 3px;font-size:11px}
+  #tbl .grid th, #tbl .grid td{padding:2px 3px;font-size:11px}
 }
 @media (max-width:420px){
   .summary{grid-template-columns:1fr}
@@ -1102,8 +1102,8 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 :root[data-theme="light"]{--bg2:#f5f7fa;--link:#2563eb}
 .grid{width:100%;border-collapse:collapse;font-size:12px;margin-top:0}
 .grid th,.grid td{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
-.grid thead th{color:var(--muted);font-weight:600;background:var(--bg2);position:sticky;top:0;z-index:3}
-.grid thead th:first-child{left:0;top:0;z-index:5;background:var(--bg2)}
+.grid thead th{color:var(--th-text);font-weight:600;background:var(--th-bg);text-align:center;position:sticky;top:0;z-index:3}
+.grid thead th:first-child{left:0;top:0;z-index:5;background:var(--th-bg)}
 .grid td:first-child{background:var(--panel)}
 #tbl .grid tbody tr:hover td:first-child{background:var(--row-hover)}
 .grid td.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -1141,9 +1141,9 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
     <a class="navlink active" href="/cb">可转债套利</a>
   </div>
 </div>
+  <div id="tbl" class="tablebox"></div>
   <div id="statusbar" class="statusbar"></div>
   <div id="summary" class="summary"></div>
-  <div id="tbl" class="tablebox"></div>
   <div class="ops">
     <button class="btn" id="rescanBtn" onclick="rescan()">立即重扫</button>
     <span id="scanState" class="tzline"></span>
