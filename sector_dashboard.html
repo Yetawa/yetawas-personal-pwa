@@ -13,6 +13,7 @@
   --txt:#e6edf7; --txt2:#9fb0c8; --txt3:#64748b;
   --up:#ef4444; --down:#22c55e; --flat:#64748b;
   --accent:#2dd4bf; --gold:#f5b94a;
+  --code-text:#79c0ff;   /* 代码超链接浅蓝色（与其他页面一致） */
   --upbg:rgba(239,68,68,.16); --downbg:rgba(34,197,94,.16);
   --up-rgb:239,68,68; --down-rgb:34,197,94; --flat-rgb:100,116,139;
   --shadow:0 6px 24px rgba(0,0,0,.35);
@@ -22,6 +23,7 @@
   --txt:#2a2418; --txt2:#6b6151; --txt3:#9a8f7c;
   --up:#e11d48; --down:#16a34a; --flat:#94a3b8;
   --accent:#0d9488; --gold:#b8860b;
+  --code-text:#2563eb;   /* 浅色主题下代码链接用深蓝 */
   --upbg:rgba(225,29,72,.12); --downbg:rgba(22,163,74,.12);
   --up-rgb:225,29,72; --down-rgb:22,163,74; --flat-rgb:148,163,184;
   --shadow:0 6px 20px rgba(120,90,40,.12);
@@ -126,6 +128,9 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
 th{color:var(--txt3);font-weight:700;font-size:11.5px}
 td .code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--accent);font-weight:700}
+/* 代码超链接（与其他页面一致：浅蓝色、无下划线、悬停下划线） */
+.codelink{color:var(--code-text);text-decoration:none;font-weight:600}
+.codelink:hover{text-decoration:underline}
 tr:hover td{background:var(--card2)}
 
 .narr{font-size:13px;color:var(--txt2);line-height:1.75;background:var(--card2);border:1px solid var(--line);
@@ -496,6 +501,11 @@ function renderNB(){
 }
 
 /* 研判 + ETF（ETF 按最新交易日主力净流入由多到少排序，与④资金排行一致） */
+// ETF 代码跳转套利看板：file:// 用 fund_arb.html?code=，线上用 /arb?code=（与其他页面 codelink 一致）
+function etfArbHref(code){
+  code = String(code||"").replace(/^(sh|sz|bj)/i,"");
+  return (location.protocol==="file:" ? "fund_arb.html" : "/arb") + "?code=" + encodeURIComponent(code);
+}
 function renderStatic(){
   $("#judge").innerHTML = D.judge.map(([t,b])=>`<div class="j"><div class="jt">${t}</div><div class="jb">${b}</div></div>`).join("");
   const tb=$("#etfTbl tbody");
@@ -507,7 +517,7 @@ function renderStatic(){
   };
   const rows = (D.etfs||[]).map(r=>({r, m: mainOf(r[0])}))
     .sort((a,b)=>((b.m===null?-1e18:b.m)-(a.m===null?-1e18:a.m)));
-  tb.innerHTML = rows.map(x=>`<tr><td>${x.r[0]}</td><td>${x.r[1]}</td><td><span class="code">${x.r[2]}</span></td><td style="color:var(--txt2)">${x.r[3]}</td></tr>`).join("");
+  tb.innerHTML = rows.map(x=>`<tr><td>${x.r[0]}</td><td>${x.r[1]}</td><td><a class="codelink" href="${etfArbHref(x.r[2])}" title="查看 ${x.r[2]} 套利看板">${x.r[2]}</a></td><td style="color:var(--txt2)">${x.r[3]}</td></tr>`).join("");
 }
 
 /* 主题切换 */
