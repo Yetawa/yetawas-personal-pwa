@@ -37,7 +37,7 @@ a.theme-btn{text-decoration:none}
 .topnav .navspacer{flex:1 1 auto}
 .topnav .navtheme{margin-left:6px}
 /* 主题切换小块：标题行右侧（替代导航栏按钮，避免手机端占一行/挡标题） */
-.theme-mini{flex:none;align-self:flex-start;margin-left:auto;border:1px solid var(--border);background:var(--panel);color:var(--title);border-radius:8px;padding:4px 10px;font-size:14px;line-height:1.2;cursor:pointer;font-family:inherit}
+.theme-mini{flex:none;align-self:flex-start;margin-left:auto;border:1px solid var(--border);background:var(--panel);color:var(--title);border-radius:6px;padding:2px 8px;font-size:12px;line-height:1.3;cursor:pointer;font-family:inherit}
 .theme-mini:hover{border-color:var(--btn);color:var(--btn)}
 .stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
 .stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
@@ -100,7 +100,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  .topbar{flex-direction:column;align-items:stretch;gap:10px}
+  .topbar{flex-direction:row;align-items:flex-start;gap:8px}
   .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
   .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
   .theme-btn{align-self:flex-start}
@@ -108,7 +108,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .panel{flex-direction:column;align-items:stretch;gap:10px}
   .field{width:100%}
   .field input,.field textarea,.field select{width:100%}
-  button{width:100%}
+  button:not(.theme-mini){width:100%}
   .fund-title{margin-left:0;margin-top:2px;font-size:18px}
   h1{font-size:18px}
   .sub{font-size:12px}
@@ -264,6 +264,7 @@ function rescan(){
 }
 (function(){
   initTheme();
+  window.addEventListener('DOMContentLoaded',function(){try{applyTheme(document.documentElement.getAttribute('data-theme')||'dark');}catch(e){}});
   load();
 })();
 </script>
