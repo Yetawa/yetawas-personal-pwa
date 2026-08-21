@@ -852,12 +852,19 @@
       container.querySelectorAll('.pill').forEach(btn => {
         btn.addEventListener('click', () => {
           const key = btn.dataset.pill;
-          if (['确立多头', '震荡中', '确立空头'].includes(key)) {
+          const trendKeys = ['确立多头', '震荡中', '确立空头'];
+          const sigKeys = ['趋势趋多', '趋势趋空', '震荡'];
+          // 互斥筛选：点趋势类清空信号下拉，点信号类清空趋势下拉，
+          // 避免两个维度叠加过滤导致结果为空（表现为"点击无筛选效果"）
+          if (trendKeys.includes(key)) {
             document.getElementById('filterTrend').value = key;
-          } else if (['趋势趋多', '趋势趋空', '震荡'].includes(key)) {
+            document.getElementById('filterSignal').value = '';
+          } else if (sigKeys.includes(key)) {
             const map = {'趋势趋多':'up','趋势趋空':'down','震荡':'mid'};
             document.getElementById('filterSignal').value = map[key];
+            document.getElementById('filterTrend').value = '';
           }
+          document.getElementById('filterStatus').value = '';
           applyFilters();
           container.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
