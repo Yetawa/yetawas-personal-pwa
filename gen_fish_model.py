@@ -200,7 +200,7 @@ def compute_model(price, bars):
         signal, detail = '震荡', ''
 
     return {
-        "ma5": round(ma5, 3), "dev": round(dev, 2), "volRatio": round(vol_ratio, 2),
+        "ma5": round(ma5, 3), "ma20": round(ma20, 3), "dev": round(dev, 2), "volRatio": round(vol_ratio, 2),
         "pe": pe, "status": status, "trend": trend, "signal": signal, "signalDetail": detail,
     }
 
