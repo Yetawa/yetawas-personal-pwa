@@ -110,6 +110,7 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 @media(max-width:560px){.kpi{grid-template-columns:1fr}}
 .kpi .big{font-size:26px;font-weight:800}
+.nb-chart{margin-top:6px;overflow-x:auto}
 .kpi .lbl{font-size:12px;color:var(--txt2)}
 .note{font-size:11.5px;color:var(--txt3);margin-top:8px;line-height:1.6}
 
@@ -266,6 +267,10 @@ tr:hover td{background:var(--card2)}
         <div class="note">两融余额反映杠杆资金风险偏好，持续回升通常对应市场上行动能增强。</div>
       </div>
     </div>
+    <div class="card" style="margin-top:10px">
+      <div class="lbl">北向成交额 · 近 10 个交易日（亿元，红=较前日增加 绿=减少）</div>
+      <div id="nbChart" class="nb-chart"></div>
+    </div>
   </div>
 
   <!-- 研判 -->
@@ -278,7 +283,6 @@ tr:hover td{background:var(--card2)}
   <div class="sect">
     <div class="sect-h"><h2>⑧ 相关 ETF 推荐</h2><span class="tag">对应热点行业 · 代码仅供参考</span></div>
     <div class="card" style="padding:0;overflow:auto">
-      <div class="scroll-hint">← 左右滑动查看完整表格 →</div>
       <table id="etfTbl">
         <thead><tr><th>行业 / 主题</th><th>ETF</th><th>代码</th><th>逻辑</th></tr></thead>
         <tbody></tbody>
@@ -288,9 +292,7 @@ tr:hover td{background:var(--card2)}
 
   <div class="foot">
     数据来源：东方财富实时行情接口(ulist.np)、证券时报·数据宝 A股行情指标/资金流向日报、东方财富资金流向日报、港交所/交易所公开数据。
-    各交易日数据来源已在上方逐日标注。北向资金自 2024-08-19 起不再披露每日净买入/净卖出，仅披露成交额。<br>
-    本页为单文件 PWA（可「添加到主屏幕」离线查看），支持昼/夜切换与近5个交易日切换。数据为公开行情快照，<b>仅供研究参考，不构成投资建议</b>。<br>
-    返回套利看板：<a href="https://fund-arb.onrender.com/arb" target="_blank" rel="noopener">https://fund-arb.onrender.com/arb</a>
+    各交易日数据来源已在上方逐日标注。数据为公开行情快照，<b>仅供研究参考，不构成投资建议</b>。
   </div>
 </div>
 
@@ -449,13 +451,38 @@ function renderNB(){
   $("#mgDate").textContent=m.date; $("#mgBal").textContent=m.balance.toLocaleString()+" 亿";
   $("#mgDelta").textContent=(m.delta>=0?"+":"")+m.delta;
   $("#mgDelta").style.color = m.delta>=0?"var(--up)":"var(--down)";
+  const tr = (n.trend||[]);
+  const ch = $("#nbChart");
+  if(!ch) return;
+  if(tr.length < 2){ ch.innerHTML = '<div class="src-note">暂无趋势数据</div>'; return; }
+  const w=720, h=120, padB=18, padT=8, padX=8;
+  const maxV = Math.max(...tr.map(x=>x.v));
+  const bw = (w-2*padX)/tr.length;
+  let bars = tr.map((x,i)=>{
+    const bh = Math.max(2, (x.v/maxV)*(h-padB-padT));
+    const y = h-padB-bh;
+    const up = i===0 ? true : x.v >= tr[i-1].v;
+    const col = up ? "var(--up)" : "var(--down)";
+    return `<rect x="${(padX+i*bw+bw*0.19).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*0.62).toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}" rx="2"/>`
+      + `<text x="${(padX+i*bw+bw/2).toFixed(1)}" y="${h-4}" text-anchor="middle" font-size="9" fill="var(--txt3)">${x.date}</text>`
+      + `<text x="${(padX+i*bw+bw/2).toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--txt3)">${x.v}</text>`;
+  }).join("");
+  ch.innerHTML = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${bars}</svg>`;
 }
 
-/* 研判 + ETF */
+/* 研判 + ETF（ETF 按最新交易日主力净流入由多到少排序，与④资金排行一致） */
 function renderStatic(){
   $("#judge").innerHTML = D.judge.map(([t,b])=>`<div class="j"><div class="jt">${t}</div><div class="jb">${b}</div></div>`).join("");
   const tb=$("#etfTbl tbody");
-  tb.innerHTML = D.etfs.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td><span class="code">${r[2]}</span></td><td style="color:var(--txt2)">${r[3]}</td></tr>`).join("");
+  const ind = ((D.days||{})[D.today]||{}).industries || {};
+  const mainOf = nm => {
+    const k = String(nm||"").split("/")[0].trim();
+    const o = ind[k];
+    return (o && typeof o.main==="number") ? o.main : null;
+  };
+  const rows = (D.etfs||[]).map(r=>({r, m: mainOf(r[0])}))
+    .sort((a,b)=>((b.m===null?-1e18:b.m)-(a.m===null?-1e18:a.m)));
+  tb.innerHTML = rows.map(x=>`<tr><td>${x.r[0]}</td><td>${x.r[1]}</td><td><span class="code">${x.r[2]}</span></td><td style="color:var(--txt2)">${x.r[3]}</td></tr>`).join("");
 }
 
 /* 主题切换 */
