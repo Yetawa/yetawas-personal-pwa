@@ -152,13 +152,14 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b><span id="btinline"></span></div>
 
-<div id="statusbar" class="statusbar" style="display:none"></div>
+<div id="fund-title" class="fund-title"></div>
+<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>
 <div id="baseinfo" class="baseinfo" style="display:none;margin:8px 0;color:#8b949e;font-size:13px"></div>
+<div id="statusbar" class="statusbar" style="display:none"></div>
 <div id="summary" class="summary"></div>
 <div id="validate" class="summary" style="display:none"></div>
 <div id="loading">加载中…</div>
 <div id="err"></div>
-<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div>
 
 <div class="panel">
   <div class="field"><label>基金代码</label><input id="code" value="162411"></div>
@@ -170,7 +171,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <option value="holdings">持仓估算</option>
   </select></div>
   <button id="btn" onclick="load()">查询</button>
-  <div id="fund-title" class="fund-title"></div>
 </div>
 
 <div class="note">
