@@ -133,7 +133,7 @@ def _u(sa):
 UNDERLYING_MAP = {
     "160140": _u("SPY"), "164705": {"tx": "hkHSI", "sa": "HSI"}, "501312": _u("QQQ"), "164906": _u("KWEB"),
     "160717": _u("FXI"), "501300": _u("AGG"), "160719": _u("GLD"), "161126": _u("XLV"),
-    "161116": _u("GLD"), "161831": _u("FXI"), "160924": {"tx": "hkHSI", "sa": "HSI"}, "161124": _u("EWH"),
+    "161116": _u("GLD"), "161831": _u("FXI"), "160924": {"tx": "hkHSI", "sa": "HSI"}, "161124": {"sa": "HSSI", "hk_sina": True},
     "164701": _u("GLD"), "163208": _u("XOP"), "160216": _u("DBC"), "160416": _u("XOP"),
     "161130": _u("QQQ"), "161127": _u("XBI"),
     # 161226 国投瑞银白银期货：投资上海期货交易所白银期货，用国内白银连续合约 AG0，无需 USD/CNY 换汇。
@@ -166,6 +166,7 @@ UNDERLYING_WEIGHT = {
     "SPY": 0.98, "QQQ": 0.98, "INDA": 0.97, "KWEB": 0.97,
     "XLV": 0.98, "XBI": 0.98, "XLK": 0.98, "SOXX": 0.98,  # 行业/宽基股票
     "EWH": 0.98, "FXI": 0.98,                               # 港股
+    "HSSI": 0.95,                                            # 恒生综合小型股指数（161124 易方达港小盘，业绩基准 95%×指数 + 5%×活期）
     "AGG": 0.90,                                             # 债券
     # 国内 A 股指数代理（sa=指数代码）：指数满仓 LOF，w 取 0.98
     "399997": 0.98, "399987": 0.98, "399006": 0.98,
@@ -324,7 +325,8 @@ def collect_backtest_points(codes, und, days, fx_map=None, lag=1):
         fx_map = fetch_fx()
     try:
         xop_map, _ = resolve_xop(code0, und, days)
-        merge_seed_xop(xop_map)
+        if not (und or {}).get("hk_sina"):
+            merge_seed_xop(xop_map)
     except Exception:
         return []
     if not xop_map:
@@ -1145,6 +1147,41 @@ def fetch_kline_sina(symbol, n=25):
     return out
 
 
+def fetch_hk_index_sina(symbol="HSSI", n=5):
+    """新浪港股指数日 K（hq.sinajs.cn 实时）。symbol 如 HSSI（恒生综合小型股指数）。
+    新浪港股指数实时仅含「现价 + 昨收」两个点，据此构造 {上一自然日: 昨收, 今日: 现价}，
+    供下游 build_rows 以 T-1 官方净值锚点估算当日净值（与 164705/160924 用 hkHSI 思路一致，
+    但直接用恒生综合小型股指数本身，成分完全匹配 161124 易方达港小盘，替代错配的 EWH）。
+    返回 [(date, price), ...] 按日期升序；失败返回 []。"""
+    sym = "hk" + symbol.upper()
+    url = "https://hq.sinajs.cn/list=" + sym
+    try:
+        txt = http_get_text(url, referer="https://finance.sina.com.cn/", timeout=10, retries=2, encoding="gbk")
+    except Exception as e:
+        print(f"    [港股指数] {sym} 实时失败: {e}")
+        return []
+    m = re.search(r'="([^"]*)"', txt)
+    if not m:
+        return []
+    parts = m.group(1).split(",")
+    if len(parts) < 9:
+        return []
+    try:
+        # 新浪港股指数格式: [0]代码 [1]中文名 [2]今开 [3]昨收 [4]最高 [5]最低 [6]现价 [7]涨跌额 [8]涨跌幅
+        # 实测对照东财 124.HSSI: f43=现价(1333.63)=parts[6], f60=昨收(1316.73)=parts[3]
+        price = float(parts[6])       # 现价
+        prev = float(parts[3])        # 昨收
+    except (ValueError, IndexError):
+        return []
+    if price <= 0 or prev <= 0:
+        return []
+    # 日期键用「UTC 安全」的北京时间（bj_now 依赖进程时区，本地 UTC+8 会双加 8h）
+    bj = datetime.utcnow() + timedelta(hours=8)
+    today = bj.strftime("%Y-%m-%d")
+    yday = (bj - timedelta(days=1)).strftime("%Y-%m-%d")
+    return [(yday, prev), (today, price)]
+
+
 def fetch_kline_sina_futures(symbol, n=120):
     """新浪财经期货连续合约 K 线（日线）。symbol 如 AG0、AU0、RB0、SC0 等。
     返回 [(date, close), ...] 按日期升序。"""
@@ -1308,6 +1345,16 @@ def fetch_xop(und, n=25):
                 results.append((r, "新浪财经期货"))
         except Exception as e:
             print(f"    [兜底] 新浪期货标的失败：{e}")
+    # 新浪港股指数（恒生综合小型股指数 HSSI 等）：实时现价+昨收两日序列，
+    # 直接用指数本身做代理（161124 易方达港小盘），替代 EWH 成分错配。
+    hk_sina = (und or {}).get("hk_sina")
+    if hk_sina:
+        try:
+            r = fetch_hk_index_sina(hk_sina if isinstance(hk_sina, str) else "HSSI", n)
+            if r:
+                results.append((r, "新浪港股指数"))
+        except Exception as e:
+            print(f"    [兜底] 新浪港股指数标的失败：{e}")
     if not results:
         return [], "无数据"
     best = max(results, key=lambda x: len(x[0]))
@@ -1971,6 +2018,9 @@ def signal_for_premium(premium, threshold=THRESHOLD, subscribe_status="", redeem
 
 
 def merge_seed_xop(xop_map):
+    """seed 兜底：把历史校准日期的标的价补进缺失日。仅用于「在线接口整体失败」时，
+    对 hk_sina（新浪港股指数实时两日序列）不适用——seed 是 7 月的旧值，与 HSSI 量级
+    完全不同（1316 vs 174），混入会污染 build_rows 的 P 比值，导致估算荒谬。"""
     used = False
     for d, v in SEED_XOP.items():
         if d not in xop_map:
@@ -2123,7 +2173,9 @@ def compute(code, days=30, display_days=None, start="", end="", underlying=None,
         w_use = weight_for(und, code=code) if und else None
         lag_use = lag_for(und, code=code) if und else 1
     use_fx_flag = und.get("use_fx", True) if und else True
-    seed_xop = merge_seed_xop(xop_map) if und else 0
+    # hk_sina（新浪港股指数实时两日序列）不做 seed 兜底：SEED_XOP 是 7 月美股旧值，
+    # 与 HSSI 量级(1300+)完全不同，混入会把 P 比值算爆（曾出现 est_nav=6.35 荒谬值）。
+    seed_xop = (merge_seed_xop(xop_map) if (und and not und.get("hk_sina")) else 0)
     seed_fx = merge_seed_fx(fx_map)
     if seed_xop or seed_fx:
         print("    [注意] 部分标的/汇率使用 seed 兜底（本机通常被实时数据覆盖）")
@@ -2458,7 +2510,8 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
                 lag = 1
             else:
                 xop_map, xsrc = resolve_xop(code, und, n)
-                merge_seed_xop(xop_map)
+                if not und.get("hk_sina"):
+                    merge_seed_xop(xop_map)
                 use_fx = und.get("use_fx", True)
                 if code in COMPOSITE_UNDERLYING:
                     # 复合序列(_build_composite_xop)已按权重合成归一化日收益累积，
@@ -2579,7 +2632,8 @@ def _backtest_index(code, days=30, fx_map=None):
         fx_map = fetch_fx()
     try:
         xop_map, xsrc = resolve_xop(code, und, n)
-        merge_seed_xop(xop_map)
+        if not und.get("hk_sina"):
+            merge_seed_xop(xop_map)
     except Exception as e:
         return {"error": f"标的获取失败: {e}"}
     xop_dates = sorted(xop_map.keys())
@@ -2779,8 +2833,10 @@ def _hydrate_from_disk():
             if isinstance(fc, dict) and fc.get("data"):
                 _FLOAT_CAP_CACHE["ts"], _FLOAT_CAP_CACHE["data"] = fc.get("ts", 0.0), fc["data"]
         # TOP 套利榜全量快照回填（冷启动秒回历史候选，无需等全市场重算）
-        # 注意：规模过滤修复后首次启动需强制重算，暂跳过旧快照回填
-        if False and os.path.exists(TOP_SNAP_FILE):
+        # 历史教训：曾因规模过滤修复暂跳过回填（if False），导致 onrender 冷启动
+        # 快照为空 → 全市场冷算在美西节点取不到东财行情 → 榜单缩水且估算全部回退
+        # 官方净值（用户反馈"TOP 估算跟前一天一模一样"）。现恢复回填。
+        if os.path.exists(TOP_SNAP_FILE):
             try:
                 with open(TOP_SNAP_FILE, encoding="utf-8") as _tf:
                     _s = json.load(_tf)
@@ -3115,10 +3171,12 @@ def _top_finalize(base_rows, threshold, dgate, top_n):
     return out[:top_n]
 
 def serve_top_from_snapshot(date, threshold, dgate, top_n=20):
-    """优先从全量快照秒回；快照缺失/过期才走完整冷算（并填充快照）。"""
+    """优先从全量快照秒回；快照缺失/过期才走完整冷算（并填充快照）。
+    快照判据：日期匹配 + 有行即用（不卡 TTL）——onrender 美西节点取不到东财行情，
+    冷算只会产出缩水+全部回退官方净值的劣质榜单；磁盘快照是本机/自动化在国内
+    定时算好的完整结果，日期一致时直接秒回，保证线上 TOP 与排行口径一致。"""
     with _TOP_SNAP_LOCK:
         snap = (dict(_TOP_SNAPSHOT) if (_TOP_SNAPSHOT["date"] == date
-                and (time.time() - _TOP_SNAPSHOT["ts"]) < Handler._API_CACHE_TTL_TOP
                 and _TOP_SNAPSHOT["rows"]) else None)
     if snap:
         rows = _top_finalize(snap["rows"], threshold, dgate, top_n)
