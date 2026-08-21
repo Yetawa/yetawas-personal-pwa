@@ -34,7 +34,7 @@ h1{font-size:22px;margin:0 0 4px;color:var(--title)}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 a.theme-btn{text-decoration:none}
 /* 主题切换小块：标题行右侧（替代导航栏按钮，避免手机端占一行/挡标题） */
-.theme-mini{flex:none;align-self:flex-start;margin-left:auto;border:1px solid var(--border);background:var(--panel);color:var(--title);border-radius:8px;padding:4px 10px;font-size:14px;line-height:1.2;cursor:pointer;font-family:inherit}
+.theme-mini{flex:none;align-self:flex-start;margin-left:auto;border:1px solid var(--border);background:var(--panel);color:var(--title);border-radius:6px;padding:2px 8px;font-size:12px;line-height:1.3;cursor:pointer;font-family:inherit}
 .theme-mini:hover{border-color:var(--btn);color:var(--btn)}
 .theme-btn:hover{border-color:var(--btn);color:var(--btn)}
 /* 全站统一固定顶部导航：6 个入口 + 主题切换，位置固定且各页一致 */
@@ -109,7 +109,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  .topbar{flex-direction:column;align-items:stretch;gap:10px}
+  .topbar{flex-direction:row;align-items:flex-start;gap:8px}
   .top-actions{align-self:stretch;flex-wrap:wrap;gap:6px;width:100%}
   .top-actions .theme-btn,.top-actions a.theme-btn{flex:0 0 auto}
   .theme-btn{align-self:flex-start}
@@ -117,7 +117,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .panel{flex-direction:column;align-items:stretch;gap:10px}
   .field{width:100%}
   .field input,.field textarea,.field select{width:100%}
-  button:not(.arb-exp-btn){width:100%}
+  button:not(.arb-exp-btn):not(.theme-mini){width:100%}
   .fund-title{margin-left:0;margin-top:2px;font-size:18px}
   h1{font-size:18px}
   .sub{font-size:12px}
@@ -205,6 +205,7 @@ function initTheme(){
   applyTheme(t);
 }
 initTheme();
+window.addEventListener('DOMContentLoaded',function(){try{applyTheme(document.documentElement.getAttribute('data-theme')||'dark');}catch(e){}});
 function fmtNum(v,d=4){ return v==null?"—":Number(v).toFixed(d); }
 function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+v.toFixed(2)+"%"; }
 function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
