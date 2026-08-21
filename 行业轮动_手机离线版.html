@@ -487,10 +487,30 @@ function refreshLive(){
   $("#liveTag").textContent="● 刷新中…";
   fetch("/api/sector_live",{signal:ctrl.signal}).then(r=>r.json()).then(res=>{
     if(res && res.industries){
-      const cur=D.days[D.today].industries;
-      for(const [k,v] of Object.entries(res.industries)){ if(v && typeof v.chg==="number") cur[k]=v; }
-      D.days[D.today].source="东方财富实时行情接口(ulist.np) 实时刷新 · "+new Date().toLocaleTimeString();
-      if(curDay===D.today){ renderDay(); }
+      // 实时数据的实际日期（东财盘中即今日）；快照无该日时动态新增并保持最新5日窗口
+      const liveDate = res.date || D.today;
+      if(!D.days[liveDate]){
+        const baseDate = D.today;
+        D.days[liveDate] = JSON.parse(JSON.stringify(D.days[baseDate] || {industries:{}}));
+        const wd = ["周日","周一","周二","周三","周四","周五","周六"];
+        D.days[liveDate].label = liveDate.slice(5).replace("-","/") + " " + (wd[new Date(liveDate).getDay()]||"");
+        D.days[liveDate].source = "东方财富实时行情接口(ulist.np) 实时刷新 · "+new Date().toLocaleTimeString();
+        D.today = liveDate;
+        const keep = Object.keys(D.days).sort().reverse().slice(0,5);
+        for(const k of Object.keys(D.days)){ if(!keep.includes(k)) delete D.days[k]; }
+        curDay = liveDate;
+        renderDates();
+      }
+      const cur=D.days[liveDate].industries;
+      for(const [k,v] of Object.entries(res.industries)){
+        if(!v || typeof v.chg!=="number") continue;
+        const o = cur[k] || {chg:null,main:null};
+        o.chg = v.chg;
+        if(typeof v.main==="number") o.main = v.main;
+        cur[k] = o;
+      }
+      D.days[liveDate].source="东方财富实时行情接口(ulist.np) 实时刷新 · "+new Date().toLocaleTimeString();
+      if(curDay===liveDate){ renderDay(); }
       $("#liveTag").textContent="● 已实时更新 "+new Date().toLocaleTimeString();
       markLive(true);
     } else {
