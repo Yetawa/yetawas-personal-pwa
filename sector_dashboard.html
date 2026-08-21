@@ -366,7 +366,7 @@ function renderDates(){
 }
 
 /* 行业近5日涨跌 sparkline（取 days 历史中该行业的 chg 序列） */
-function sparkSVG(name){
+function sparkSVG(name, white){
   const ds = Object.keys(D.days).sort();
   const pts = ds.map(d=>{ const o=(D.days[d].industries||{})[name]; return o?o.chg:null; })
                  .filter(v=>typeof v==="number");
@@ -378,7 +378,8 @@ function sparkSVG(name){
     const y=h-pad - (v-min)/rng*(h-2*pad);
     return [x,y];
   });
-  const col = pts[pts.length-1]>=0 ? "var(--up)" : "var(--down)";
+  // 正红方块（white=true）且末端为涨：线条改白，避免红底上红线看不清
+  const col = (white && pts[pts.length-1]>=0) ? "#ffffff" : (pts[pts.length-1]>=0 ? "var(--up)" : "var(--down)");
   const d = coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
   return `<div class="spk"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px">`
        + `<path d="${d}" fill="none" style="stroke:${col}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
@@ -406,12 +407,14 @@ function renderDay(){
       bdCol = up?"var(--up)":"var(--down)";
       bg = up ? `rgba(var(--up-rgb),${inten.toFixed(3)})` : `rgba(var(--down-rgb),${inten.toFixed(3)})`;
     }
-    const mCol = m===null?"var(--txt3)":(m>=0?"var(--up)":"var(--down)");
+    // 正红方块（up 且强度深）：主力净流入为正时改白字；否则保持涨跌色
+    const white = (c!==null && c>=0 && (Math.min(0.92, Math.abs(c)/maxAbs*0.82 + 0.16)>=0.5));
+    const mCol = m===null?"var(--txt3)":(white&&m>=0?"#ffffff":(m>=0?"var(--up)":"var(--down)"));
     return `<div class="tile" style="background:${bg};border-color:${bdCol}">
       <div class="tn" style="color:${txtCol}">${n}</div>
       <div class="tc" style="color:${txtCol}">${fmtChg(c)}</div>
       <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">主力 ${fmtMain(m)}</div>
-      ${sparkSVG(n)}
+      ${sparkSVG(n, white)}
     </div>`;
   }).join("");
   // flow bars
