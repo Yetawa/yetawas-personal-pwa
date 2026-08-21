@@ -277,6 +277,103 @@ _STATIC_JSON = """{
 # 保证「近5交易日切换」立即可用；用户本机每日运行会用实时/回补数据覆盖这些种子。
 _HISTORY_SEED = r"""{"2026-08-07":{"label":"08-07 周五","source":"东方财富资金流向日报(13个行业主力净流入)","industries":{"电子":{"chg":3.53,"main":282.97},"汽车":{"chg":0.28,"main":-1.62},"医药生物":{"chg":4.77,"main":88.46},"纺织服饰":{"chg":-0.27,"main":-1.75},"有色金属":{"chg":3.19,"main":70.77},"家用电器":{"chg":-0.86,"main":-1.75},"机械设备":{"chg":2.08,"main":40.49},"食品饮料":{"chg":0.21,"main":-1.76},"电力设备":{"chg":1.19,"main":29.93},"房地产":{"chg":-0.51,"main":-1.83},"建筑材料":{"chg":3.33,"main":29.25},"社会服务":{"chg":0.11,"main":-1.87},"国防军工":{"chg":1.47,"main":10.51},"轻工制造":{"chg":-0.16,"main":-2.43},"基础化工":{"chg":1.23,"main":9.73},"商贸零售":{"chg":-0.42,"main":-2.84},"煤炭":{"chg":-0.34,"main":1.17},"环保":{"chg":0.49,"main":-2.85},"钢铁":{"chg":-0.21,"main":1.0},"交通运输":{"chg":-0.64,"main":-3.38},"石油石化":{"chg":0.64,"main":0.85},"传媒":{"chg":0.05,"main":-9.48},"公用事业":{"chg":-0.1,"main":0.35},"银行":{"chg":-0.65,"main":-10.61},"农林牧渔":{"chg":-0.21,"main":0.15},"非银金融":{"chg":-0.26,"main":-11.47},"建筑装饰":{"chg":-0.06,"main":-0.35},"通信":{"chg":0.13,"main":-24.25},"美容护理":{"chg":0.72,"main":-0.46},"计算机":{"chg":-0.6,"main":-58.56},"综合":{"chg":0.77,"main":-0.94}}},"2026-08-10":{"label":"08-10 周一","source":"证券时报·数据宝 A股行情指标(申万一级行业)","industries":{"电力设备":{"chg":0.71,"main":17.78},"食品饮料":{"chg":2.51,"main":16.34},"有色金属":{"chg":2.02,"main":12.18},"基础化工":{"chg":1.68,"main":5.95},"国防军工":{"chg":1.32,"main":5.72},"传媒":{"chg":1.42,"main":5.64},"汽车":{"chg":1.37,"main":4.58},"农林牧渔":{"chg":3.14,"main":3.15},"轻工制造":{"chg":1.91,"main":2.4},"商贸零售":{"chg":1.62,"main":1.81},"银行":{"chg":0.45,"main":1.79},"钢铁":{"chg":0.94,"main":1.39},"煤炭":{"chg":2.34,"main":1.3},"纺织服饰":{"chg":2.4,"main":1.09},"美容护理":{"chg":1.79,"main":0.53},"社会服务":{"chg":1.98,"main":0.47},"交通运输":{"chg":0.91,"main":-0.45},"机械设备":{"chg":0.02,"main":-0.57},"综合":{"chg":1.32,"main":-1.0},"环保":{"chg":1.63,"main":-1.95},"房地产":{"chg":1.63,"main":-2.14},"家用电器":{"chg":1.39,"main":-2.7},"公用事业":{"chg":0.89,"main":-2.77},"建筑装饰":{"chg":0.75,"main":-3.37},"石油石化":{"chg":1.49,"main":-3.99},"建筑材料":{"chg":0.35,"main":-13.24},"非银金融":{"chg":0.18,"main":-15.7},"医药生物":{"chg":1.4,"main":-20.6},"计算机":{"chg":-0.26,"main":-43.39},"通信":{"chg":-3.16,"main":-170.44},"电子":{"chg":-0.49,"main":-196.54}}},"2026-08-11":{"label":"08-11 周二","source":"证券时报·数据宝 A股行情指标(申万一级行业)","industries":{"通信":{"chg":1.13,"main":13.36},"石油石化":{"chg":0.5,"main":8.39},"医药生物":{"chg":0.31,"main":-12.75},"公用事业":{"chg":0.27,"main":-3.12},"家用电器":{"chg":0.2,"main":0.39},"纺织服饰":{"chg":0.11,"main":2.64},"房地产":{"chg":-0.01,"main":-3.45},"银行":{"chg":-0.02,"main":0.42},"建筑装饰":{"chg":-0.06,"main":12.76},"电力设备":{"chg":-0.2,"main":-25.98},"煤炭":{"chg":-0.23,"main":1.62},"商贸零售":{"chg":-0.41,"main":-2.19},"计算机":{"chg":-0.46,"main":-21.3},"机械设备":{"chg":-0.57,"main":-11.61},"汽车":{"chg":-0.61,"main":8.99},"综合":{"chg":-0.68,"main":-0.06},"环保":{"chg":-0.69,"main":-2.32},"轻工制造":{"chg":-0.69,"main":-3.06},"食品饮料":{"chg":-0.74,"main":-12.62},"建筑材料":{"chg":-0.82,"main":-7.73},"传媒":{"chg":-0.86,"main":-19.7},"电子":{"chg":-0.87,"main":-101.7},"美容护理":{"chg":-0.9,"main":-1.18},"非银金融":{"chg":-0.92,"main":-22.64},"社会服务":{"chg":-1.21,"main":-3.53},"农林牧渔":{"chg":-1.21,"main":-9.86},"交通运输":{"chg":-1.43,"main":-16.75},"钢铁":{"chg":-1.52,"main":-3.03},"基础化工":{"chg":-1.57,"main":-19.06},"国防军工":{"chg":-2.38,"main":-36.66},"有色金属":{"chg":-4.42,"main":-138.4}}},"2026-08-12":{"label":"08-12 周三","source":"东方财富实时行情接口(ulist.np) 收盘数据 · 主力净流入=超大单+大单","industries":{"电子":{"chg":1.99,"main":101.58},"通信":{"chg":2.46,"main":129.33},"计算机":{"chg":1.04,"main":-15.41},"传媒":{"chg":1.36,"main":7.17},"电力设备":{"chg":1.58,"main":40.23},"机械设备":{"chg":1.49,"main":16.78},"国防军工":{"chg":0.99,"main":-4.56},"汽车":{"chg":0.95,"main":15.47},"家用电器":{"chg":1.15,"main":-1.74},"食品饮料":{"chg":1.66,"main":12.77},"纺织服饰":{"chg":0.6,"main":-0.84},"轻工制造":{"chg":1.22,"main":3.04},"医药生物":{"chg":0.53,"main":-34.4},"公用事业":{"chg":-0.01,"main":-7.57},"交通运输":{"chg":0.73,"main":1.98},"房地产":{"chg":3.1,"main":11.53},"商贸零售":{"chg":1.22,"main":0.35},"社会服务":{"chg":1.17,"main":1.47},"综合":{"chg":1.69,"main":2.37},"建筑材料":{"chg":1.19,"main":-5.3},"建筑装饰":{"chg":1.42,"main":-6.35},"农林牧渔":{"chg":1.01,"main":-0.45},"基础化工":{"chg":0.95,"main":-6.95},"钢铁":{"chg":0.77,"main":0.5},"有色金属":{"chg":1.12,"main":-10.5},"石油石化":{"chg":-0.46,"main":-3.55},"煤炭":{"chg":-0.78,"main":-3.19},"环保":{"chg":1.14,"main":1.0},"美容护理":{"chg":-0.21,"main":-0.97},"银行":{"chg":-0.09,"main":6.22},"非银金融":{"chg":0.72,"main":-0.35}}}}"""
 
+def fetch_north_latest():
+    """抓北向资金最新交易日陆股通成交额（MUTUAL_TYPE 003=深股通 + 005=沪股通，DEAL_AMT 单位百万→亿）。
+    2024-08-19 起北向不再披露每日净买入/净卖出，仅披露成交额。失败返回 None。"""
+    url = ("https://datacenter-web.eastmoney.com/api/data/v1/get?"
+           "sortColumns=TRADE_DATE&sortTypes=-1&pageSize=30&pageNumber=1"
+           "&reportName=RPT_MUTUAL_DEAL_HISTORY&columns=ALL&source=WEB&client=WEB")
+    j = _get(url, timeout=12, retries=2)
+    if not j or not j.get("result") or not j["result"].get("data"):
+        return None
+    data = j["result"]["data"]
+    date0 = data[0]["TRADE_DATE"][:10]
+    amt = 0.0
+    for x in data:
+        if x["TRADE_DATE"][:10] != date0:
+            break
+        if x.get("MUTUAL_TYPE") in ("003", "005") and isinstance(x.get("DEAL_AMT"), (int, float)):
+            amt += x["DEAL_AMT"]
+    if amt <= 0:
+        return None
+    return {"date": date0, "turnover": round(amt / 100, 2)}
+
+
+def fetch_margin_latest():
+    """抓两融余额最新值（RPTA_RZRQ_LSHJ，RZRQYE 单位元→亿；delta=最新两天余额差值）。失败返回 None。"""
+    url = ("https://datacenter-web.eastmoney.com/api/data/v1/get?"
+           "sortColumns=DIM_DATE&sortTypes=-1&pageSize=3&pageNumber=1"
+           "&reportName=RPTA_RZRQ_LSHJ&columns=ALL&source=WEB&client=WEB")
+    j = _get(url, timeout=12, retries=2)
+    if not j or not j.get("result") or not j["result"].get("data"):
+        return None
+    rows = j["result"]["data"]
+    try:
+        d0, d1 = rows[0], rows[1]
+        date = d0["DIM_DATE"][:10]
+        bal = float(d0["RZRQYE"]) / 1e8
+        delta = (float(d0["RZRQYE"]) - float(d1["RZRQYE"])) / 1e8
+        return {"date": date, "balance": round(bal, 2), "delta": round(delta, 2)}
+    except Exception:
+        return None
+
+
+def _gen_judge(days, indices, style):
+    """基于最新交易日数据自动生成行业配置研判（≤3 条 [标题, 正文]）。数据不足返回 []。"""
+    if not days:
+        return []
+    d0 = sorted(days.keys(), reverse=True)[0]
+    blk = days[d0].get("industries") or {}
+    items = [(n, v.get("chg"), v.get("main")) for n, v in blk.items()]
+    items = [x for x in items if x[1] is not None]
+    if len(items) < 5:
+        return []
+    items.sort(key=lambda x: x[1], reverse=True)
+    top_up = items[:3]
+    dn_list = [x for x in items if x[1] < 0]
+    dn_list.sort(key=lambda x: x[1])
+    top_dn = dn_list[:3]
+    mains = [(n, c, m) for n, c, m in items if m is not None]
+    mains.sort(key=lambda x: x[2], reverse=True)
+    in_lead = mains[:3]
+    out_lead = mains[-3:][::-1]
+    ups = sum(1 for _, c, _ in items if c > 0)
+    downs = len(items) - ups
+
+    style_txt = ""
+    if style and "大盘成长" in style and "大盘价值" in style:
+        gc = style["大盘成长"][1]
+        gv = style["大盘价值"][1]
+        style_txt = ("成长占优：大盘成长 %+.2f%% 跑赢大盘价值 %+.2f%%。" % (gc, gv)
+                     if gc > gv else
+                     "价值占优：大盘价值 %+.2f%% 跑赢大盘成长 %+.2f%%。" % (gv, gc))
+
+    out = []
+    up_s = "、".join("%s%+.2f%%" % (n, c) for n, c, _ in top_up)
+    dn_s = ("、".join("%s%+.2f%%" % (n, c) for n, c, _ in top_dn)
+            if top_dn else "无下跌行业")
+    out.append([
+        "%s 行业强弱：%d 涨 %d 跌" % (d0[5:].replace("-", "/"), ups, downs),
+        "领涨：%s；领跌：%s。全市场 %d 个申万一级行业中 %d 涨 %d 跌。" % (up_s, dn_s, len(items), ups, downs),
+    ])
+    if in_lead and out_lead:
+        in_s = "、".join("%s%+.0f亿" % (n, m) for n, _, m in in_lead)
+        out_s = "、".join("%s%+.0f亿" % (n, m) for n, _, m in out_lead)
+        out.append([
+            "主力资金：净流入集中在 %s" % in_lead[0][0],
+            "主力净流入居前：%s；净流出居前：%s。%s" % (in_s, out_s, style_txt or "跟随资金方向，避免逆势。"),
+        ])
+    elif style_txt:
+        out.append(["风格轮动", style_txt])
+    max_chg = max(c for _, c, _ in items)
+    if max_chg > 3:
+        out.append([
+            "警惕追高",
+            "当日领涨 %s 涨幅达 %+.2f%%，短线涨幅过快，追高需控仓，宜沿 5/10 日线分批，并留意次日资金是否延续。" % (top_up[0][0], max_chg),
+        ])
+    return out[:3]
+
+
 def _static_sections(today):
     try:
         s = json.loads(_STATIC_JSON)
@@ -356,7 +453,16 @@ def main():
         hist = fetch_history(SECTOR_BK, n_days=5)
     except Exception:
         hist = {}
-    hist_days = {d: v for d, v in hist.items() if d != today_str}
+    hist_days = {}
+    if is_today:
+        # 目标是今天：今日行由下方实时接口生成，历史日从 hist 拿（排除今日）
+        hist_days = {d: v for d, v in hist.items() if d != today_str}
+    else:
+        # 补跑历史交易日(--date D)：目标日 D 的收盘数据并入；同时排除「今天」的盘中
+        # 数据（今日未收盘，K线不完整，混入会被误标为最新交易日——曾致回补错乱）
+        hist_days = {d: v for d, v in hist.items() if d != datetime.date.today().isoformat()}
+        if today_str in hist:
+            hist_days[today_str] = hist[today_str]
     # 历史日：合并旧文件同日的行业（回补个别取数失败的行业）
     for d, ind_h in hist_days.items():
         merged = dict(ind_h)
@@ -407,6 +513,29 @@ def main():
         for _k in ("north", "margin", "judge", "etfs"):
             if static.get(_k):
                 D[_k] = static[_k]
+    # 北向 / 两融：动态抓取最新值覆盖静态兜底（保留 note 说明；失败时用静态值）
+    try:
+        _nb = fetch_north_latest()
+        if _nb:
+            D["north"] = dict(static.get("north", {}), **_nb)
+            print("    北向动态更新:", _nb)
+    except Exception as e:
+        print("    北向动态抓取失败，保留静态:", e)
+    try:
+        _mg = fetch_margin_latest()
+        if _mg:
+            D["margin"] = _mg
+            print("    两融动态更新:", _mg)
+    except Exception as e:
+        print("    两融动态抓取失败，保留静态:", e)
+    # 行业配置研判：基于最新数据自动生成（数据不足时保留静态文案）
+    try:
+        _gj = _gen_judge(days, indices, style)
+        if _gj:
+            D["judge"] = _gj
+            print("    研判自动生成:", len(_gj), "条")
+    except Exception as e:
+        print("    研判自动生成失败，保留静态:", e)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(D, f, ensure_ascii=False, indent=1)
     print("OK sector_data.json today=%s industries=%d indices=%d style=%d (保留%d天)" % (
