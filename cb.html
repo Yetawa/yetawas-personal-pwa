@@ -125,8 +125,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 
 .grid{width:100%;border-collapse:collapse;font-size:12px;margin-top:0}
 .grid th,.grid td{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
-.grid thead th{color:var(--muted);font-weight:600;background:var(--bg2);position:sticky;top:0;z-index:3}
-.grid thead th:first-child{left:0;top:0;z-index:5;background:var(--bg2)}
+.grid thead th{color:var(--th-text);font-weight:600;background:var(--th-bg);text-align:center;position:sticky;top:0;z-index:3}
+.grid thead th:first-child{left:0;top:0;z-index:5;background:var(--th-bg)}
 .grid td:first-child{background:var(--panel)}
 #tbl .grid tbody tr:hover td:first-child{background:var(--row-hover)}
 .grid td.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -175,9 +175,9 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <span class="navspacer"></span>
   </div>
 </div>
+  <div id="tbl" class="tablebox"></div>
   <div id="statusbar" class="statusbar"></div>
   <div id="summary" class="summary"></div>
-  <div id="tbl" class="tablebox"></div>
   <div class="ops">
     <button class="btn" id="rescanBtn" onclick="rescan()">立即重扫</button>
     <span id="scanState" class="tzline"></span>
