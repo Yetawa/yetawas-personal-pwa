@@ -123,16 +123,16 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .summary{grid-template-columns:1fr}
 }
 
-.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:0}
-.grid th,.grid td{padding:5px 7px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.grid{width:100%;border-collapse:collapse;font-size:12px;margin-top:0}
+.grid th,.grid td{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
 .grid thead th{color:var(--muted);font-weight:600;background:var(--bg2);position:sticky;top:0;z-index:3}
 .grid thead th:first-child{left:0;top:0;z-index:5;background:var(--bg2)}
 .grid td:first-child{background:var(--panel)}
 #tbl .grid tbody tr:hover td:first-child{background:var(--row-hover)}
 .grid td.num{text-align:right;font-variant-numeric:tabular-nums}
 .grid td.rank{text-align:center;color:var(--muted);width:34px}
-.grid .pos{color:#16a34a;font-weight:600}
-.grid .neg{color:#dc2626}
+.grid .pos{color:var(--pos);font-weight:600}
+.grid .neg{color:var(--neg)}
 .grid .codelink{color:var(--link);text-decoration:none}
 .grid .codelink:hover{text-decoration:underline}
 .grid .c-sub{color:var(--muted);font-size:11px;font-weight:400;margin-left:6px;font-variant-numeric:tabular-nums}
@@ -239,7 +239,7 @@ function render(d){
         + '<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+p.market+p.code+'.html" target="_blank">'+p.name+'</a><span class="c-sub">'+p.code+'</span></td>'
         + '<td class="num">'+fmt(p.price)+'</td>'
         + '<td class="num">'+fmt(p.convert_value)+'</td>'
-        + '<td class="num '+(p.premium<0?"pos":"neg")+'">'+fmt(p.premium)+'%</td>'
+        + '<td class="num '+(p.premium>=0?"pos":"neg")+'">'+fmt(p.premium)+'%</td>'
         + '<td class="num '+rateCls+'"><b>'+fmt(p.arb)+'%</b></td>'
         + '<td><a class="codelink" href="https://quote.eastmoney.com/'+p.market+p.stock_code+'.html" target="_blank">'+p.stock_name+'</a><span class="c-sub">'+p.stock_code+'</span></td>'
         + '<td class="num">'+fmt(p.double_low)+'</td>'
