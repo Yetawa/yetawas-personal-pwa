@@ -87,8 +87,8 @@ button:disabled{opacity:.6;cursor:wait}
 .est{color:var(--est);font-style:italic}
 /* 集思录式紧密表格：紧凑行高、仅底边线、首行+首列锁定 */
 .tablebox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow:auto;max-height:65vh}
-table{border-collapse:collapse;width:100%;font-size:12.5px;table-layout:auto}
-th,td{border:0;border-bottom:1px solid var(--border);padding:5px 8px;text-align:right;vertical-align:middle;white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:12px;table-layout:auto}
+th,td{border:0;border-bottom:1px solid var(--border);padding:4px 7px;text-align:right;vertical-align:middle;white-space:nowrap}
 th{background:var(--th-bg);color:var(--th-text);font-weight:600;text-align:center;position:sticky;top:0;z-index:3}
 td:first-child{text-align:left;position:sticky;left:0;z-index:1;background:var(--panel)}
 th:first-child{left:0;top:0;z-index:5}
@@ -125,8 +125,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   .sitem .v{font-size:16px}
   .statusbar{font-size:12px;gap:8px}
   .tablebox{padding:4px}
-  th,td{padding:4px 6px;font-size:12px}
-  #tbl .grid th, #tbl .grid td{padding:4px 6px;font-size:12px}
+  th,td{padding:3px 4px;font-size:11.5px}
+  #tbl .grid th, #tbl .grid td{padding:3px 4px;font-size:11.5px}
 }
 @media (max-width:420px){
   .summary{grid-template-columns:1fr}
@@ -198,6 +198,12 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
 
+<div class="rank-bar" id="rankbar" style="display:none"></div>
+<div id="summary2" class="summary2"></div>
+<div id="loading">加载中…</div>
+<div id="err"></div>
+<div class="tablebox rank-scroll" id="tablebox" style="display:none"><table id="tbl"></table></div>
+
 <div class="panel">
   <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价率阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
@@ -220,12 +226,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     </div>
   </details>
 </div>
-
-<div class="rank-bar" id="rankbar" style="display:none"></div>
-<div id="summary2" class="summary2"></div>
-<div id="loading">加载中…</div>
-<div id="err"></div>
-<div class="tablebox rank-scroll" id="tablebox" style="display:none"><table id="tbl"></table></div>
 
 <div class="note">
 <b>说明</b>
