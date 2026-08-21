@@ -331,6 +331,7 @@
               <th data-k="code" onclick="sortBy('code')" title="点击排序">代码</th>
               <th data-k="change" onclick="sortBy('change')" title="点击排序">涨幅</th>
               <th data-k="pe" onclick="sortBy('pe')" title="点击排序">PE%</th>
+              <th data-k="price" onclick="sortBy('price')" title="点击排序">现价</th>
               <th data-k="ma5" onclick="sortBy('ma5')" title="点击排序">MA5</th>
               <th data-k="ma20" onclick="sortBy('ma20')" title="点击排序">MA20</th>
               <th data-k="dev" onclick="sortBy('dev')" title="点击排序">偏离</th>
@@ -780,6 +781,7 @@
           <td class="code"><a class="codelink" href="${arbHref(e.code)}">${esc(plainCode(e.code))}</a></td>
           <td class="num ${classByChange(e.change)}">${fmtPct(e.change)}</td>
           <td class="num ${peClass(e.pe)}">${e.pe}%</td>
+          <td class="num">${e.changePrice != null && isFinite(e.changePrice) ? e.changePrice.toFixed(3) : '—'}</td>
           <td class="num">${e.ma5.toFixed(3)}</td>
           <td class="num">${e.ma20 != null ? e.ma20.toFixed(3) : '—'}</td>
           <td class="num ${classByChange(e.dev)}">${fmtPct(e.dev)}</td>
@@ -804,6 +806,7 @@
             <span class="${trendClass(e.trend)}">${e.trend}</span>
           </div>
           <div class="card-row"><span>涨幅</span><span class="${classByChange(e.change)}">${fmtPct(e.change)}</span></div>
+          <div class="card-row"><span>现价</span><span>${e.changePrice != null && isFinite(e.changePrice) ? e.changePrice.toFixed(3) : '—'}</span></div>
           <div class="card-row"><span>PE百分位</span><span class="${peClass(e.pe)}">${e.pe}%</span></div>
           <div class="card-row"><span>MA5</span><span>${e.ma5.toFixed(3)}</span></div>
           <div class="card-row"><span>MA20</span><span>${e.ma20 != null ? e.ma20.toFixed(3) : '—'}</span></div>
@@ -898,31 +901,27 @@
     function sortBy(key) {
       if (sortKey === key) sortDesc = !sortDesc; else { sortKey = key; sortDesc = true; }
       markSortHead();
-      renderTable(getFiltered());
+      renderTable(applySort(getFiltered()));
     }
+    // 表头高亮当前排序列（不显示三角符号，节省空间）
     function markSortHead() {
       document.querySelectorAll('#grid thead th').forEach(th => {
         const k = th.dataset.k;
         if (!k) return;
-        if (k === sortKey) {
-          th.style.color = 'var(--accent)';
-          th.innerHTML = th.innerHTML.replace(/\s*[▲▼]$/, '') + (sortDesc ? ' ▼' : ' ▲');
-        } else {
-          th.style.color = '';
-          th.innerHTML = th.innerHTML.replace(/\s*[▲▼]$/, '');
-        }
+        th.style.color = (k === sortKey) ? 'var(--accent)' : '';
       });
     }
-    // 数字列：dev/change/pe/ma5/ma20/volRatio 数值比较；其余按文本
+    // 数值列；现价列映射到 changePrice 字段
     function applySort(arr) {
       const numKeys = ['dev', 'change', 'pe', 'ma5', 'ma20', 'volRatio'];
       const numeric = numKeys.includes(sortKey);
       return arr.slice().sort((a, b) => {
-        let av = a[sortKey], bv = b[sortKey];
+        let av = (sortKey === 'price' ? a.changePrice : a[sortKey]);
+        let bv = (sortKey === 'price' ? b.changePrice : b[sortKey]);
         if (av == null && bv == null) return 0;
         if (av == null) return 1;
         if (bv == null) return -1;
-        if (numeric) return sortDesc ? (bv - av) : (av - bv);
+        if (numeric || sortKey === 'price') return sortDesc ? (bv - av) : (av - bv);
         return sortDesc ? String(bv).localeCompare(String(av), 'zh') : String(av).localeCompare(String(bv), 'zh');
       });
     }
