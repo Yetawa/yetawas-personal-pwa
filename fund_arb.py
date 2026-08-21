@@ -2380,7 +2380,7 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
     except Exception as e:
         return {"code": code, "name": name, "error": f"净值获取失败: {e}"}
     try:
-        price_rows, psrc = fetch_price_tencent(tx_sym, n)
+        price_rows, psrc = fetch_price(em_sec, tx_sym, n)
         price_map = dict(price_rows)
     except Exception as e:
         return {"code": code, "name": name, "error": f"价格获取失败: {e}"}
@@ -2443,20 +2443,10 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
             print(f"    [{code}] 持仓择优失败，回退指数代理: {e}")
 
     # und 已在上方解析（今日行补充用）
-    # 方案B：国内基金(无明确指数映射)优先用「前十大重仓 + 腾讯实时行情」合成盘中实时估值；
-    # 已在 UNDERLYING_MAP 的指数基金(如161725白酒)保留更准的指数代理。仅最新交易日生效，
-    # 锚点取「该日之前最近一个已披露净值」，避免与今日涨跌重复计。
-    use_holdings = (und is None) or (und.get("use_fx") is False and code not in UNDERLYING_MAP)
-    if use_holdings and est_nav is None and nav is not None and price is not None and d == all_dates[-1]:
-        nav_dates_sorted = sorted(nav_map.keys())
-        before = [x for x in nav_dates_sorted if x < d]
-        anchor = nav_map.get(before[-1]) if before else nav
-        lh = live_holdings_estimate(code, anchor, d, fx_map)
-        if lh:
-            est_nav, ichg = lh
-            est_premium = (price - est_nav) / est_nav * 100
-            index_change = ichg
-            est_mode = "holdings_live"
+    # 注：原「前十大重仓实时估值(live_holdings_estimate)」分支已移除——套利看板 compute()
+    # 不调用该逻辑，保留会造成 TOP 与看板估算净值/溢价不一致（用户反馈"TOP 估算不准"）。
+    # 无标的国内基金在下方与看板一致回退官方净值；持仓配置基金由 est_mode==holdings 的
+    # 合成持仓指数(build_holdings_index)分支处理（与看板同源）。
     if und and est_nav is None:
         try:
             # 持仓模式：用合成持仓指数作为估算标的（换汇已折入），w=1、lag=1、不再乘汇率
@@ -2538,25 +2528,11 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
     #   est_nav = 官方净值 × (1 + 指数日内涨跌% × w)；取数失败 / 无映射则回退官方净值（原行为）。
     # 主动 / 混合 / FOF 无单一跟踪指数，自然走回退（其净值次日披露，盘中没有可代理的日内标的）。
     if est_nav is None and nav is not None and price is not None:
-        _dm = DOMESTIC_INDEX_MAP.get(code)
-        _chg = None
-        if _dm:
-            _ic = _dm[0]
-            try:
-                if index_chg_map is not None:
-                    _chg = index_chg_map.get(_ic)
-                else:
-                    _chg = get_index_chg(_ic)
-            except Exception:
-                _chg = None
-        if _chg is not None:
-            _w = _dm[2] if len(_dm) > 2 else 1.0
-            est_nav = nav * (1 + _chg / 100.0 * _w)
-            est_premium = (price - est_nav) / est_nav * 100
-            index_change = _chg
-        else:
-            est_nav = nav
-            est_premium = premium
+        # 与套利看板 compute() 完全一致：无 QDII 标的的国内基金直接回退官方净值，
+        # 官方溢价 = (价格 - 最新净值) / 最新净值。不做 DOMESTIC_INDEX_MAP 指数日内估算，
+        # 避免与看板口径不一致（用户对比两页时出现"TOP 估算不准"）。
+        est_nav = nav
+        est_premium = premium
 
     sig_premium = est_premium if est_premium is not None else premium
     sig_text, sig_cls = signal_for_premium(sig_premium, threshold,
