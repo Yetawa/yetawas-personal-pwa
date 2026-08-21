@@ -22,8 +22,12 @@
       --accent-2: #38bdf8;
       --panel: var(--bg-3);
       --btn: var(--accent);
-      --up: #ff4d4f;
-      --down: #00b578;
+      --th-bg: #1f6feb;
+      --th-text: #ffffff;
+      --code-text: #79c0ff;
+      --row-hover: rgba(255,255,255,0.04);
+      --up: #ff5b5b;
+      --down: #2ecc71;
       --bull: #ff4d4f;
       --bear: #00b578;
       --warn: #f59e0b;
@@ -43,8 +47,12 @@
       --text: #1e293b;
       --text-2: #475569;
       --text-3: #94a3b8;
-      --up: #d93026;
-      --down: #13855c;
+      --th-bg: #2563eb;
+      --th-text: #ffffff;
+      --code-text: #2563eb;
+      --row-hover: rgba(0,0,0,0.03);
+      --up: #dc2626;
+      --down: #16a34a;
       --bull: #d93026;
       --bear: #13855c;
       --warn: #b45309;
@@ -128,25 +136,29 @@
     /* Table */
     .table-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
     .table-wrap { overflow-x: auto; overflow-y: auto; max-height: 70vh; }
-    .grid { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 860px; table-layout: auto; }
-    .grid thead th { position: sticky; top: 0; z-index: 10; background: var(--bg-3); color: var(--text-3); font-weight: 600; padding: 7px 6px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .grid { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 860px; table-layout: auto; }
+    .grid thead th { position: sticky; top: 0; z-index: 3; background: var(--th-bg); color: var(--th-text); font-weight: 600; padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
     .grid thead th:first-child, .grid thead th:nth-child(2) { text-align: left; }
-    .grid thead th:first-child { left: 0; top: 0; z-index: 12; }
+    .grid thead th:first-child { left: 0; top: 0; z-index: 5; }
     .grid tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
-    .grid tbody tr:hover { background: rgba(255,255,255,0.03); }
-    [data-theme="light"] .grid tbody tr:hover { background: rgba(0,0,0,0.02); }
-    .grid td { padding: 5px 6px; text-align: right; white-space: nowrap; color: var(--text-2); }
+    .grid tbody tr:hover { background: var(--row-hover); }
+    .grid td { padding: 5px 8px; text-align: right; white-space: nowrap; color: var(--text-2); }
     .grid td:first-child, .grid td:nth-child(2) { text-align: left; color: var(--text); }
     .grid td:first-child { position: sticky; left: 0; z-index: 1; background: var(--bg-card); }
     .grid tbody tr:hover td:first-child { background: var(--bg-card); }
     .idx { color: var(--text-3); font-variant-numeric: tabular-nums; width: 36px; }
     .name { font-weight: 600; }
     .code { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
-    .codelink { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .codelink { color: var(--code-text); text-decoration: none; font-weight: 600; }
     .codelink:hover { text-decoration: underline; }
     .num { font-variant-numeric: tabular-nums; }
     .up { color: var(--up); font-weight: 600; }
     .down { color: var(--down); font-weight: 600; }
+    /* 涨跌幅/信号列红涨绿跌：.grid td 特异性高于 .up/.down，需用复合选择器覆盖 */
+    .grid td.up { color: var(--up); font-weight: 600; }
+    .grid td.down { color: var(--down); font-weight: 600; }
+    .grid td.signal-up { color: var(--up); }
+    .grid td.signal-down { color: var(--down); }
     .status-badge { display: inline-block; padding: 3px 8px; border-radius: 5px; font-size: 12px; font-weight: 500; background: var(--bg-3); border: 1px solid var(--border); }
     .signal { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
     .signal-arrow { font-size: 14px; }
@@ -249,9 +261,7 @@
       .status-badge, .trend-bull, .trend-bear, .trend-neutral { padding: 1px 4px; font-size: 10px; border-radius: 3px; }
       .signal { gap: 2px; }
       .signal-arrow { font-size: 11px; }
-      /* 导出条改为底部通栏，不再遮挡表格 */
-      #arbExportBar { position: fixed; left: 0; right: 0; bottom: 0; justify-content: center; gap: 24px; padding: 6px 10px; background: var(--bg-card); border-top: 1px solid var(--border); border-radius: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.25); }
-      .arb-exp-btn { padding: 5px 10px; font-size: 12px; }
+      /* 导出条与其他页面一致：右下角浮动（不再改底部通栏） */
     }
   
   /* ---- 导出表格/图片 浮动条（来源：公众号 航城大叔） ---- */
@@ -279,9 +289,9 @@
     <span class="navspacer"></span>
   </div>
   <script>
-    // 线上(onrender)环境：把相对链接改成站点绝对路由；本地 file:// 保持相对链接
+    // 通过 http/https 访问（onrender 线上 或 本地预览服务）：相对链接改写为站点绝对路由；file:// 打开保持相对链接
     (function(){
-      if (location.hostname.indexOf('onrender.com') < 0) return;
+      if (location.protocol === 'file:') return;
       var map = {
         'fish_basin.html': '/yupen',
         'sector_dashboard.html': '/sector',
@@ -1116,6 +1126,7 @@
 
     // init
     loadTheme();
+    window.addEventListener('DOMContentLoaded', loadTheme);
     loadEtfs();
     loadKlineCache();
     applyFilters();
