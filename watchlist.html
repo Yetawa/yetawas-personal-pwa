@@ -46,8 +46,10 @@ h1{font-size:19px;font-weight:800}
 .addbar input:focus{border-color:var(--accent)}
 .addbar #addCode{width:130px}
 .addbar #addName{width:160px;flex:1;min-width:110px}
-.addbar button{background:#1f6feb;border:1px solid #1f6feb;color:#fff;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
-[data-theme="light"] .addbar button{background:#2563eb;border-color:#2563eb}
+.addbar button{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.addbar button:hover{border-color:var(--accent);color:var(--accent)}
+.addbar button:active{transform:translateY(1px)}
+[data-theme="light"] .addbar button{background:var(--card);color:var(--txt)}
 .addbar .ghost{background:var(--card);color:var(--txt);border:1px solid var(--line)}
 /* 统计卡 */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
@@ -90,6 +92,10 @@ h1{font-size:19px;font-weight:800}
 .chart-head .rng{background:var(--card2);border:1px solid var(--line);color:var(--txt2);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer}
 .chart-head .rng.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
 [data-theme="light"] .chart-head .rng.active{background:#2563eb;border-color:#2563eb}
+.chart-head .rng2{background:var(--card2);border:1px solid var(--line);color:var(--txt2);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer}
+.chart-head .rng2.active{background:#0d9488;border-color:#0d9488;color:#fff}
+[data-theme="light"] .chart-head .rng2.active{background:#0d9488;border-color:#0d9488}
+.chart-head .rng-grp{font-size:11px;color:var(--txt3);align-self:center;margin-right:2px}
 .chart{width:100%}
 .chart .empty{color:var(--txt3);font-size:12px;padding:18px;text-align:center}
 
@@ -139,28 +145,23 @@ h1{font-size:19px;font-weight:800}
 
   <div class="chart-box">
     <div class="chart-head">
-      <b>自选池平均涨跌幅 vs 上证指数</b>
+      <b>自选池 vs 上证指数：累计涨跌幅 &amp; 滚动回测</b>
       <div class="range">
+        <span class="rng-grp">区间</span>
         <button class="rng" data-d="5">5日</button>
         <button class="rng" data-d="10">10日</button>
         <button class="rng active" data-d="30">30日</button>
         <button class="rng" data-d="180">半年</button>
         <button class="rng" data-d="250">一年</button>
       </div>
-    </div>
-    <div class="chart" id="chart"><div class="empty">自选池为空，无法绘制走势图</div></div>
-  </div>
-
-  <div class="chart-box">
-    <div class="chart-head">
-      <b>自选池回测：近 N 日滚动涨跌幅</b>
       <div class="range">
+        <span class="rng-grp">回测滚动</span>
         <button class="rng2" data-n="5">近5日</button>
         <button class="rng2 active" data-n="10">近10日</button>
         <button class="rng2" data-n="20">近20日</button>
       </div>
     </div>
-    <div class="chart" id="btchart"><div class="empty">回测需要自选池历史行情，点「刷新」后自动绘制</div></div>
+    <div class="chart" id="chart"><div class="empty">自选池为空，无法绘制走势图</div></div>
   </div>
 </div>
 <script src="watchlist.js"></script>
@@ -353,7 +354,7 @@ function computeChg(list){
 }
 
 /* ===== 走势图：自选池平均涨跌幅 vs 上证指数（指数恒为基准，逐日对齐） ===== */
-var chartDays=30, chartCache={}, lastWlRaw=[], lastShRaw=[], lastBtCum={};
+var chartDays=30, chartCache={}, lastWlRaw=[], lastShRaw=[], lastPool=[];
 function klineFor(code, attempt){
   attempt = attempt||0;
   return new Promise(function(res){
@@ -374,8 +375,6 @@ function loadChart(force){
   if(force) chartCache={};
   var chart=document.getElementById('chart');
   if(chart) chart.innerHTML='<div class="empty">加载走势图…</div>';
-  var btChart=document.getElementById('btchart');
-  if(btChart) btChart.innerHTML='<div class="empty">回测需要自选池历史行情，点「刷新」后自动绘制</div>';
   // 指数恒为基准：无论自选有无、是否成功，都先取上证指数
   var shPromise = klineFor('sh000001').then(function(m){
     var sd=Object.keys(m).sort();
@@ -391,44 +390,54 @@ function loadChart(force){
         }, i*120);
       });
     })).then(function(res){
-      var daySum={}, dayCnt={};
+      var daySum={}, dayCnt={};   // 自选日基线累计（实线）
+      var poolSum={}, poolCnt={}; // 全历史等权指数（从各自最早交易日=100，用于回测滚动）
       res.forEach(function(o){
         var m=o.map, base=o.base; if(!base||base<=0) return;
-        Object.keys(m).forEach(function(d){
-          if(o.x.date && d < o.x.date) return;
-          var v=(m[d]/base-1)*100;   // 累计涨跌幅（从自选日基线）
+        var dates=Object.keys(m).sort();
+        var firstBase=null;
+        dates.forEach(function(d){
+          if(firstBase===null) firstBase=m[d];
+          if(o.x.date && d < o.x.date) return;          // 累计实线：仅自选日之后
+          var v=(m[d]/base-1)*100;
           daySum[d]=(daySum[d]||0)+v; dayCnt[d]=(dayCnt[d]||0)+1;
+          var pv=(m[d]/firstBase-1)*100;                 // 回测滚动基准：各自最早日
+          poolSum[d]=(poolSum[d]||0)+pv; poolCnt[d]=(poolCnt[d]||0)+1;
         });
       });
       var keys=Object.keys(daySum).filter(function(d){ return dayCnt[d]>0; }).sort();
       lastWlRaw = keys.map(function(d){ return {date:d, cum:daySum[d]/dayCnt[d]}; });
-      // 回测：等权「自选池指数」= 每个交易日各成分累计涨跌幅的均值（用于滚动 N 日收益）
-      lastBtCum = {};
-      keys.forEach(function(d){ lastBtCum[d]=daySum[d]/dayCnt[d]; });
-    }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; lastBtCum={}; });
-  Promise.all([shPromise, wlPromise]).then(function(){ renderChart(); renderBacktest(); }).catch(function(e){
+      var pkeys=Object.keys(poolSum).filter(function(d){ return poolCnt[d]>0; }).sort();
+      lastPool = pkeys.map(function(d){ return {date:d, idx:poolSum[d]/poolCnt[d]}; });
+    }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; lastPool=[]; });
+  Promise.all([shPromise, wlPromise]).then(function(){ renderChart(); }).catch(function(e){
     console.error('loadChart err', e);
     if(chart) chart.innerHTML='<div class="empty">走势图加载失败：'+((e&&e.message)||String(e))+'（请点刷新重试）</div>';
   });
 }
 function renderChart(){
   var box=document.getElementById('chart'); if(!box) return;
-  var shWin=lastShRaw.slice(-chartDays), wlWin=lastWlRaw.slice(-chartDays);
-  if(!shWin.length && !wlWin.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
+  var shWin=lastShRaw.slice(-chartDays), wlWin=lastWlRaw.slice(-chartDays), poolWin=lastPool.slice(-chartDays);
+  if(!shWin.length && !wlWin.length && !poolWin.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
   // 指数归一（窗口起点=0%）
   var shBase = shWin.length? shWin[0].close : null;
   var sh = (shBase>0) ? shWin.map(function(p){ return {date:p.date, v:(p.close/shBase-1)*100}; }) : [];
   // 自选归一（窗口起点=0%，与指数同基准便于对比）
   var wlBase = wlWin.length? wlWin[0].cum : null;
   var wl = (wlBase!=null) ? wlWin.map(function(p){ return {date:p.date, v:p.cum - wlBase}; }) : [];
+  // 回测：全历史等权指数近 N 日滚动涨跌幅（不依赖自选日，始终可绘制）
+  var bt=[];
+  for(var i=btN;i<poolWin.length;i++){
+    bt.push({date:poolWin[i].date, v:poolWin[i].idx-poolWin[i-btN].idx});
+  }
   // 合并日期轴（交易并集，缺失日跳过）
-  var dateSet={}; sh.forEach(function(p){ dateSet[p.date]=1; }); wl.forEach(function(p){ dateSet[p.date]=1; });
+  var dateSet={}; sh.forEach(function(p){ dateSet[p.date]=1; }); wl.forEach(function(p){ dateSet[p.date]=1; }); bt.forEach(function(p){ dateSet[p.date]=1; });
   var dates=Object.keys(dateSet).sort();
-  var shMap={}, wlMap={};
-  sh.forEach(function(p){ shMap[p.date]=p.v; }); wl.forEach(function(p){ wlMap[p.date]=p.v; });
+  var shMap={}, wlMap={}, btMap={};
+  sh.forEach(function(p){ shMap[p.date]=p.v; }); wl.forEach(function(p){ wlMap[p.date]=p.v; }); bt.forEach(function(p){ btMap[p.date]=p.v; });
   if(!dates.length){ box.innerHTML='<div class="empty">暂无可绘制日期</div>'; return; }
-  var W=680,H=230,padL=46,padR=14,padT=14,padB=22;
-  var vals=dates.map(function(d){ return shMap[d]; }).concat(dates.map(function(d){ return wlMap[d]; })).filter(function(v){ return v!=null; });
+  var W=680,H=240,padL=46,padR=14,padT=14,padB=22;
+  var vals=dates.map(function(d){ return shMap[d]; }).concat(dates.map(function(d){ return wlMap[d]; })).concat(dates.map(function(d){ return btMap[d]; })).filter(function(v){ return v!=null; });
   var max=0.5; vals.forEach(function(v){ if(Math.abs(v)>max) max=Math.abs(v); });
   var innerH=H-padT-padB, y0=padT+innerH/2, yScale=innerH/2/max;
   function px(v){ return y0-v*yScale; }
@@ -443,8 +452,9 @@ function renderChart(){
     return out.trim();
   }
   var isLight=document.documentElement.getAttribute('data-theme')==='light';
-  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选：强调深色
-  var shCol=isLight?'#b8a988':'#9fb0c8';   // 上证：浅色
+  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选累计：青色实线
+  var shCol=isLight?'#b8a988':'#9fb0c8';   // 上证：灰色实线
+  var btCol=isLight?'#e11d48':'#fb7185';   // 回测滚动：红色虚线（涨红）
   var grid='<line x1="'+padL+'" y1="'+y0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y0.toFixed(1)+'" stroke="var(--txt3)" stroke-width="0.8"/>';
   [0.5,1,2,3].forEach(function(g){
     if(max<g) return;
@@ -458,16 +468,21 @@ function renderChart(){
     var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
     grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i].slice(5)+'</text>';
   });
+  var lastBt = bt.length? bt[bt.length-1].v : null;
   // 图例（仅显示存在的序列）
   var legParts=[];
   if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均累计涨跌幅</span>');
   if(sh.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span>');
+  if(bt.length) legParts.push('<span><span style="display:inline-block;width:16px;height:0;border-top:2px dashed '+btCol+';vertical-align:middle;margin-right:4px"></span>近'+btN+'日滚动涨跌幅</span>');
   var legend='<div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-bottom:4px;flex-wrap:wrap">'+legParts.join('')+'</div>';
-  box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid
-    + (wl.length? '<path d="'+path(wlMap)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>':'')
+  var svg=grid
     + (sh.length? '<path d="'+path(shMap)+'" fill="none" stroke="'+shCol+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>':'')
-    +'</svg>';
+    + (wl.length? '<path d="'+path(wlMap)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>':'')
+    + (bt.length? '<path d="'+path(btMap)+'" fill="none" stroke="'+btCol+'" stroke-width="1.6" stroke-dasharray="5,4" stroke-linejoin="round" stroke-linecap="round"/>':'');
+  var caption = (lastBt!=null) ? '<div style="text-align:center;font-size:12px;color:'+(lastBt>=0?'var(--up)':'var(--down)')+';font-weight:700;margin-top:4px">当前近'+btN+'日滚动涨跌幅：'+(lastBt>=0?'+':'')+lastBt.toFixed(2)+'%</div>' : '';
+  box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svg+'</svg>'+caption;
 }
+
 document.querySelectorAll('.rng').forEach(function(b){
   b.addEventListener('click',function(){
     document.querySelectorAll('.rng').forEach(function(x){ x.classList.remove('active'); });
@@ -477,61 +492,12 @@ document.querySelectorAll('.rng').forEach(function(b){
   });
 });
 
-/* ===== 回测：自选池等权指数近 N 日滚动涨跌幅 ===== */
-var btN=10;
-function renderBacktest(){
-  var box=document.getElementById('btchart'); if(!box) return;
-  var keys=Object.keys(lastBtCum).sort();
-  if(keys.length<=btN){ box.innerHTML='<div class="empty">历史数据不足 '+btN+' 个交易日，暂无法回测</div>'; return; }
-  // 近 N 日滚动涨跌幅 = 等权指数[i] - 等权指数[i-N]（即该窗口内的累计涨跌幅）
-  var series=[];
-  for(var i=btN;i<keys.length;i++){
-    series.push({date:keys[i], v:lastBtCum[keys[i]]-lastBtCum[keys[i-btN]]});
-  }
-  series = series.slice(-Math.max(chartDays, series.length));
-  if(!series.length){ box.innerHTML='<div class="empty">暂无可回测数据</div>'; return; }
-  var dates=series.map(function(p){ return p.date; });
-  var vals=series.map(function(p){ return p.v; });
-  var max=0.5; vals.forEach(function(v){ if(Math.abs(v)>max) max=Math.abs(v); });
-  var W=680,H=200,padL=46,padR=14,padT=14,padB=22;
-  var innerH=H-padT-padB, y0=padT+innerH/2, yScale=innerH/2/max;
-  function px(v){ return y0-v*yScale; }
-  function pathPts(){
-    var started=false, out='';
-    series.forEach(function(p,i){
-      var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
-      out += (started?'L':'M')+x.toFixed(1)+' '+px(p.v).toFixed(1)+' ';
-      started=true;
-    });
-    return out.trim();
-  }
-  var isLight=document.documentElement.getAttribute('data-theme')==='light';
-  var col=isLight?'#0d9488':'#2dd4bf';
-  var grid='<line x1="'+padL+'" y1="'+y0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y0.toFixed(1)+'" stroke="var(--txt3)" stroke-width="0.8"/>';
-  [0.5,1,2,3].forEach(function(g){
-    if(max<g) return;
-    var y=px(g);
-    grid+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>';
-    grid+='<text x="'+(padL-4)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">+'+g+'%</text>';
-    grid+='<text x="'+(padL-4)+'" y="'+(px(-g)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">-'+g+'%</text>';
-  });
-  var lblIdx=[0, Math.floor((dates.length-1)/2), dates.length-1];
-  lblIdx.forEach(function(i){
-    var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
-    grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i].slice(5)+'</text>';
-  });
-  var lastV=series[series.length-1].v;
-  var stat='<div style="text-align:center;font-size:12px;color:'+(lastV>=0?'var(--up)':'var(--down)')+';font-weight:700;margin-bottom:4px">当前近'+btN+'日滚动涨跌幅：'+(lastV>=0?'+':'')+lastV.toFixed(2)+'%</div>';
-  box.innerHTML=stat+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid
-    +'<path d="'+pathPts()+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
-    +'</svg>';
-}
 document.querySelectorAll('.rng2').forEach(function(b){
   b.addEventListener('click',function(){
     document.querySelectorAll('.rng2').forEach(function(x){ x.classList.remove('active'); });
     b.classList.add('active');
     btN=parseInt(b.getAttribute('data-n'),10)||10;
-    renderBacktest();
+    renderChart();
   });
 });
 
