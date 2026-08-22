@@ -8,6 +8,18 @@
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
+  // 名称显示宽度限制 ≤15（汉字算 2，字母/数字算 1）
+  function trimToWidth(s, max) {
+    max = max || 15;
+    var w = 0, out = '';
+    s = String(s || '');
+    for (var i = 0; i < s.length; i++) {
+      var cw = /[一-鿿豈-﫿]/.test(s[i]) ? 2 : 1;
+      if (w + cw > max) break;
+      w += cw; out += s[i];
+    }
+    return out;
+  }
   function toast(msg) {
     var t = document.getElementById('wlToast');
     if (!t) {
@@ -25,7 +37,7 @@
     if (!code || !/^\d{6}$/.test(code)) { toast('代码格式不对'); return false; }
     var arr = loadW();
     if (arr.some(function (x) { return norm(x.code) === code; })) { toast('已在自选池'); return false; }
-    arr.unshift({ code: code, name: name || '', date: today(), wlprice: null });
+    arr.unshift({ code: code, name: trimToWidth(name || '', 15), date: today(), wlprice: null });
     saveW(arr);
     toast('已加入自选池：' + code);
     return true;
