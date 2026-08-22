@@ -3131,6 +3131,100 @@ _TOP_SNAPSHOT = {"ts": 0.0, "date": None, "universe": 0, "tradable": 0,
                 "candidates": 0, "filter_trace": {}, "rows": []}
 _TOP_SNAP_LOCK = _threading.Lock()
 
+
+# ---- 近5日入选历史（口袋支点 / TOP / 可转债 三页统计表数据源）----
+# 每次成功生成当日结果时，把入选名单（精简字段）追加到 history_entries.json，
+# 前端三页各自 fetch /api/history?type=... 渲染「近5个交易日入选统计表」。
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history_entries.json")
+_HISTORY_LOCK = _threading.Lock()
+HISTORY_MAX_DAYS = 5   # 只保留最近 5 个交易日
+
+def _history_load():
+    try:
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"    [历史] 读取失败: {e}")
+    return {}
+
+def _history_save(data):
+    try:
+        with open(HISTORY_FILE + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(HISTORY_FILE + ".tmp", HISTORY_FILE)
+    except Exception as e:
+        print(f"    [历史] 写入失败: {e}")
+
+def history_append(kind, date, entries):
+    """追加当日入选记录。kind: pivot/top/cb；entries: 精简字段列表。"""
+    if not entries:
+        return
+    with _HISTORY_LOCK:
+        data = _history_load()
+        bucket = data.setdefault(kind, {})
+        bucket[date] = entries
+        # 只保留最近 5 个交易日（按日期字符串排序取后 5）
+        dates = sorted(bucket.keys())
+        for old in dates[:-HISTORY_MAX_DAYS]:
+            bucket.pop(old, None)
+        _history_save(data)
+
+def history_payload(kind, days=5):
+    """返回近 N 个交易日的入选记录（按日期升序拼接，附 date 字段）。"""
+    with _HISTORY_LOCK:
+        data = _history_load()
+        bucket = data.get(kind, {})
+        dates = sorted(bucket.keys())[-days:]
+        out = []
+        for d in dates:
+            for e in bucket.get(d, []):
+                row = dict(e)
+                row["date"] = d
+                out.append(row)
+        return out
+
+def _pivot_history_entries(res):
+    """口袋支点：A级及以上（S/A）入选记录。"""
+    out = []
+    for p in (res.get("picks") or []):
+        g = p.get("grade", "")
+        if g in ("S", "A"):
+            out.append({
+                "code": p.get("code"), "name": p.get("name"),
+                "grade": g, "price": p.get("close"),  # 入选日价格
+            })
+    return out
+
+def _top_history_entries(rows, threshold=1.5):
+    """TOP 套利：估算溢价 ≥ threshold（默认1.5%）的入选记录。"""
+    out = []
+    for r in rows:
+        sp = r.get("est_premium") if r.get("est_premium") is not None else r.get("premium")
+        if sp is None or sp < threshold:
+            continue
+        out.append({
+            "code": r.get("code"), "name": r.get("name"),
+            "price": r.get("price"), "nav": r.get("nav"),
+            "est_premium": round(sp, 2),
+        })
+    return out
+
+def _cb_history_entries(res):
+    """可转债：严格折价（is_discount）入选记录。"""
+    out = []
+    for p in (res.get("picks") or []):
+        if not p.get("is_discount"):
+            continue
+        out.append({
+            "code": p.get("code"), "name": p.get("name"),
+            "price": p.get("price"),              # 转债入选日价
+            "stock_code": p.get("stock_code"), "stock_name": p.get("stock_name"),
+            "stock_price": p.get("stock_price"),  # 正股入选日价
+            "arb": p.get("arb"),
+        })
+    return out
+
 def _persist_top_snapshot():
     """把 TOP 全量快照落盘（去抖 30s），使冷启动也能秒回历史候选。"""
     now = time.time()
@@ -3351,6 +3445,11 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         _TOP_SNAPSHOT.update(ts=time.time(), date=target_date, universe=len(lof),
                              tradable=tradable, candidates=len(cands),
                              filter_trace=filter_trace, rows=base_rows)
+    # 近5日入选历史：估算溢价≥1.5% 的溢价套利入选名单（供 TOP 页统计表）
+    try:
+        history_append("top", target_date, _top_history_entries(base_rows, threshold))
+    except Exception as _e:
+        print(f"    [历史] TOP 记录失败: {_e}")
     _persist_top_snapshot()
     out = _top_finalize(base_rows, threshold, dgate, top_n)
     return {"date": target_date, "threshold": threshold, "dgate": dgate,
@@ -3459,7 +3558,7 @@ _CB_LOCK = threading.Lock()
 _CB = dict(result=None, scanning=False, error="", progress=dict(done=0, total=0, phase=""))
 
 _UT = "fa5fd1943c7b386f172d6893dbfba10b"
-_CB_FIELDS = "f12,f13,f14,f2,f5,f232,f234,f236,f237,f238,f243"  # f5=成交量(手)，已停牌债成交量为0
+_CB_FIELDS = "f12,f13,f14,f2,f5,f232,f234,f236,f237,f238,f240,f243"  # f5=成交量(手)，已停牌债成交量为0；f240=正股实时价
 
 
 def _cb_http_get(url, timeout=20):
@@ -3506,6 +3605,7 @@ def cb_compute(items, progress=None):
             prem = float(it.get("f237"))            # 转股溢价率(%)：<0 即折价(套利空间)
             stock_code = str(it.get("f232") or "")
             stock_name = it.get("f234") or ""
+            stock_price = it.get("f240")           # 正股实时价（东财字段）
             start = str(it.get("f243") or "")
             dlow = it.get("f238")
             volume = float(it.get("f5") or 0)       # 成交量(手)
@@ -3530,6 +3630,7 @@ def cb_compute(items, progress=None):
             price=round(price, 3), convert_value=round(cv, 3),
             premium=round(prem, 3), arb=round(arb, 3),
             stock_code=stock_code, stock_name=stock_name,
+            stock_price=(round(float(stock_price), 3) if stock_price not in (None, "", "-") else None),
             double_low=round(price + prem, 2),
             convert_start=start, in_conv=in_conv, is_st=is_st,
         ))
@@ -3661,6 +3762,11 @@ def _cb_save_disk(res):
             json.dump(res, f, ensure_ascii=False)
     except Exception as e:
         print("    [可转债] 磁盘缓存写入失败: %s" % e)
+    # 近5日入选历史：严格折价入选名单（供可转债页统计表）
+    try:
+        history_append("cb", res.get("trade_date", ""), _cb_history_entries(res))
+    except Exception as e:
+        print("    [历史] 可转债记录失败: %s" % e)
 
 
 def cb_run_scan_bg():
@@ -3967,6 +4073,23 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/sector_live":
             self._send(200, json.dumps(self._sector_live_payload(), ensure_ascii=False), "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/history":
+            qs = parse_qs(parsed.query)
+            k = qs.get("type", [""])[0]
+            try:
+                days = max(1, min(10, int(qs.get("days", ["5"])[0])))
+            except ValueError:
+                days = 5
+            if k not in ("pivot", "top", "cb"):
+                self._send(400, json.dumps({"error": "type 应为 pivot/top/cb"}))
+                return
+            try:
+                rows = history_payload(k, days)
+                self._send(200, json.dumps({"type": k, "days": days, "rows": rows}, ensure_ascii=False),
+                           "application/json; charset=utf-8")
+            except Exception as e:
+                self._send(500, json.dumps({"error": str(e)}, ensure_ascii=False))
             return
         if parsed.path == "/sector_data.json":
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sector_data.json")
@@ -4855,6 +4978,11 @@ def _pivot_save_disk(res):
             json.dump(res, f, ensure_ascii=False)
     except Exception as e:
         print(f"    [口袋支点] 磁盘缓存写入失败: {e}")
+    # 近5日入选历史：A级及以上入选名单（供口袋支点页统计表）
+    try:
+        history_append("pivot", res.get("trade_date", ""), _pivot_history_entries(res))
+    except Exception as e:
+        print(f"    [历史] 口袋支点记录失败: {e}")
 
 
 def pivot_run_scan_bg():
