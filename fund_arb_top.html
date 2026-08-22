@@ -241,12 +241,12 @@ function renderTopHist(){
   const numKeys=['price','nav','_cur','_nav','_pchg','_nchg'];
   rows.sort(function(a,b){ var av=a[topHistKey],bv=b[topHistKey]; if(av==null&&bv==null)return 0; if(av==null)return 1; if(bv==null)return -1; if(numKeys.indexOf(topHistKey)>=0) return topHistDesc?(bv-av):(av-bv); return topHistDesc?String(bv).localeCompare(String(av),'zh'):String(av).localeCompare(String(bv),'zh'); });
   if(!rows.length){ box.innerHTML='<div class="hist-empty">暂无近 5 日溢价套利入选记录</div>'; return; }
-  const head=topHistCell('date','入选日期')+topHistCell('code','代码')+topHistCell('name','名称')+topHistCell('price','入选日价格')+topHistCell('nav','入选日净值')+topHistCell('_cur','最新价')+topHistCell('_nav','最新净值')+topHistCell('_pchg','价格累计涨跌')+topHistCell('_nchg','净值累计涨跌');
+  const head=topHistCell('code','代码')+topHistCell('name','名称')+topHistCell('date','入选日期')+topHistCell('price','入选日价格')+topHistCell('nav','入选日净值')+topHistCell('_cur','最新价')+topHistCell('_nav','最新净值')+topHistCell('_pchg','价格累计涨跌')+topHistCell('_nchg','净值累计涨跌');
   box.innerHTML='<table class="histtbl"><thead><tr>'+head+'</tr></thead><tbody>'+rows.map(function(r){
     const pcls=(r._pchg==null)?'':(r._pchg>=0?'pos':'neg');
     const ncls=(r._nchg==null)?'':(r._nchg>=0?'pos':'neg');
     const plain=String(r.code||'').replace(/^(sh|sz|bj)/i,'');
-    return '<tr><td>'+esc(r.date)+'</td><td><a class="codelink" href="'+(location.protocol==='file:'?'fund_arb.html':'/arb')+'?code='+plain+'" target="_blank">'+esc(r.code)+'</a></td><td class="l">'+esc(r.name)+'</td><td>'+fmtNum(r.price)+'</td><td>'+fmtNum(r.nav)+'</td><td>'+fmtNum(r._cur)+'</td><td>'+fmtNum(r._nav)+'</td><td class="'+pcls+'">'+fmtPct(r._pchg)+'</td><td class="'+ncls+'">'+fmtPct(r._nchg)+'</td></tr>';
+    return '<tr><td><a class="codelink" href="'+(location.protocol==='file:'?'fund_arb.html':'/arb')+'?code='+plain+'" target="_blank">'+esc(r.code)+'</a></td><td class="l">'+esc(r.name)+'</td><td>'+esc(r.date)+'</td><td>'+fmtNum(r.price)+'</td><td>'+fmtNum(r.nav)+'</td><td>'+fmtNum(r._cur)+'</td><td>'+fmtNum(r._nav)+'</td><td class="'+pcls+'">'+fmtPct(r._pchg)+'</td><td class="'+ncls+'">'+fmtPct(r._nchg)+'</td></tr>';
   }).join('')+'</tbody></table>';
 }
 function applyTheme(t){
