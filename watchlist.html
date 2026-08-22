@@ -58,9 +58,8 @@ h1{font-size:19px;font-weight:800}
 /* 表格：TOP套利榜风格 + 蓝底白字表头 + 第1列锁定 + 横向滚动 */
 .watch-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px}
 .watchtbl{font-size:12px;table-layout:auto;width:max-content;min-width:100%;border-collapse:collapse;white-space:nowrap}
-.watchtbl th{background:#1f6feb;color:#fff;font-weight:700;padding:7px 10px;position:sticky;top:0;z-index:3;text-align:right;cursor:pointer;user-select:none}
+.watchtbl th{background:#1f6feb;color:#fff;font-weight:700;padding:7px 10px;position:sticky;top:0;z-index:3;text-align:center;cursor:pointer;user-select:none}
 [data-theme="light"] .watchtbl th{background:#2563eb}
-.watchtbl th:first-child,.watchtbl td:first-child{text-align:left}
 .watchtbl th.l,.watchtbl td.l{text-align:left}
 .watchtbl td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
 .watchtbl tbody tr:hover td{background:var(--card2)}
@@ -79,6 +78,16 @@ h1{font-size:19px;font-weight:800}
 .empty{color:var(--txt3);font-size:13px;padding:26px;text-align:center}
 .hint{font-size:11.5px;color:var(--txt3);margin-top:10px;line-height:1.8}
 .hint b{color:var(--gold)}
+/* 走势图 */
+.chart-box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:14px}
+.chart-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
+.chart-head .range{display:flex;gap:5px;flex-wrap:wrap}
+.chart-head .rng{background:var(--card2);border:1px solid var(--line);color:var(--txt2);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer}
+.chart-head .rng.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
+[data-theme="light"] .chart-head .rng.active{background:#2563eb;border-color:#2563eb}
+.chart{width:100%}
+.chart .empty{color:var(--txt3);font-size:12px;padding:18px;text-align:center}
+
 </style>
 </head>
 <body>
@@ -101,10 +110,11 @@ h1{font-size:19px;font-weight:800}
     <input id="addCode" placeholder="代码，如 162411" maxlength="6">
     <input id="addName" placeholder="名称（留空自动补）">
     <button id="addBtn" onclick="addManual()">添加</button>
-    <button class="ghost" onclick="clearAll()">清空</button>
-    <button class="ghost" onclick="exportWl()">导出</button>
-    <button class="ghost" onclick="document.getElementById('impFile').click()">导入</button>
-    <input type="file" id="impFile" accept=".json" style="display:none">
+    <button onclick="clearAll()">清空</button>
+    <button onclick="exportWl()">导出</button>
+    <button onclick="document.getElementById('impFile').click()">导入</button>
+    <button onclick="refresh(true)">刷新</button>
+    <input type="file" id="impFile" accept=".json,.csv,text/csv,application/json" style="display:none">
   </div>
 
   <div class="stats" id="stats"></div>
@@ -119,6 +129,20 @@ h1{font-size:19px;font-weight:800}
     </table>
   </div>
   <div class="hint">提示：代码/名称点击表头可排序（涨跌幅默认降序）。自选池用于跟踪你关注的基金从加入日起的累计表现，辅助判断选股质量。</div>
+
+  <div class="chart-box">
+    <div class="chart-head">
+      <b>自选池平均涨跌幅 vs 上证指数</b>
+      <div class="range">
+        <button class="rng" data-d="5">5日</button>
+        <button class="rng" data-d="10">10日</button>
+        <button class="rng active" data-d="30">30日</button>
+        <button class="rng" data-d="180">半年</button>
+        <button class="rng" data-d="250">一年</button>
+      </div>
+    </div>
+    <div class="chart" id="chart"><div class="empty">自选池为空，无法绘制走势图</div></div>
+  </div>
 </div>
 <script src="watchlist.js"></script>
 <script>
@@ -209,7 +233,8 @@ function render(){
     +'<div class="sitem"><div class="l">最差</div><div class="v neg">'+esc(loName)+' '+fmtPct(lo)+'</div></div>';
 }
 
-function refresh(){
+function refresh(force){
+  if(force){ pxCache={}; }
   list=loadW();
   var codes=list.map(function(x){ return x.code; });
   Promise.all(codes.map(fetchPrice)).then(function(){
@@ -221,8 +246,102 @@ function refresh(){
     });
     saveW(list);
     render();
+    loadChart(!!force);
   });
 }
+
+/* ===== 走势图：自选池平均涨跌幅 vs 上证指数 ===== */
+var chartDays=30, chartCache={}, lastWl=[], lastSh=[];
+function klineFor(code){
+  return new Promise(function(res){
+    if(chartCache[code]){ res(chartCache[code]); return; }
+    fetch(BASE+'/api/kline?code='+encodeURIComponent(code)+'&days=260&t='+Date.now())
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var m={}; (d.rows||[]).forEach(function(x){ m[x.date]=x.close; });
+        chartCache[code]=m; res(m);
+      })
+      .catch(function(){ chartCache[code]={}; res(chartCache[code]); });
+  });
+}
+function loadChart(force){
+  if(force) chartCache={};
+  var chart=document.getElementById('chart');
+  if(!list.length){ if(chart) chart.innerHTML='<div class="empty">自选池为空，无法绘制走势图</div>'; return; }
+  if(chart) chart.innerHTML='<div class="empty">加载走势图…</div>';
+  Promise.all(list.map(function(x){ return klineFor(x.code); })).then(function(maps){
+    return klineFor('sh000001').then(function(shMap){
+      // 自选每日平均涨跌幅（仅统计自选日之后）
+      var dayAvg={}, dayCnt={};
+      list.forEach(function(x,i){
+        var m=maps[i], base=x.wlprice;
+        if(!base||base<=0) return;
+        Object.keys(m).forEach(function(d){
+          if(d < x.date) return;
+          dayAvg[d]=(dayAvg[d]||0)+((m[d]/base-1)*100); dayCnt[d]=(dayCnt[d]||0)+1;
+        });
+      });
+      var wl=Object.keys(dayAvg).sort().map(function(d){ return {date:d, v:dayAvg[d]/dayCnt[d]}; });
+      // 上证：区间起点为 0
+      var shDates=Object.keys(shMap).sort();
+      var sh=[];
+      if(shDates.length){
+        var base=shMap[shDates[0]];
+        sh=shDates.map(function(d){ return {date:d, v:(shMap[d]/base-1)*100}; });
+      }
+      lastWl=wl; lastSh=sh;
+      renderChart();
+    });
+  });
+}
+function renderChart(){
+  var box=document.getElementById('chart'); if(!box) return;
+  var wl=lastWl.slice(-chartDays), sh=lastSh.slice(-chartDays);
+  if(!wl.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
+  var dates=wl.map(function(x){ return x.date; });
+  var W=680,H=230,padL=46,padR=14,padT=14,padB=22;
+  var vals=wl.concat(sh).map(function(x){ return x.v; });
+  var max=0.5; vals.forEach(function(v){ if(Math.abs(v)>max) max=Math.abs(v); });
+  var innerH=H-padT-padB, y0=padT+innerH/2, yScale=innerH/2/max;
+  function px(v){ return y0-v*yScale; }
+  function path(series){
+    return series.map(function(s,i){
+      var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
+      return (i?'L':'M')+x.toFixed(1)+' '+px(s.v).toFixed(1);
+    }).join(' ');
+  }
+  var isLight=document.documentElement.getAttribute('data-theme')==='light';
+  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选：强调深色
+  var shCol=isLight?'#b8a988':'#9fb0c8';   // 上证：浅色
+  var grid='<line x1="'+padL+'" y1="'+y0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y0.toFixed(1)+'" stroke="var(--txt3)" stroke-width="0.8"/>';
+  [0.5,1,2,3].forEach(function(g){
+    if(max<g) return;
+    var y=px(g);
+    grid+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>';
+    grid+='<text x="'+(padL-4)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">+'+g+'%</text>';
+    grid+='<text x="'+(padL-4)+'" y="'+(px(-g)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">-'+g+'%</text>';
+  });
+  var lblIdx=[0, Math.floor((dates.length-1)/2), dates.length-1];
+  lblIdx.forEach(function(i){
+    var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
+    grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i].slice(5)+'</text>';
+  });
+  var legend='<div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-bottom:4px">'
+    +'<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均涨跌幅</span>'
+    +'<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span></div>';
+  box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid
+    +'<path d="'+path(wl)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+    +'<path d="'+path(sh)+'" fill="none" stroke="'+shCol+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>'
+    +'</svg>';
+}
+document.querySelectorAll('.rng').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.rng').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    chartDays=parseInt(b.getAttribute('data-d'),10)||30;
+    renderChart();
+  });
+});
 
 function addManual(){
   var code=(document.getElementById('addCode').value||'').trim();
@@ -259,14 +378,36 @@ document.getElementById('impFile').addEventListener('change',function(ev){
   var rd=new FileReader();
   rd.onload=function(){
     try{
-      var arr=JSON.parse(rd.result);
-      if(!Array.isArray(arr)) throw 0;
+      var text=rd.result;
+      var arr=[];
+      if(text.trim().charAt(0)==='['){
+        arr=JSON.parse(text);
+        if(!Array.isArray(arr)) throw 0;
+      }else{
+        // CSV：首列代码，第二列名称（可带 BOM/表头，兼容导出的 CSV 首行"来源：..."）
+        text.split(/\r?\n/).forEach(function(line){
+          line=(line||'').replace(/^\uFEFF/,'').trim();
+          if(!line) return;
+          if(line.indexOf('来源：')===0) return;
+          var m=line.match(/"?([0-9]{6})"?/);
+          if(!m) return;
+          var cols=line.split(',').map(function(c){ return c.replace(/^"|"$/g,'').trim(); });
+          if(!cols[0]) return;
+          arr.push({code:cols[0], name:cols[1]||'', date:cols[3]||todayStr(), price:cols[4]!=null&&cols[4]!==''&&!isNaN(cols[4])?parseFloat(cols[4]):null});
+        });
+      }
       var cur=loadW();
-      arr.forEach(function(x){ if(x&&x.code&&/^\d{6}$/.test(String(x.code))&&!cur.some(function(c){return c.code===String(x.code);})) cur.push({code:String(x.code),name:x.name||'',date:x.date||todayStr(),price:x.price!=null?x.price:null}); });
-      saveW(cur); toast('导入 '+arr.length+' 条'); refresh();
+      var added=0;
+      arr.forEach(function(x){
+        if(x&&x.code&&/^\d{6}$/.test(String(x.code))&&!cur.some(function(c){return c.code===String(x.code);})){
+          cur.push({code:String(x.code), name:x.name||'', date:x.date||todayStr(), price:(x.price!=null&&!isNaN(x.price))?Number(x.price):null});
+          added++;
+        }
+      });
+      saveW(cur); toast('导入 '+added+' 条'); refresh(true);
     }catch(e){ toast('导入文件格式不对'); }
   };
-  rd.readAsText(f);
+  rd.readAsText(f, 'utf-8');
   ev.target.value='';
 });
 
