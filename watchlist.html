@@ -60,7 +60,10 @@ h1{font-size:19px;font-weight:800}
 .watchtbl{font-size:12px;table-layout:auto;width:max-content;min-width:100%;border-collapse:collapse;white-space:nowrap}
 .watchtbl th{background:#1f6feb;color:#fff;font-weight:700;padding:7px 10px;position:sticky;top:0;z-index:3;text-align:center;cursor:pointer;user-select:none}
 [data-theme="light"] .watchtbl th{background:#2563eb}
-.watchtbl th.l,.watchtbl td.l{text-align:left}
+.watchtbl td.l{text-align:left}
+/* 当前排序列：仅高亮，不出现任何三角箭头 */
+.watchtbl th.sorted{background:#1756c9}
+[data-theme="light"] .watchtbl th.sorted{background:#1d4ed8}
 .watchtbl td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
 .watchtbl tbody tr:hover td{background:var(--card2)}
 .watchtbl .pos{color:var(--up);font-weight:700}
@@ -123,12 +126,12 @@ h1{font-size:19px;font-weight:800}
   <div class="watch-scroll">
     <table class="watchtbl" id="tbl">
       <thead><tr>
-        <th>代码</th><th class="l">名称</th><th>现价</th><th>自选日期</th><th>自选价格</th><th>加入天数</th><th>自选至今涨跌幅</th><th>操作</th>
+        <th data-k="code">代码</th><th data-k="name" class="l">名称</th><th data-k="price">现价</th><th data-k="date">自选日期</th><th data-k="wlprice">自选价格</th><th data-k="days">加入天数</th><th data-k="chg">累计涨跌幅</th><th>操作</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
   </div>
-  <div class="hint">提示：代码/名称点击表头可排序（涨跌幅默认降序）。自选池用于跟踪你关注的基金从加入日起的累计表现，辅助判断选股质量。</div>
+  <div class="hint">提示：点击任意表头即可按该列排序（再次点击切换升/降序，无箭头图标，当前排序列高亮）；累计涨跌幅默认降序。自选池跟踪你关注的品种从加入日起的累计表现；可转债按「转股价值=100÷转股价×正股」自加入日至今的累计涨跌幅统计。</div>
 
   <div class="chart-box">
     <div class="chart-head">
@@ -187,9 +190,14 @@ function fetchPrice(code){
 }
 
 var sortKey='chg', sortDesc=true;
-function setSort(k){ if(sortKey===k) sortDesc=!sortDesc; else { sortKey=k; sortDesc=true; } render(); }
-function headCell(k,l){ return '<th onclick="setSort(\''+k+'\')" title="点击排序">'+l+'</th>'; }
-function headCellL(k,l){ return '<th class="l" onclick="setSort(\''+k+'\')" title="点击排序">'+l+'</th>'; }
+function setSort(k){ if(sortKey===k) sortDesc=!sortDesc; else { sortKey=k; sortDesc=true; } markSorted(); render(); }
+function markSorted(){
+  document.querySelectorAll('#tbl thead th[data-k]').forEach(function(th){
+    th.classList.toggle('sorted', th.getAttribute('data-k')===sortKey);
+  });
+}
+function isCB(code){ return /^1[12]\d{4}$/.test(String(code||'')); }
+function priceChg(x){ return (x.price!=null&&x.wlprice!=null&&x.wlprice>0)?(x.price-x.wlprice)/x.wlprice*100:null; }
 
 var list=[];
 function render(){
@@ -205,7 +213,7 @@ function render(){
   tb.innerHTML=list.map(function(x){
     var cls=(x.chg==null)?'':(x.chg>=0?'pos':'neg');
     var link=(location.protocol==='file:')?'fund_arb.html':'/arb';
-    return '<tr><td><a class="codelink" href="'+link+'?code='+x.code+'" target="_blank" data-code="'+x.code+'">'+x.code+'</a></td>'
+    return '<tr><td class="l"><a class="codelink" href="'+link+'?code='+x.code+'" target="_blank" data-code="'+x.code+'">'+x.code+'</a></td>'
       +'<td class="l">'+esc(x.name||'—')+'</td>'
       +'<td>'+fmt(x.price)+'</td>'
       +'<td>'+esc(x.date||'—')+'</td>'
@@ -236,21 +244,52 @@ function render(){
 function refresh(force){
   if(force){ pxCache={}; }
   list=loadW();
-  var codes=list.map(function(x){ return x.code; });
-  Promise.all(codes.map(fetchPrice)).then(function(){
+  if(!list.length){ render(); lastWl=[]; lastSh=[]; renderChart(); return; }
+  Promise.all(list.map(fetchPrice)).then(function(){
     list.forEach(function(x,i){
       var r=pxCache[x.code];
       if(r){ if(!x.name) x.name=r.name; x.price=r.price; }
+      if(x.wlprice==null && x.price!=null) x.wlprice=x.price; // 首次加入时以当前价≈自选价
       x.days=daysFrom(x.date);
-      x.chg=(x.price!=null&&x.wlprice!=null&&x.wlprice>0)?(x.price-x.wlprice)/x.wlprice*100:null;
     });
-    saveW(list);
-    render();
-    loadChart(!!force);
+    return computeChg(list);
+  }).then(function(){
+    saveW(list); render(); loadChart(!!force);
   });
 }
+var cbMapCache=null;
+function loadCbMap(){
+  if(cbMapCache) return Promise.resolve(cbMapCache);
+  return fetch(BASE+'/api/cb?force=0').then(function(r){ return r.json(); }).then(function(d){
+    var m={}; (d.picks||[]).forEach(function(p){ if(p&&p.code) m[p.code]=p; });
+    cbMapCache=m; return m;
+  }).catch(function(){ cbMapCache={}; return cbMapCache; });
+}
+// 累计涨跌幅：普通品种=现价/自选价；可转债=正股(转股价值与之同比例)自加入日至今的累计涨跌
+function computeChg(list){
+  var bonds=list.filter(function(x){ return isCB(x.code); });
+  if(!bonds.length){ list.forEach(function(x){ x.chg=priceChg(x); }); return Promise.resolve(); }
+  return loadCbMap().then(function(map){
+    return Promise.all(bonds.map(function(x){
+      var info=map[x.code];
+      if(!info || !info.stock_code){ x._bond=false; x.chg=priceChg(x); return; }
+      x._bond=true; x._stock=info.stock_code;
+      if(info.price!=null){ x.price=info.price; if(x.wlprice==null) x.wlprice=info.price; }
+      if(info.name) x.name=info.name;
+      return klineFor(info.stock_code).then(function(sm){
+        x._conv = sm; // 正股价格序列（转股价值=常数×正股价，故同比例）
+        var dates=Object.keys(sm).filter(function(d){ return d>=x.date; }).sort();
+        var watchP = dates.length? sm[dates[0]] : null;
+        var allD=Object.keys(sm).sort();
+        var nowP = allD.length? sm[allD[allD.length-1]] : null;
+        x.chg = (watchP!=null && nowP!=null && watchP>0)? (nowP-watchP)/watchP*100 : priceChg(x);
+        x._convWatch = watchP;
+      });
+    }));
+  }).then(function(){ list.forEach(function(x){ if(x.chg==null) x.chg=priceChg(x); }); });
+}
 
-/* ===== 走势图：自选池平均涨跌幅 vs 上证指数 ===== */
+/* ===== 走势图：自选池平均涨跌幅 vs 上证指数（逐日对齐） ===== */
 var chartDays=30, chartCache={}, lastWl=[], lastSh=[];
 function klineFor(code){
   return new Promise(function(res){
@@ -267,30 +306,34 @@ function klineFor(code){
 function loadChart(force){
   if(force) chartCache={};
   var chart=document.getElementById('chart');
-  if(!list.length){ if(chart) chart.innerHTML='<div class="empty">自选池为空，无法绘制走势图</div>'; return; }
+  if(!list.length){ if(chart) chart.innerHTML='<div class="empty">自选池为空，无法绘制走势图</div>'; lastWl=[]; lastSh=[]; renderChart(); return; }
   if(chart) chart.innerHTML='<div class="empty">加载走势图…</div>';
-  Promise.all(list.map(function(x){ return klineFor(x.code); })).then(function(maps){
-    return klineFor('sh000001').then(function(shMap){
-      // 自选每日平均涨跌幅（仅统计自选日之后）
-      var dayAvg={}, dayCnt={};
-      list.forEach(function(x,i){
-        var m=maps[i], base=x.wlprice;
-        if(!base||base<=0) return;
-        Object.keys(m).forEach(function(d){
-          if(d < x.date) return;
-          dayAvg[d]=(dayAvg[d]||0)+((m[d]/base-1)*100); dayCnt[d]=(dayCnt[d]||0)+1;
-        });
+  // 每项：普通品种取价格序列；可转债取转股价值序列
+  var tasks=list.map(function(x){
+    if(x._bond && x._conv){ return Promise.resolve({x:x, map:x._conv, base:x._convWatch}); }
+    return klineFor(x.code).then(function(m){ return {x:x, map:m, base:x.wlprice}; });
+  });
+  Promise.all(tasks).then(function(res){
+    var daySum={}, dayCnt={};
+    res.forEach(function(o){
+      var m=o.map, base=o.base; if(!base||base<=0) return;
+      Object.keys(m).forEach(function(d){
+        if(o.x.date && d < o.x.date) return;
+        var v=(m[d]/base-1)*100;
+        daySum[d]=(daySum[d]||0)+v; dayCnt[d]=(dayCnt[d]||0)+1;
       });
-      var wl=Object.keys(dayAvg).sort().map(function(d){ return {date:d, v:dayAvg[d]/dayCnt[d]}; });
-      // 上证：区间起点为 0
-      var shDates=Object.keys(shMap).sort();
-      var sh=[];
-      if(shDates.length){
-        var base=shMap[shDates[0]];
-        sh=shDates.map(function(d){ return {date:d, v:(shMap[d]/base-1)*100}; });
-      }
-      lastWl=wl; lastSh=sh;
-      renderChart();
+    });
+    var wl=Object.keys(daySum).filter(function(d){ return dayCnt[d]>0; }).sort().map(function(d){ return {date:d, v:daySum[d]/dayCnt[d]}; });
+    return klineFor('sh000001').then(function(shMap){
+      var sd=Object.keys(shMap).sort();
+      var baseSh=sd.length? shMap[sd[0]] : null;
+      // 上证指数与自选序列对齐到同一组日期（缺失日跳过），起点归零
+      var sh=wl.map(function(p){
+        var c=shMap[p.date];
+        if(c==null||baseSh==null||baseSh<=0) return {date:p.date, v:null};
+        return {date:p.date, v:(c/baseSh-1)*100};
+      });
+      lastWl=wl; lastSh=sh; renderChart();
     });
   });
 }
@@ -300,15 +343,19 @@ function renderChart(){
   if(!wl.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
   var dates=wl.map(function(x){ return x.date; });
   var W=680,H=230,padL=46,padR=14,padT=14,padB=22;
-  var vals=wl.concat(sh).map(function(x){ return x.v; });
+  var vals=wl.concat(sh).map(function(x){ return x.v; }).filter(function(v){ return v!=null; });
   var max=0.5; vals.forEach(function(v){ if(Math.abs(v)>max) max=Math.abs(v); });
   var innerH=H-padT-padB, y0=padT+innerH/2, yScale=innerH/2/max;
   function px(v){ return y0-v*yScale; }
   function path(series){
-    return series.map(function(s,i){
+    var started=false, out='';
+    series.forEach(function(s,i){
+      if(s.v==null) return;
       var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
-      return (i?'L':'M')+x.toFixed(1)+' '+px(s.v).toFixed(1);
-    }).join(' ');
+      out += (started?'L':'M')+x.toFixed(1)+' '+px(s.v).toFixed(1)+' ';
+      started=true;
+    });
+    return out.trim();
   }
   var isLight=document.documentElement.getAttribute('data-theme')==='light';
   var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选：强调深色
@@ -351,7 +398,7 @@ function addManual(){
     if(!r || !r.name){ if(!name){ toast('未能自动识别，请补名称'); return; } }
     var arr=loadW();
     if(arr.some(function(x){ return x.code===code; })){ toast('已在自选池'); return; }
-    arr.unshift({code:code, name:(name||(r&&r.name)||''), date:todayStr(), price:(r&&r.price)||null});
+    arr.unshift({code:code, name:(name||(r&&r.name)||''), date:todayStr(), wlprice:(r&&r.price)||null});
     saveW(arr);
     document.getElementById('addCode').value=''; document.getElementById('addName').value='';
     toast('已添加：'+code); refresh();
@@ -393,14 +440,14 @@ document.getElementById('impFile').addEventListener('change',function(ev){
           if(!m) return;
           var cols=line.split(',').map(function(c){ return c.replace(/^"|"$/g,'').trim(); });
           if(!cols[0]) return;
-          arr.push({code:cols[0], name:cols[1]||'', date:cols[3]||todayStr(), price:cols[4]!=null&&cols[4]!==''&&!isNaN(cols[4])?parseFloat(cols[4]):null});
+          arr.push({code:cols[0], name:cols[1]||'', date:cols[3]||todayStr(), wlprice:cols[4]!=null&&cols[4]!==''&&!isNaN(cols[4])?parseFloat(cols[4]):null});
         });
       }
       var cur=loadW();
       var added=0;
       arr.forEach(function(x){
         if(x&&x.code&&/^\d{6}$/.test(String(x.code))&&!cur.some(function(c){return c.code===String(x.code);})){
-          cur.push({code:String(x.code), name:x.name||'', date:x.date||todayStr(), price:(x.price!=null&&!isNaN(x.price))?Number(x.price):null});
+          cur.push({code:String(x.code), name:x.name||'', date:x.date||todayStr(), wlprice:(x.price!=null&&!isNaN(x.price))?Number(x.price):null});
           added++;
         }
       });
@@ -411,7 +458,12 @@ document.getElementById('impFile').addEventListener('change',function(ev){
   ev.target.value='';
 });
 
+// 表头点击排序（无三角，仅高亮当前排序列）
+document.querySelectorAll('#tbl thead th[data-k]').forEach(function(th){
+  th.addEventListener('click', function(){ setSort(th.getAttribute('data-k')); });
+});
 // 立即加载一次价格并定时刷新
+markSorted();
 refresh();
 setInterval(refresh, 120000);
 </script>
