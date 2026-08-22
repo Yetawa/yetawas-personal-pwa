@@ -383,60 +383,59 @@
     </section>
 
     <section class="guide-card collapsed" id="guideCard">
-      <h3 class="guide-title" id="guideToggle"><span class="bolt">⚡</span> 信号解读：吃药？3 分钟看这张「鱼盆趋势模型 v1.3」<span class="toggle">▾</span></h3>
+      <h3 class="guide-title" id="guideToggle"><span class="bolt">⚡</span> 信号解读：鱼盆趋势模型怎么看<span class="toggle">▾</span></h3>
       <div class="guide-grid">
         <div class="guide-step">
-          <p><span class="step-num step-1">①</span><strong>一句话看懂</strong>：把每只 ETF 想像成一条鱼，把近 60 个交易日一直「贴」着走的盆沿——3 成在交易的中间成本（<b>20 日均线</b>）。鱼贴着圈里游动，鱼跌出了圈就报跌，跑出圈就买涨，跑出圈就破圈。</p>
+          <p><span class="step-num step-1">①</span><strong>这是什么</strong>：一套跟踪 ETF 中期趋势的量化模型。把价格比作鱼、把一段时间的平均成本比作盆沿，通过"鱼离盆沿多远、往哪边游、有没有量"判断每只 ETF 目前处于什么阶段。</p>
         </div>
         <div class="guide-step">
-          <p><span class="step-num step-2">②</span><strong>数据的"靠谱"</strong>：每天收盘后自动拉取 50 只 ETF 最新约 <b>600</b> 个交易日（≈ 2.5 年）的行情（前复权），绝对不掺人。鱼儿离开多远、要跳多高、多久才让趋势确认——不在圈里硬撑 2 天，不打破圈谈 2 天，3 步确认后才认。</p>
+          <p><span class="step-num step-2">②</span><strong>有什么用</strong>：帮你快速筛出"趋势向上、离成本不远、回踩有支撑"的品种，避开"破位往下、量能萎缩"的品种。适合做中期波段参考，不追高、不抄底，只在趋势确认后行动。</p>
         </div>
         <div class="guide-step">
-          <p><span class="step-num step-3">③</span><strong>鱼盆的"五步走"</strong>：</p>
+          <p><span class="step-num step-3">③</span><strong>怎么算的</strong>：</p>
           <ul>
-            <li><b>1 步算「盆沿」</b>：20 日均线，3 个月的平均价格。</li>
-            <li><b>2 步算「盆沿距离」</b>：5 档的鱼盆状态（跳出盆外 / 盆沿上方 / 盆沿试探 / 盆内游动 / 盆底深水区）。</li>
-            <li><b>3 步算「四因子」</b>：趋势强度 40%、突破动能 30%、量能确认 20%、波动稳定性 10%。</li>
-            <li><b>4 步判「方向」</b>：综合分 &gt; +0.6 且站稳 3 天 → <b>确立多头</b>；&lt; -0.6 且跌破 3 天 → <b>确立空头</b>；其余 <b>震荡中</b>。</li>
-            <li><b>5 步给「变盘预警」</b>：综合七套理论给「<b>变盘预警</b>」。</li>
+            <li><b>盆沿</b>：20 日均线 × 0.6 + 60 日均线 × 0.4，代表中期平均成本；</li>
+            <li><b>偏离率</b>：现价比盆沿高/低百分之几，离盆沿越远越"过头"；</li>
+            <li><b>四因子</b>：趋势强度 40% + 突破动能 30% + 量能确认 20% + 波动稳定 10%，合成一个综合分；</li>
+            <li><b>定方向</b>：综合分 &gt; 0.6 且站稳 20 日线 → 确立多头；&lt; -0.6 且跌破 → 确立空头；其余震荡中。</li>
           </ul>
         </div>
         <div class="guide-step">
-          <p><span class="step-num step-4">④</span><strong>变盘预警（最值得盯的一列）</strong>：每只 ETF 一个「趋势研判」—— <b>趋势趋多 / 偏多 / 趋势延续 / 弱势延续 / 震荡 / 偏空 / 趋势趋空</b>。箭头管方向，后面 3 个小格子管强度。</p>
-          <ul>
-            <li><b>↑ 趋势趋多</b>：突破确认或突破启动，指标转多；</li>
-            <li><b>↑ 偏多</b>：蓄势待跳，贴着盆沿，指标略显偏多；</li>
-            <li><b>→ 趋势延续</b>：已确立多头，指标延续多头；</li>
-            <li><b>→ 弱势延续</b>：已确立空头，指标延续空头；</li>
-            <li><b>→ 震荡</b>：方向不明，指标中性；</li>
-            <li><b>↓ 偏空</b>：临界转弱，贴着盆沿但动能走弱；</li>
-            <li><b>↓ 趋势趋空</b>：破位风险或破位确认，指标转空。</li>
-          </ul>
-          <p>下方小字是触发信号的理论依据——一眼能看出方向、强度、原因三件事。</p>
+          <p><span class="step-num step-4">④</span><strong>数据与可信度</strong>：每天收盘后拉取 50 只 ETF 约 600 个交易日（≈2.5 年）前复权行情，全部机器计算、无人工干预。信号基于道氏、海龟、均线、量价等经典理论，属于"趋势跟随"思路——**在震荡市会频繁假信号，这是趋势模型的固有缺点**，请结合大盘环境使用。</p>
         </div>
         <div class="guide-step">
-          <p><span class="step-num step-5">⑤</span><strong>手抄结果</strong>：</p>
+          <p><span class="step-num step-5">⑤</span><strong>表格每列怎么看</strong>：</p>
           <ul>
-            <li><b>PE 百分位</b>：近 600 日收盘价在历史区间中的位置，作为估值高低代理（&lt;30% 低估绿 / 30-70% 中位黄 / &gt;70% 高估红）；</li>
-            <li><b>MA5 与 5 日均线</b>（短期情绪温度计）；</li>
-            <li><b>偏离率</b>：现价偏离「20+60 日加权均线基准」的幅度（&gt;0 即离盆沿较远）；</li>
-            <li><b>量比</b>：当日量 / 近 5 日均量（&lt;0.8 缩量灰 / 0.8-1.2 平量黄 / &gt;1.2 放量红）；</li>
-            <li><b>鱼盆状态</b>：跳出盆外 / 盆沿上方 / 盆沿试探 / 盆内游动 / 盆底深水区；</li>
-            <li><b>趋势</b>：确立多头 / 震荡中 / 确立空头。</li>
+            <li><b>PE%</b>：现价在近 2.5 年价格区间的位置，越低越便宜（&lt;30 绿 / 30-70 黄 / &gt;70 红）；</li>
+            <li><b>MA5 / MA20</b>：5 日、20 日均线，短期成本与中期成本；</li>
+            <li><b>偏离</b>：现价距盆沿的百分比，正=在盆沿上方，负=在下方；</li>
+            <li><b>量比</b>：今日成交量 / 近 5 日均量，&gt;1.2 放量、&lt;0.8 缩量；</li>
+            <li><b>状态</b>：跳出盆外 / 盆沿上方 / 盆沿试探 / 盆内游动 / 盆底深水区；</li>
+            <li><b>变盘</b>：短期信号方向（趋多 / 偏多 / 震荡 / 偏空 / 趋空）；</li>
+            <li><b>趋势</b>：中期结论（确立多头 / 震荡中 / 确立空头）。</li>
+          </ul>
+        </div>
+        <div class="guide-step">
+          <p><span class="step-num step-6">⑥</span><strong>信号与操作建议</strong>：</p>
+          <ul>
+            <li><b>确立多头 + 趋多</b>：趋势向上，可持有或回踩 20 日线附近分批关注；</li>
+            <li><b>偏多 / 盆沿试探</b>：方向未定，观望为主，等突破确认；</li>
+            <li><b>震荡中</b>：方向不明，不参与或轻仓；</li>
+            <li><b>确立空头 + 趋空</b>：趋势向下，规避或止损，不轻易抄底；</li>
+            <li><b>偏离过大</b>（如 &gt;10%）：短期涨幅透支，追高需谨慎。</li>
           </ul>
         </div>
         <div class="guide-step guide-step-wide">
-          <p><span class="step-num step-7">⑦</span><strong>理论支撑（为什么这么算）</strong>：</p>
+          <p><span class="step-num step-7">⑦</span><strong>理论支撑</strong>：</p>
           <table class="theory-tbl">
-            <thead><tr><th>具体理论</th><th>对应原理</th><th>在本表中的作用</th></tr></thead>
+            <thead><tr><th>理论</th><th>原理</th><th>在表中的应用</th></tr></thead>
             <tbody>
-              <tr><td>道氏理论</td><td>高低点结构（HH/HL/LH/LL）</td><td>判断趋势方向是否真正确立</td></tr>
-              <tr><td>海龟法则</td><td>唐奇安 20 日通道突破</td><td>突破新高 / 新低，捕捉趋势启动信号</td></tr>
-              <tr><td>葛兰碧均线</td><td>MA5 与 MA20 金叉 / 死叉</td><td>短期买卖点确认</td></tr>
-              <tr><td>量价关系</td><td>量比 + OBV</td><td>突破有没有量能配合</td></tr>
-              <tr><td>布林带挤压</td><td>带距百分位</td><td>波动收敛到极致，变盘在即</td></tr>
-              <tr><td>背离理论</td><td>MACD 顶 / 底背离</td><td>趋势衰竭预警，动能转折</td></tr>
-              <tr><td>动量理论</td><td>RSI / ROC</td><td>超买超卖，动能预警</td></tr>
+              <tr><td>道氏理论</td><td>高低点结构定趋势</td><td>判断多头/空头是否确立</td></tr>
+              <tr><td>海龟法则</td><td>20 日通道突破</td><td>突破新高捕捉趋势启动</td></tr>
+              <tr><td>葛兰碧均线</td><td>均线多空排列</td><td>MA5/MA20 关系辅助买卖点</td></tr>
+              <tr><td>量价关系</td><td>放量突破更可信</td><td>量比确认突破有效性</td></tr>
+              <tr><td>布林带</td><td>波动收敛后变盘</td><td>波动稳定性因子</td></tr>
+              <tr><td>动量理论</td><td>强者恒强</td><td>趋势强度与动能因子</td></tr>
             </tbody>
           </table>
         </div>
