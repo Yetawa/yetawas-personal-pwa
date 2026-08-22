@@ -25,7 +25,7 @@
     if (!code || !/^\d{6}$/.test(code)) { toast('代码格式不对'); return false; }
     var arr = loadW();
     if (arr.some(function (x) { return norm(x.code) === code; })) { toast('已在自选池'); return false; }
-    arr.unshift({ code: code, name: name || '', date: today(), price: null });
+    arr.unshift({ code: code, name: name || '', date: today(), wlprice: null });
     saveW(arr);
     toast('已加入自选池：' + code);
     return true;
