@@ -150,7 +150,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div class="topbar">
   <div class="titles">
     <h1>LOF / ETF 基金套利数据看板 <span class="ver">V1.3</span></h1>
-    <div class="sub">填基金代码 → 拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认仅显示近 10 个交易日，日期倒序（最新在顶端）。</div>
+    <div class="sub">填基金代码 → 拉取净值/价格/标的/汇率/申购状态，自动算溢价率与套利信号。估算固定用 30 个交易日，界面默认显示近 10 个交易日。</div>
   </div>
   <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   <div class="topnav">
@@ -159,7 +159,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <a class="navlink" href="fund_arb_ranking.html">排行表</a>
     <a class="navlink" href="fund_arb_top.html">TOP套利</a>
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
-    <a class="navlink" href="cb.html">可转债套利</a>
+    <a class="navlink" href="cb.html">可转债套利</a><a class="navlink" href="watchlist.html">自选池</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
   </div>
 </div>
@@ -463,4 +463,4 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
-</body></html>
+<script src="watchlist.js"></script></body></html>
