@@ -125,7 +125,7 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 
 /* etf table */
 table{width:100%;border-collapse:collapse;font-size:12.5px}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{text-align:center;padding:8px 10px;border-bottom:1px solid var(--line)}td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
 th{color:var(--txt3);font-weight:700;font-size:11.5px}
 td .code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--accent);font-weight:700}
 /* 代码超链接（与其他页面一致：浅蓝色、无下划线、悬停下划线） */
@@ -391,8 +391,8 @@ function sparkSVG(name, white){
     const y=h-pad - (v-min)/rng*(h-2*pad);
     return [x,y];
   });
-  // 正红方块（white=true）且末端为涨：线条改白，避免红底上红线看不清
-  const col = (white && pts[pts.length-1]>=0) ? "#ffffff" : (pts[pts.length-1]>=0 ? "var(--up)" : "var(--down)");
+  // 底色够深时线条改白（涨红/跌绿都适用），避免与底色接近看不清
+  const col = white ? "#ffffff" : (pts[pts.length-1]>=0 ? "var(--up)" : "var(--down)");
   const d = coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
   return `<div class="spk"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px">`
        + `<path d="${d}" fill="none" style="stroke:${col}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg></div>`;
@@ -420,9 +420,9 @@ function renderDay(){
       bdCol = up?"var(--up)":"var(--down)";
       bg = up ? `rgba(var(--up-rgb),${inten.toFixed(3)})` : `rgba(var(--down-rgb),${inten.toFixed(3)})`;
     }
-    // 正红方块（up 且强度深）：主力净流入为正时改白字；否则保持涨跌色
-    const white = (c!==null && c>=0 && (Math.min(0.92, Math.abs(c)/maxAbs*0.82 + 0.16)>=0.5));
-    const mCol = m===null?"var(--txt3)":(white&&m>=0?"#ffffff":(m>=0?"var(--up)":"var(--down)"));
+    // 底色够深（涨红或跌绿）即白字/白线，保证对比度
+    const white = (c!==null && (Math.min(0.92, Math.abs(c)/maxAbs*0.82 + 0.16)>=0.5));
+    const mCol = m===null?"var(--txt3)":(white?"#ffffff":(m>=0?"var(--up)":"var(--down)"));
     return `<div class="tile" style="background:${bg};border-color:${bdCol}">
       <div class="tn" style="color:${txtCol}">${n}</div>
       <div class="tc" style="color:${txtCol}">${fmtChg(c)}</div>
