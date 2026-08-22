@@ -172,7 +172,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <a class="navlink" href="fund_arb_ranking.html">排行表</a>
     <a class="navlink active" href="fund_arb_top.html">TOP套利</a>
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
-    <a class="navlink" href="cb.html">可转债套利</a>
+    <a class="navlink" href="cb.html">可转债套利</a><a class="navlink" href="watchlist.html">自选池</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
   </div>
 </div>
@@ -425,4 +425,4 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err)); });
 }
 </script>
-</body></html>
+<script src="watchlist.js"></script></body></html>
