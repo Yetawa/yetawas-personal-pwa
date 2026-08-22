@@ -126,12 +126,12 @@ h1{font-size:19px;font-weight:800}
   <div class="watch-scroll">
     <table class="watchtbl" id="tbl">
       <thead><tr>
-        <th data-k="code">代码</th><th data-k="name" class="l">名称</th><th data-k="price">现价</th><th data-k="date">自选日期</th><th data-k="wlprice">自选价格</th><th data-k="days">加入天数</th><th data-k="chg">累计涨跌幅</th><th>操作</th>
+        <th data-k="code">代码</th><th data-k="name">名称</th><th data-k="price">现价</th><th data-k="date">自选日期</th><th data-k="wlprice">自选价格</th><th data-k="days">加入天数</th><th data-k="chg">累计涨跌幅</th><th>操作</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
   </div>
-  <div class="hint">提示：点击任意表头即可按该列排序（再次点击切换升/降序，无箭头图标，当前排序列高亮）；累计涨跌幅默认降序。自选池跟踪你关注的品种从加入日起的累计表现；可转债按「转股价值=100÷转股价×正股」自加入日至今的累计涨跌幅统计。</div>
+  <div class="hint">提示：点击任意表头即可按该列排序。</div>
 
   <div class="chart-box">
     <div class="chart-head">
@@ -336,76 +336,79 @@ function computeChg(list){
   }).then(function(){ list.forEach(function(x){ if(x.chg==null) x.chg=priceChg(x); }); });
 }
 
-/* ===== 走势图：自选池平均涨跌幅 vs 上证指数（逐日对齐） ===== */
-var chartDays=30, chartCache={}, lastWl=[], lastSh=[];
+/* ===== 走势图：自选池平均涨跌幅 vs 上证指数（指数恒为基准，逐日对齐） ===== */
+var chartDays=30, chartCache={}, lastWlRaw=[], lastShRaw=[];
 function klineFor(code){
   return new Promise(function(res){
     if(chartCache[code]){ res(chartCache[code]); return; }
-    fetch(BASE+'/api/kline?code='+encodeURIComponent(code)+'&days=260&t='+Date.now())
-      .then(function(r){ return r.json(); })
+    fetch(BASE+'/api/kline?code='+encodeURIComponent(code)+'&days=260&t='+Date.now(), {cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(d){
-        var m={}; (d.rows||[]).forEach(function(x){ m[x.date]=x.close; });
+        var m={}; (d.rows||[]).forEach(function(x){ if(x&&x.date) m[x.date]=x.close; });
         chartCache[code]=m; res(m);
       })
-      .catch(function(){ chartCache[code]={}; res(chartCache[code]); });
+      .catch(function(e){ console.warn('klineFor '+code+' err', e); chartCache[code]={}; res(chartCache[code]); });
   });
 }
 function loadChart(force){
   if(force) chartCache={};
   var chart=document.getElementById('chart');
-  if(!list.length){ if(chart) chart.innerHTML='<div class="empty">自选池为空，无法绘制走势图</div>'; lastWl=[]; lastSh=[]; renderChart(); return; }
   if(chart) chart.innerHTML='<div class="empty">加载走势图…</div>';
-  // 每项：普通品种取价格序列；可转债取转股价值序列
-  var tasks=list.map(function(x){
-    if(x._bond && x._conv){ return Promise.resolve({x:x, map:x._conv, base:x._convWatch}); }
-    return klineFor(x.code).then(function(m){ return {x:x, map:m, base:x.wlprice}; });
-  });
-  Promise.all(tasks).then(function(res){
-    var daySum={}, dayCnt={};
-    res.forEach(function(o){
-      var m=o.map, base=o.base; if(!base||base<=0) return;
-      Object.keys(m).forEach(function(d){
-        if(o.x.date && d < o.x.date) return;
-        var v=(m[d]/base-1)*100;
-        daySum[d]=(daySum[d]||0)+v; dayCnt[d]=(dayCnt[d]||0)+1;
+  // 指数恒为基准：无论自选有无、是否成功，都先取上证指数
+  var shPromise = klineFor('sh000001').then(function(m){
+    var sd=Object.keys(m).sort();
+    lastShRaw = sd.map(function(d){ return {date:d, close:m[d]}; });
+  }).catch(function(e){ console.warn('sh000001 err', e); lastShRaw=[]; });
+  // 自选池：每项价格序列 / 可转债转股价值序列
+  var wlPromise = (!list.length) ? Promise.resolve() :
+    Promise.all(list.map(function(x){
+      if(x._bond && x._conv){ return Promise.resolve({x:x, map:x._conv, base:x._convWatch}); }
+      return klineFor(x.code).then(function(m){ return {x:x, map:m, base:x.wlprice}; });
+    })).then(function(res){
+      var daySum={}, dayCnt={};
+      res.forEach(function(o){
+        var m=o.map, base=o.base; if(!base||base<=0) return;
+        Object.keys(m).forEach(function(d){
+          if(o.x.date && d < o.x.date) return;
+          var v=(m[d]/base-1)*100;
+          daySum[d]=(daySum[d]||0)+v; dayCnt[d]=(dayCnt[d]||0)+1;
+        });
       });
-    });
-    var wl=Object.keys(daySum).filter(function(d){ return dayCnt[d]>0; }).sort().map(function(d){ return {date:d, v:daySum[d]/dayCnt[d]}; });
-    return klineFor('sh000001').then(function(shMap){
-      var sd=Object.keys(shMap).sort();
-      var baseSh=sd.length? shMap[sd[0]] : null;
-      // 上证指数与自选序列对齐到同一组日期（缺失日跳过），起点归零
-      var sh=wl.map(function(p){
-        var c=shMap[p.date];
-        if(c==null||baseSh==null||baseSh<=0) return {date:p.date, v:null};
-        return {date:p.date, v:(c/baseSh-1)*100};
-      });
-      lastWl=wl; lastSh=sh; renderChart();
-    }).catch(function(e){
-      console.warn('sh000001 kline err', e);
-      lastWl=wl; lastSh=wl.map(function(p){return {date:p.date, v:null};}); renderChart();
-    });
-  }).catch(function(e){
+      var keys=Object.keys(daySum).filter(function(d){ return dayCnt[d]>0; }).sort();
+      lastWlRaw = keys.map(function(d){ return {date:d, cum:daySum[d]/dayCnt[d]}; });
+    }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; });
+  Promise.all([shPromise, wlPromise]).then(renderChart).catch(function(e){
     console.error('loadChart err', e);
     if(chart) chart.innerHTML='<div class="empty">走势图加载失败：'+((e&&e.message)||String(e))+'（请点刷新重试）</div>';
   });
 }
 function renderChart(){
   var box=document.getElementById('chart'); if(!box) return;
-  var wl=lastWl.slice(-chartDays), sh=lastSh.slice(-chartDays);
-  if(!wl.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
-  var dates=wl.map(function(x){ return x.date; });
+  var shWin=lastShRaw.slice(-chartDays), wlWin=lastWlRaw.slice(-chartDays);
+  if(!shWin.length && !wlWin.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
+  // 指数归一（窗口起点=0%）
+  var shBase = shWin.length? shWin[0].close : null;
+  var sh = (shBase>0) ? shWin.map(function(p){ return {date:p.date, v:(p.close/shBase-1)*100}; }) : [];
+  // 自选归一（窗口起点=0%，与指数同基准便于对比）
+  var wlBase = wlWin.length? wlWin[0].cum : null;
+  var wl = (wlBase!=null) ? wlWin.map(function(p){ return {date:p.date, v:p.cum - wlBase}; }) : [];
+  // 合并日期轴（交易并集，缺失日跳过）
+  var dateSet={}; sh.forEach(function(p){ dateSet[p.date]=1; }); wl.forEach(function(p){ dateSet[p.date]=1; });
+  var dates=Object.keys(dateSet).sort();
+  var shMap={}, wlMap={};
+  sh.forEach(function(p){ shMap[p.date]=p.v; }); wl.forEach(function(p){ wlMap[p.date]=p.v; });
+  if(!dates.length){ box.innerHTML='<div class="empty">暂无可绘制日期</div>'; return; }
   var W=680,H=230,padL=46,padR=14,padT=14,padB=22;
-  var vals=wl.concat(sh).map(function(x){ return x.v; }).filter(function(v){ return v!=null; });
+  var vals=dates.map(function(d){ return shMap[d]; }).concat(dates.map(function(d){ return wlMap[d]; })).filter(function(v){ return v!=null; });
   var max=0.5; vals.forEach(function(v){ if(Math.abs(v)>max) max=Math.abs(v); });
   var innerH=H-padT-padB, y0=padT+innerH/2, yScale=innerH/2/max;
   function px(v){ return y0-v*yScale; }
-  function path(series){
+  function path(map){
     var started=false, out='';
-    series.forEach(function(s,i){
-      if(s.v==null) return;
+    dates.forEach(function(d,i){
+      var v=map[d]; if(v==null) return;
       var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
-      out += (started?'L':'M')+x.toFixed(1)+' '+px(s.v).toFixed(1)+' ';
+      out += (started?'L':'M')+x.toFixed(1)+' '+px(v).toFixed(1)+' ';
       started=true;
     });
     return out.trim();
@@ -426,12 +429,15 @@ function renderChart(){
     var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
     grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i].slice(5)+'</text>';
   });
-  var legend='<div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-bottom:4px">'
-    +'<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均涨跌幅</span>'
-    +'<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span></div>';
+  // 图例（仅显示存在的序列；自选为空时提示仅展示指数）
+  var legParts=[];
+  if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均涨跌幅</span>');
+  if(sh.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span>');
+  if(!wl.length) legParts.push('<span style="color:var(--txt3)">（自选池为空/无数据，仅展示上证指数）</span>');
+  var legend='<div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-bottom:4px;flex-wrap:wrap">'+legParts.join('')+'</div>';
   box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid
-    +'<path d="'+path(wl)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
-    +'<path d="'+path(sh)+'" fill="none" stroke="'+shCol+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>'
+    + (wl.length? '<path d="'+path(wlMap)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>':'')
+    + (sh.length? '<path d="'+path(shMap)+'" fill="none" stroke="'+shCol+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>':'')
     +'</svg>';
 }
 document.querySelectorAll('.rng').forEach(function(b){
