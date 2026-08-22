@@ -3227,6 +3227,7 @@ def _cb_history_entries(res):
             "price": p.get("price"),              # 转债入选日价
             "stock_code": p.get("stock_code"), "stock_name": p.get("stock_name"),
             "stock_price": p.get("stock_price"),  # 正股入选日价
+            "convert_price": p.get("convert_price"),  # 入选日转股价
             "arb": p.get("arb"),
         })
     return out
@@ -3628,6 +3629,13 @@ def cb_compute(items, progress=None):
             suspended_soon += 1
             continue
         arb = (cv - price) / price * 100.0          # 套利收益率(折价率)
+        # 转股价反推：转股价值 = 100 / 转股价 × 正股价 → 转股价 = 100 × 正股价 / 转股价值
+        convert_price = None
+        if stock_price not in (None, "", "-"):
+            try:
+                convert_price = round(100.0 * float(stock_price) / cv, 3)
+            except (TypeError, ValueError, ZeroDivisionError):
+                convert_price = None
         in_conv = len(start) >= 8 and int(start) <= today   # 已进入转股期
         is_st = bool(stock_name) and ("ST" in stock_name)
         market = "sh" if str(it.get("f13")) == "1" else "sz"
@@ -3637,6 +3645,7 @@ def cb_compute(items, progress=None):
             premium=round(prem, 3), arb=round(arb, 3),
             stock_code=stock_code, stock_name=stock_name,
             stock_price=(round(float(stock_price), 3) if stock_price not in (None, "", "-") else None),
+            convert_price=convert_price,
             double_low=round(price + prem, 2),
             convert_start=start, in_conv=in_conv, is_st=is_st,
         ))
@@ -4129,6 +4138,22 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 with open(_fp, encoding="utf-8") as _f:
                     self._send(200, _f.read(), "text/html; charset=utf-8")
+            except Exception:
+                self._send(404, "Not Found", "text/plain; charset=utf-8")
+            return
+        if parsed.path in ("/watch", "/watch.html", "/watchlist.html"):
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.html")
+            try:
+                with open(_fp, encoding="utf-8") as _f:
+                    self._send(200, _f.read(), "text/html; charset=utf-8")
+            except Exception:
+                self._send(404, "Not Found", "text/plain; charset=utf-8")
+            return
+        if parsed.path == "/watchlist.js":
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.js")
+            try:
+                with open(_fp, encoding="utf-8") as _f:
+                    self._send(200, _f.read(), "application/javascript; charset=utf-8")
             except Exception:
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
