@@ -30,6 +30,8 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 .topnav .navlink.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
 [data-theme="light"] .topnav .navlink.active{background:#2563eb;border-color:#2563eb;color:#fff}
 .topnav .navspacer{flex:1 1 auto}
+.theme-mini{flex:none;margin-left:6px;border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:8px;padding:6px 12px;font-size:13.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.theme-mini:hover{border-color:var(--accent);color:var(--accent)}
 @media(max-width:760px){
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
@@ -95,14 +97,16 @@ h1{font-size:19px;font-weight:800}
 </head>
 <body>
 <div class="topnav">
-  <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
-  <a class="navlink" href="fund_arb.html">套利看板</a>
-  <a class="navlink" href="fund_arb_ranking.html">排行表</a>
-  <a class="navlink" href="fund_arb_top.html">TOP套利</a>
-  <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
-  <a class="navlink" href="cb.html">可转债套利</a>
-  <a class="navlink active" href="watchlist.html">自选池</a>
+  <a class="navlink" data-file="sector_dashboard.html" data-route="/sector">行业轮动</a>
+  <a class="navlink" data-file="fish_basin.html" data-route="/yupen">鱼盆模型</a>
+  <a class="navlink" data-file="fund_arb.html" data-route="/arb">套利看板</a>
+  <a class="navlink" data-file="fund_arb_ranking.html" data-route="/ranking">排行表</a>
+  <a class="navlink" data-file="fund_arb_top.html" data-route="/top">TOP套利</a>
+  <a class="navlink" data-file="https://fund-arb.onrender.com/pivot" data-route="/pivot">口袋支点</a>
+  <a class="navlink" data-file="cb.html" data-route="/cb">可转债套利</a>
+  <a class="navlink active" data-file="watchlist.html" data-route="/watch">自选池</a>
   <span class="navspacer"></span>
+  <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
 </div>
 
 <div class="wrap">
@@ -111,7 +115,7 @@ h1{font-size:19px;font-weight:800}
 
   <div class="addbar">
     <input id="addCode" placeholder="代码，如 162411" maxlength="6">
-    <input id="addName" placeholder="名称（留空自动补）">
+    <input id="addName" placeholder="名称（≤15字符，约7个汉字）" maxlength="20" oninput="limitName(this)">
     <button id="addBtn" onclick="addManual()">添加</button>
     <button onclick="clearAll()">清空</button>
     <button onclick="exportWl()">导出</button>
@@ -145,6 +149,18 @@ h1{font-size:19px;font-weight:800}
       </div>
     </div>
     <div class="chart" id="chart"><div class="empty">自选池为空，无法绘制走势图</div></div>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-head">
+      <b>自选池回测：近 N 日滚动涨跌幅</b>
+      <div class="range">
+        <button class="rng2" data-n="5">近5日</button>
+        <button class="rng2 active" data-n="10">近10日</button>
+        <button class="rng2" data-n="20">近20日</button>
+      </div>
+    </div>
+    <div class="chart" id="btchart"><div class="empty">回测需要自选池历史行情，点「刷新」后自动绘制</div></div>
   </div>
 </div>
 <script src="watchlist.js"></script>
@@ -337,47 +353,60 @@ function computeChg(list){
 }
 
 /* ===== 走势图：自选池平均涨跌幅 vs 上证指数（指数恒为基准，逐日对齐） ===== */
-var chartDays=30, chartCache={}, lastWlRaw=[], lastShRaw=[];
-function klineFor(code){
+var chartDays=30, chartCache={}, lastWlRaw=[], lastShRaw=[], lastBtCum={};
+function klineFor(code, attempt){
+  attempt = attempt||0;
   return new Promise(function(res){
-    if(chartCache[code]){ res(chartCache[code]); return; }
+    if(chartCache[code]!==undefined){ res(chartCache[code]); return; }
     fetch(BASE+'/api/kline?code='+encodeURIComponent(code)+'&days=260&t='+Date.now(), {cache:'no-store'})
       .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(d){
         var m={}; (d.rows||[]).forEach(function(x){ if(x&&x.date) m[x.date]=x.close; });
         chartCache[code]=m; res(m);
       })
-      .catch(function(e){ console.warn('klineFor '+code+' err', e); chartCache[code]={}; res(chartCache[code]); });
+      .catch(function(e){
+        if(attempt<2){ setTimeout(function(){ klineFor(code, attempt+1).then(res); }, 300*(attempt+1)); }
+        else { console.warn('klineFor '+code+' failed', e); chartCache[code]={}; res(chartCache[code]); }
+      });
   });
 }
 function loadChart(force){
   if(force) chartCache={};
   var chart=document.getElementById('chart');
   if(chart) chart.innerHTML='<div class="empty">加载走势图…</div>';
+  var btChart=document.getElementById('btchart');
+  if(btChart) btChart.innerHTML='<div class="empty">回测需要自选池历史行情，点「刷新」后自动绘制</div>';
   // 指数恒为基准：无论自选有无、是否成功，都先取上证指数
   var shPromise = klineFor('sh000001').then(function(m){
     var sd=Object.keys(m).sort();
     lastShRaw = sd.map(function(d){ return {date:d, close:m[d]}; });
   }).catch(function(e){ console.warn('sh000001 err', e); lastShRaw=[]; });
-  // 自选池：每项价格序列 / 可转债转股价值序列
+  // 自选池：错峰拉取每项价格序列 / 可转债转股价值序列（避免并发被服务端限流）
   var wlPromise = (!list.length) ? Promise.resolve() :
-    Promise.all(list.map(function(x){
-      if(x._bond && x._conv){ return Promise.resolve({x:x, map:x._conv, base:x._convWatch}); }
-      return klineFor(x.code).then(function(m){ return {x:x, map:m, base:x.wlprice}; });
+    Promise.all(list.map(function(x, i){
+      return new Promise(function(res){
+        setTimeout(function(){
+          if(x._bond && x._conv){ res({x:x, map:x._conv, base:x._convWatch}); }
+          else { klineFor(x.code).then(function(m){ res({x:x, map:m, base:x.wlprice}); }).catch(function(e){ console.warn('kline '+x.code+' err', e); res({x:x, map:{}, base:x.wlprice}); }); }
+        }, i*120);
+      });
     })).then(function(res){
       var daySum={}, dayCnt={};
       res.forEach(function(o){
         var m=o.map, base=o.base; if(!base||base<=0) return;
         Object.keys(m).forEach(function(d){
           if(o.x.date && d < o.x.date) return;
-          var v=(m[d]/base-1)*100;
+          var v=(m[d]/base-1)*100;   // 累计涨跌幅（从自选日基线）
           daySum[d]=(daySum[d]||0)+v; dayCnt[d]=(dayCnt[d]||0)+1;
         });
       });
       var keys=Object.keys(daySum).filter(function(d){ return dayCnt[d]>0; }).sort();
       lastWlRaw = keys.map(function(d){ return {date:d, cum:daySum[d]/dayCnt[d]}; });
-    }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; });
-  Promise.all([shPromise, wlPromise]).then(renderChart).catch(function(e){
+      // 回测：等权「自选池指数」= 每个交易日各成分累计涨跌幅的均值（用于滚动 N 日收益）
+      lastBtCum = {};
+      keys.forEach(function(d){ lastBtCum[d]=daySum[d]/dayCnt[d]; });
+    }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; lastBtCum={}; });
+  Promise.all([shPromise, wlPromise]).then(function(){ renderChart(); renderBacktest(); }).catch(function(e){
     console.error('loadChart err', e);
     if(chart) chart.innerHTML='<div class="empty">走势图加载失败：'+((e&&e.message)||String(e))+'（请点刷新重试）</div>';
   });
@@ -429,11 +458,10 @@ function renderChart(){
     var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
     grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i].slice(5)+'</text>';
   });
-  // 图例（仅显示存在的序列；自选为空时提示仅展示指数）
+  // 图例（仅显示存在的序列）
   var legParts=[];
-  if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均涨跌幅</span>');
+  if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均累计涨跌幅</span>');
   if(sh.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span>');
-  if(!wl.length) legParts.push('<span style="color:var(--txt3)">（自选池为空/无数据，仅展示上证指数）</span>');
   var legend='<div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-bottom:4px;flex-wrap:wrap">'+legParts.join('')+'</div>';
   box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid
     + (wl.length? '<path d="'+path(wlMap)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>':'')
@@ -449,9 +477,68 @@ document.querySelectorAll('.rng').forEach(function(b){
   });
 });
 
+/* ===== 回测：自选池等权指数近 N 日滚动涨跌幅 ===== */
+var btN=10;
+function renderBacktest(){
+  var box=document.getElementById('btchart'); if(!box) return;
+  var keys=Object.keys(lastBtCum).sort();
+  if(keys.length<=btN){ box.innerHTML='<div class="empty">历史数据不足 '+btN+' 个交易日，暂无法回测</div>'; return; }
+  // 近 N 日滚动涨跌幅 = 等权指数[i] - 等权指数[i-N]（即该窗口内的累计涨跌幅）
+  var series=[];
+  for(var i=btN;i<keys.length;i++){
+    series.push({date:keys[i], v:lastBtCum[keys[i]]-lastBtCum[keys[i-btN]]});
+  }
+  series = series.slice(-Math.max(chartDays, series.length));
+  if(!series.length){ box.innerHTML='<div class="empty">暂无可回测数据</div>'; return; }
+  var dates=series.map(function(p){ return p.date; });
+  var vals=series.map(function(p){ return p.v; });
+  var max=0.5; vals.forEach(function(v){ if(Math.abs(v)>max) max=Math.abs(v); });
+  var W=680,H=200,padL=46,padR=14,padT=14,padB=22;
+  var innerH=H-padT-padB, y0=padT+innerH/2, yScale=innerH/2/max;
+  function px(v){ return y0-v*yScale; }
+  function pathPts(){
+    var started=false, out='';
+    series.forEach(function(p,i){
+      var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
+      out += (started?'L':'M')+x.toFixed(1)+' '+px(p.v).toFixed(1)+' ';
+      started=true;
+    });
+    return out.trim();
+  }
+  var isLight=document.documentElement.getAttribute('data-theme')==='light';
+  var col=isLight?'#0d9488':'#2dd4bf';
+  var grid='<line x1="'+padL+'" y1="'+y0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y0.toFixed(1)+'" stroke="var(--txt3)" stroke-width="0.8"/>';
+  [0.5,1,2,3].forEach(function(g){
+    if(max<g) return;
+    var y=px(g);
+    grid+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>';
+    grid+='<text x="'+(padL-4)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">+'+g+'%</text>';
+    grid+='<text x="'+(padL-4)+'" y="'+(px(-g)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">-'+g+'%</text>';
+  });
+  var lblIdx=[0, Math.floor((dates.length-1)/2), dates.length-1];
+  lblIdx.forEach(function(i){
+    var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
+    grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i].slice(5)+'</text>';
+  });
+  var lastV=series[series.length-1].v;
+  var stat='<div style="text-align:center;font-size:12px;color:'+(lastV>=0?'var(--up)':'var(--down)')+';font-weight:700;margin-bottom:4px">当前近'+btN+'日滚动涨跌幅：'+(lastV>=0?'+':'')+lastV.toFixed(2)+'%</div>';
+  box.innerHTML=stat+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid
+    +'<path d="'+pathPts()+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+    +'</svg>';
+}
+document.querySelectorAll('.rng2').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.rng2').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    btN=parseInt(b.getAttribute('data-n'),10)||10;
+    renderBacktest();
+  });
+});
+
 function addManual(){
   var code=(document.getElementById('addCode').value||'').trim();
   var name=(document.getElementById('addName').value||'').trim();
+  if(name && nameWidth(name)>15) name=trimName(name,15);
   if(!/^\d{6}$/.test(code)){ toast('请输入6位数字代码'); return; }
   fetchPrice(code).then(function(r){
     if(!r || !r.name){ if(!name){ toast('未能自动识别，请补名称'); return; } }
@@ -499,14 +586,14 @@ document.getElementById('impFile').addEventListener('change',function(ev){
           if(!m) return;
           var cols=line.split(',').map(function(c){ return c.replace(/^"|"$/g,'').trim(); });
           if(!cols[0]) return;
-          arr.push({code:cols[0], name:cols[1]||'', date:cols[3]||todayStr(), wlprice:cols[4]!=null&&cols[4]!==''&&!isNaN(cols[4])?parseFloat(cols[4]):null});
+          arr.push({code:cols[0], name:trimName(cols[1]||'',15), date:cols[3]||todayStr(), wlprice:cols[4]!=null&&cols[4]!==''&&!isNaN(cols[4])?parseFloat(cols[4]):null});
         });
       }
       var cur=loadW();
       var added=0;
       arr.forEach(function(x){
         if(x&&x.code&&/^\d{6}$/.test(String(x.code))&&!cur.some(function(c){return c.code===String(x.code);})){
-          cur.push({code:String(x.code), name:x.name||'', date:x.date||todayStr(), wlprice:(x.price!=null&&!isNaN(x.price))?Number(x.price):null});
+          cur.push({code:String(x.code), name:trimName(x.name||'',15), date:x.date||todayStr(), wlprice:(x.price!=null&&!isNaN(x.price))?Number(x.price):null});
           added++;
         }
       });
@@ -517,11 +604,42 @@ document.getElementById('impFile').addEventListener('change',function(ev){
   ev.target.value='';
 });
 
+// ===== 名称长度限制：显示宽度 ≤15（汉字算 2，字母/数字算 1）=====
+function nameWidth(s){ var w=0; for(var i=0;i<(s||'').length;i++){ w += /[一-鿿豈-﫿]/.test(s[i])?2:1; } return w; }
+function trimName(s, max){ max=max||15; var w=0, out=''; for(var i=0;i<(s||'').length;i++){ var cw=/[一-鿿豈-﫿]/.test(s[i])?2:1; if(w+cw>max) break; w+=cw; out+=s[i]; } return out; }
+function limitName(el){ var s=el.value; if(nameWidth(s)>15){ el.value=trimName(s,15); toast('名称最多 15 字符（约 7 个汉字）'); } }
+
+// ===== 主题切换（与其他页面一致：右上角按钮，日间/夜间）=====
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  var icon=document.getElementById('themeIcon');
+  if(icon) icon.textContent=(t==='light')?'☀️':'🌙';
+  try{ localStorage.setItem('arb_theme', t); }catch(e){}
+}
+function toggleTheme(){
+  var cur=(document.documentElement.getAttribute('data-theme')==='light')?'dark':'light';
+  applyTheme(cur);
+}
+function initTheme(){
+  var t='dark';
+  try{ t=localStorage.getItem('arb_theme')||((new Date().getHours()>=18||new Date().getHours()<6)?'dark':'light'); }catch(e){}
+  applyTheme(t);
+}
+// ===== 导航链接：file:// 用兄弟文件名，http(s) 用站点路由（避免 Web 端前缀 404）=====
+function rewriteNav(){
+  var web=(location.protocol!=='file:');
+  document.querySelectorAll('.topnav a.navlink[data-route]').forEach(function(a){
+    a.href = web ? a.getAttribute('data-route') : a.getAttribute('data-file');
+  });
+}
+
 // 表头点击排序（无三角，仅高亮当前排序列）
 document.querySelectorAll('#tbl thead th[data-k]').forEach(function(th){
   th.addEventListener('click', function(){ setSort(th.getAttribute('data-k')); });
 });
 // 立即加载一次价格并定时刷新
+rewriteNav();
+initTheme();
 markSorted();
 refresh();
 setInterval(refresh, 120000);
