@@ -6,7 +6,7 @@ import os
 import fund_arb
 
 
-# 全站统一导航：6 个入口映射到同目录下的独立 HTML
+# 全站统一导航：7 个入口映射到同目录下的独立 HTML
 # （口袋支点无本地独立文件，指向线上 onrender 页面）
 NAV_MAP = [
     ('href="/sector"', 'href="sector_dashboard.html"'),
@@ -16,6 +16,7 @@ NAV_MAP = [
     ('href="/top"', 'href="fund_arb_top.html"'),
     ('href="/pivot"', 'href="https://fund-arb.onrender.com/pivot"'),
     ('href="/cb"', 'href="cb.html"'),
+    ('href="/watch"', 'href="watchlist.html"'),
 ]
 
 
