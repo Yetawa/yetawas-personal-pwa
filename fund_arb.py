@@ -4145,7 +4145,8 @@ class Handler(BaseHTTPRequestHandler):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.html")
             try:
                 with open(_fp, encoding="utf-8") as _f:
-                    self._send(200, _f.read(), "text/html; charset=utf-8")
+                    _html = _f.read().replace("</body>", EXPORT_BAR_HTML + "</body>")
+                    self._send(200, _html, "text/html; charset=utf-8")
             except Exception:
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
@@ -4273,6 +4274,31 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps(data, ensure_ascii=False))
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "code": code}, ensure_ascii=False))
+            return
+        if parsed.path == "/api/kline":
+            qs = parse_qs(parsed.query)
+            code = qs.get("code", ["sh000001"])[0]
+            try:
+                days = int(qs.get("days", ["30"])[0])
+            except ValueError:
+                days = 30
+            days = max(2, min(500, days))
+            sym = code
+            if re.fullmatch(r"\d{6}", code):
+                sym = ("sh" if code[0] in "569" else "sz") + code
+            rows = []
+            try:
+                rows = fetch_kline_tencent(sym, days)
+            except Exception:
+                rows = []
+            if not rows:
+                try:
+                    rows = fetch_kline_sina(sym, days)
+                except Exception:
+                    rows = []
+            out = [{"date": d, "close": c} for d, c in rows]
+            self._send(200, json.dumps({"code": code, "symbol": sym, "rows": out}, ensure_ascii=False),
+                       "application/json; charset=utf-8")
             return
         if parsed.path == "/api/ranking":
             qs = parse_qs(parsed.query)
