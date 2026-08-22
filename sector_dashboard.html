@@ -161,6 +161,11 @@ tr:hover td{background:var(--card2)}
 
 .scroll-hint{display:none;font-size:11px;color:var(--txt3);text-align:center;padding:6px 0 2px}
 @media(max-width:620px){.scroll-hint{display:block}}
+/* 手机端大盘摘要条按屏换行显示（不做横向滚动） */
+@media(max-width:620px){
+  .mini{flex-wrap:wrap;overflow-x:visible;gap:4px 10px;line-height:1.8}
+  .mini .sep{display:none}
+}
 
   /* ---- fund_arb 顶格导航（鱼盆模型接入） ---- */
   .topnav{position:fixed;top:0;left:0;right:0;z-index:2000;display:flex;align-items:center;gap:6px;padding:7px 10px;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
@@ -202,6 +207,7 @@ tr:hover td{background:var(--card2)}
     <a class="navlink" href="fund_arb_top.html">TOP套利</a>
     <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
     <a class="navlink" href="cb.html">可转债套利</a>
+    <a class="navlink" href="watchlist.html">自选池</a>
     <span class="navspacer"></span>
   </div>
   <script>
@@ -339,7 +345,9 @@ function renderIdx(){
   const order=["上证指数","深证成指","创业板指","沪深300","科创50","北证50"];
   $("#idxRow").innerHTML = order.map(n=>{
     const [v,c]=D.indices[n];
-    return `<div class="idx"><div class="n">${n}</div><div class="v">${v.toLocaleString()}</div>
+    // 涨=浅红背景、跌=浅绿背景（与热力图配色一致）
+    const bg = c>=0 ? "var(--upbg)" : "var(--downbg)";
+    return `<div class="idx" style="background:${bg}"><div class="n">${n}</div><div class="v">${v.toLocaleString()}</div>
       <div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
   }).join("");
 }
@@ -457,7 +465,9 @@ function renderStyle(){
   const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","中证1000"];
   $("#styleRow").innerHTML = order.map(n=>{
     const [v,c]=s[n];
-    return `<div class="style-idx"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
+    // 涨=浅红背景、跌=浅绿背景（与热力图配色一致）
+    const bg = c>=0 ? "var(--upbg)" : "var(--downbg)";
+    return `<div class="style-idx" style="background:${bg}"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
   }).join("");
   const gv=s["大盘价值"][1], gc=s["大盘成长"][1], sc=s["小盘成长"][1], sv=s["小盘价值"][1];
   const hs=D.indices["沪深300"][1];
@@ -486,18 +496,25 @@ function renderNB(){
   if(!ch) return;
   if(tr.length < 2){ ch.innerHTML = '<div class="src-note">暂无趋势数据</div>'; return; }
   const w=720, h=120, padB=18, padT=8, padX=8;
-  const maxV = Math.max(...tr.map(x=>x.v));
+  const base = 3000;   // 起步零轴（亿元）：以 3000 为底，放大每日差距
+  const vs = tr.map(x=>x.v);
+  const lo = Math.min(base, ...vs), hi = Math.max(base, ...vs);
+  const rng = (hi-lo)||1;
+  const yBase = h-padB - (base-lo)/rng*(h-padB-padT);   // 3000 线位置
   const bw = (w-2*padX)/tr.length;
+  const axis = `<line x1="0" y1="${yBase.toFixed(1)}" x2="${w}" y2="${yBase.toFixed(1)}" stroke="var(--txt3)" stroke-width="0.6" stroke-dasharray="3,3"/>`
+    + `<text x="2" y="${(yBase-3).toFixed(1)}" font-size="8.5" fill="var(--txt3)">${base}</text>`;
   let bars = tr.map((x,i)=>{
-    const bh = Math.max(2, (x.v/maxV)*(h-padB-padT));
-    const y = h-padB-bh;
+    const yV = h-padB - (x.v-lo)/rng*(h-padB-padT);
+    const top = Math.min(yBase, yV);
+    const bh = Math.max(1.2, Math.abs(yBase-yV));
     const up = i===0 ? true : x.v >= tr[i-1].v;
     const col = up ? "var(--up)" : "var(--down)";
-    return `<rect x="${(padX+i*bw+bw*0.19).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*0.62).toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}" rx="2"/>`
+    return `<rect x="${(padX+i*bw+bw*0.19).toFixed(1)}" y="${top.toFixed(1)}" width="${(bw*0.62).toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}" rx="2"/>`
       + `<text x="${(padX+i*bw+bw/2).toFixed(1)}" y="${h-4}" text-anchor="middle" font-size="9" fill="var(--txt3)">${x.date}</text>`
-      + `<text x="${(padX+i*bw+bw/2).toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--txt3)">${x.v}</text>`;
+      + `<text x="${(padX+i*bw+bw/2).toFixed(1)}" y="${(top-3).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--txt3)">${x.v}</text>`;
   }).join("");
-  ch.innerHTML = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${bars}</svg>`;
+  ch.innerHTML = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${axis}${bars}</svg>`;
 }
 
 /* 研判 + ETF（ETF 按最新交易日主力净流入由多到少排序，与④资金排行一致） */
@@ -706,5 +723,5 @@ function safeRender(){
 })();
 </script>
 
-</body>
+<script src="watchlist.js"></script></body>
 </html>
