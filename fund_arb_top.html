@@ -190,11 +190,50 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   <li>二级市场可交易规模取东财场内流通市值（场内规模），门槛 ≥ 1 亿元；限购金额取东财场内基金表当日数据。榜单仅供参考，非投资建议。</li>
 </ul>
 </div>
+<div class="histbox" id="topHist">
+  <h3>近 5 个交易日溢价套利入选（≥1.5%，点击表头排序）</h3>
+  <div id="topHistBody"></div>
+</div>
 </div>
 <script>
 const BASE = (location.protocol==='file:') ? 'http://localhost:8000' : '';
 const STATUS_COLORS={"暂停申购":"#ff4d4f","限大额申购":"#fa8c16","开放申购":"#52c41a"};
 let currentRows=[], sortKey='abs_est', sortDesc=true, currentFilter=null, currentMeta=null, currentThreshold=1.5, currentDgate=-2;
+// 近5日 TOP 溢价套利入选统计表
+let topHistKey='date', topHistDesc=false;
+function topHistSort(k){ if(topHistKey===k) topHistDesc=!topHistDesc; else { topHistKey=k; topHistDesc=true; } renderTopHist(); }
+function topHistCell(k,l){ return '<th class="'+(k==='code'||k==='name'?'l':'')+'" onclick="topHistSort(\''+k+'\')" title="点击排序">'+l+'</th>'; }
+async function loadTopHist(){
+  const box=document.getElementById('topHist');
+  try{
+    const r=await fetch('/api/history?type=top&days=5&t='+Date.now());
+    const d=await r.json();
+    window._topHistRows=d.rows||[];
+    renderTopHist();
+  }catch(e){ if(box) box.innerHTML='<div class="hist-empty">统计表加载失败：'+e.message+'</div>'; }
+}
+function renderTopHist(){
+  const box=document.getElementById('topHistBody'); if(!box) return;
+  const rows=(window._topHistRows||[]).slice();
+  const latest={};
+  (currentRows||[]).forEach(function(r){ latest[r.code]={price:r.price, nav:r.nav}; });
+  rows.forEach(function(r){
+    r._cur=(latest[r.code]&&latest[r.code].price)||null;
+    r._nav=(latest[r.code]&&latest[r.code].nav)||null;
+    r._pchg=(r._cur!=null&&r.price)?(r._cur-r.price)/r.price*100:null;
+    r._nchg=(r._nav!=null&&r.nav)?(r._nav-r.nav)/r.nav*100:null;
+  });
+  const numKeys=['price','nav','_cur','_nav','_pchg','_nchg'];
+  rows.sort(function(a,b){ var av=a[topHistKey],bv=b[topHistKey]; if(av==null&&bv==null)return 0; if(av==null)return 1; if(bv==null)return -1; if(numKeys.indexOf(topHistKey)>=0) return topHistDesc?(bv-av):(av-bv); return topHistDesc?String(bv).localeCompare(String(av),'zh'):String(av).localeCompare(String(bv),'zh'); });
+  if(!rows.length){ box.innerHTML='<div class="hist-empty">暂无近 5 日溢价套利入选记录</div>'; return; }
+  const head=topHistCell('date','入选日期')+topHistCell('code','代码')+topHistCell('name','名称')+topHistCell('price','入选日价格')+topHistCell('nav','入选日净值')+topHistCell('_cur','最新价')+topHistCell('_nav','最新净值')+topHistCell('_pchg','价格累计涨跌')+topHistCell('_nchg','净值累计涨跌');
+  box.innerHTML='<table class="histtbl"><thead><tr>'+head+'</tr></thead><tbody>'+rows.map(function(r){
+    const pcls=(r._pchg==null)?'':(r._pchg>=0?'pos':'neg');
+    const ncls=(r._nchg==null)?'':(r._nchg>=0?'pos':'neg');
+    const plain=String(r.code||'').replace(/^(sh|sz|bj)/i,'');
+    return '<tr><td>'+esc(r.date)+'</td><td><a class="codelink" href="'+(location.protocol==='file:'?'fund_arb.html':'/arb')+'?code='+plain+'" target="_blank">'+esc(r.code)+'</a></td><td class="l">'+esc(r.name)+'</td><td>'+fmtNum(r.price)+'</td><td>'+fmtNum(r.nav)+'</td><td>'+fmtNum(r._cur)+'</td><td>'+fmtNum(r._nav)+'</td><td class="'+pcls+'">'+fmtPct(r._pchg)+'</td><td class="'+ncls+'">'+fmtPct(r._nchg)+'</td></tr>';
+  }).join('')+'</tbody></table>';
+}
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme', t);
   const icon=document.getElementById('themeIcon'); const lbl=document.getElementById('themeLbl');
@@ -225,7 +264,7 @@ async function load(){
     const url=BASE+'/api/top?date='+encodeURIComponent(date)+'&threshold='+encodeURIComponent(threshold)+'&dgate='+encodeURIComponent(dgate);
     const r=await fetch(url); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
-    currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d);
+    currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d); loadTopHist();
   }catch(e){
     document.getElementById('err').textContent='加载失败：'+e.message;
   }finally{
