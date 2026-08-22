@@ -135,9 +135,9 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 .histbox{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:12px 0}
 .histbox h3{font-size:12.5px;margin:2px 0 8px;color:var(--title);white-space:nowrap}
 .histtbl{font-size:11.5px;table-layout:auto;width:max-content;min-width:100%;border-collapse:collapse;white-space:nowrap}
-.histtbl th{background:#1f6feb;color:#fff;font-weight:700;padding:5px 7px;position:sticky;top:0;z-index:3;text-align:right;cursor:pointer;user-select:none}
-.histtbl th:first-child,.histtbl td:first-child{text-align:left}
-.histtbl th.l,.histtbl td.l{text-align:left}
+.histtbl th{background:#1f6feb;color:#fff;font-weight:700;padding:5px 7px;position:sticky;top:0;z-index:3;text-align:center;cursor:pointer;user-select:none}
+.histtbl td:first-child{text-align:left}
+.histtbl td.l{text-align:left}
 .histtbl td{padding:4px 7px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums}
 .histtbl tbody tr:hover td{background:var(--row-hover)}
 .histtbl .pos{color:var(--pos);font-weight:600}
@@ -1155,7 +1155,7 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 :root{--bg2:#0d1117;--link:#79c0ff}
 :root[data-theme="light"]{--bg2:#f5f7fa;--link:#2563eb}
 .grid{width:100%;border-collapse:collapse;font-size:12px;margin-top:0}
-.grid th,.grid td{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.grid th{padding:4px 6px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap}.grid td{padding:4px 6px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
 .grid thead th{color:var(--th-text);font-weight:600;background:var(--th-bg);text-align:center;position:sticky;top:0;z-index:3}
 .grid thead th:first-child{left:0;top:0;z-index:5;background:var(--th-bg)}
 .grid td:first-child{background:var(--panel)}
