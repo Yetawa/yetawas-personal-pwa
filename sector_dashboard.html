@@ -363,7 +363,7 @@ function renderMini(){
   h+=`<span class="m">${mk("上证指数")}</span><span class="sep">·</span>`;
   h+=`<span class="m">${mk("深证成指")}</span><span class="sep">·</span>`;
   h+=`<span class="m">${mk("创业板指")}</span>`;
-  h+=`<span class="sep">|</span><span class="m lead">主线：${top} ${fmtChg(d[top].chg)}</span>`;
+  h+=`<span class="sep">|</span><span class="m lead ${cls(d[top].chg)}">主线：${top} ${fmtChg(d[top].chg)}</span>`;
   $("#mini").innerHTML=h;
 }
 
