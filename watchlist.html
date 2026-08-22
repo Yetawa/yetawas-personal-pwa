@@ -152,11 +152,21 @@ h1{font-size:19px;font-weight:800}
 var KEY='watchlist';
 function loadW(){ try{ return JSON.parse(localStorage.getItem(KEY)||'[]'); }catch(e){ return []; } }
 function saveW(a){ try{ localStorage.setItem(KEY,JSON.stringify(a)); }catch(e){} }
-function toast(msg){
+function toast(msg, kind){
   var t=document.getElementById('wlToast');
-  if(!t){ t=document.createElement('div'); t.id='wlToast'; t.style.cssText='position:fixed;left:50%;bottom:26%;transform:translateX(-50%);background:rgba(15,19,28,.94);color:#e6edf7;padding:9px 18px;border-radius:9px;font-size:13px;z-index:99999;border:1px solid #2f3b52'; document.body.appendChild(t); }
+  if(!t){ t=document.createElement('div'); t.id='wlToast'; t.style.cssText='position:fixed;left:50%;bottom:26%;transform:translateX(-50%);color:#e6edf7;padding:9px 18px;border-radius:9px;font-size:13px;z-index:99999;border:1px solid #2f3b52;max-width:90vw;text-align:center'; document.body.appendChild(t); }
+  t.style.background = kind==='err' ? 'rgba(120,30,30,.94)' : 'rgba(15,19,28,.94)';
   t.textContent=msg; t.style.display='block'; clearTimeout(t._t);
-  t._t=setTimeout(function(){ t.style.display='none'; },1600);
+  t._t=setTimeout(function(){ t.style.display='none'; }, kind==='err' ? 4500 : 1600);
+}
+function setBanner(msg, kind){
+  var bar=document.getElementById('wlBanner');
+  if(!bar){ bar=document.createElement('div'); bar.id='wlBanner'; bar.style.cssText='margin:8px 0;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.5;word-break:break-all'; document.querySelector('.addbar').parentNode.insertBefore(bar, document.querySelector('.addbar').nextSibling); }
+  bar.style.background = kind==='err' ? 'rgba(120,30,30,.18)' : 'rgba(13,148,136,.16)';
+  bar.style.color = kind==='err' ? '#ffb3b3' : '#9be7da';
+  bar.style.border = '1px solid ' + (kind==='err' ? 'rgba(255,80,80,.4)' : 'rgba(13,148,136,.4)');
+  bar.textContent=msg;
+  if(kind!=='err') setTimeout(function(){ if(bar.textContent===msg) bar.textContent=''; }, 6000);
 }
 function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function daysFrom(s){
@@ -171,21 +181,35 @@ function fmt(v){ if(v==null||isNaN(v)) return '—'; return Number(v).toFixed(3)
 function fmtPct(v){ if(v==null||isNaN(v)) return '—'; return (v>0?'+':'')+Number(v).toFixed(2)+'%'; }
 
 // 现价缓存（会话内）
-var pxCache={};
-function fetchPrice(code){
+var pxCache={}, pxErrors={};
+function fetchPrice(code, attempt){
+  attempt = attempt||0;
   return new Promise(function(res){
     if(pxCache[code]!==undefined){ res(pxCache[code]); return; }
-    fetch(BASE+'/api/data?code='+encodeURIComponent(code)+'&days=3&t='+Date.now())
-      .then(function(r){ return r.json(); })
+    fetch(BASE+'/api/data?code='+encodeURIComponent(code)+'&days=3&t='+Date.now(), {cache:'no-store'})
+      .then(function(r){
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        return r.json();
+      })
       .then(function(d){
-        if(d && d.error){ pxCache[code]=null; res(null); return; }
+        if(d && d.error){ throw new Error(d.error); }
         var rows=d.rows||[], name=d.name||'';
         var p=null;
         for(var i=rows.length-1;i>=0;i--){ if(rows[i]&&rows[i].price!=null){ p=rows[i].price; break; } }
+        if(p==null){ throw new Error('无价格数据'); }
         pxCache[code]={price:p, name:name};
+        delete pxErrors[code];
         res(pxCache[code]);
       })
-      .catch(function(){ pxCache[code]=null; res(null); });
+      .catch(function(e){
+        if(attempt<2){
+          setTimeout(function(){ fetchPrice(code, attempt+1).then(res); }, 350*(attempt+1));
+        }else{
+          pxErrors[code]=(e&&e.message)||String(e);
+          pxCache[code]=null;
+          res(null);
+        }
+      });
   });
 }
 
@@ -242,19 +266,42 @@ function render(){
 }
 
 function refresh(force){
-  if(force){ pxCache={}; }
+  if(force){ pxCache={}; pxErrors={}; }
   list=loadW();
+  // 备份上一次保存的数据，便于旧 localStorage（无 wlprice 字段）数据兼容
+  list.forEach(function(x){ x._prevPrice = (x.price!=null)?Number(x.price):(x.wlprice!=null?Number(x.wlprice):null); });
   if(!list.length){ render(); lastWl=[]; lastSh=[]; renderChart(); return; }
-  Promise.all(list.map(fetchPrice)).then(function(){
-    list.forEach(function(x,i){
+  setBanner('正在拉取 '+list.length+' 只自选最新价…');
+  // 错峰启动：每只间隔 120ms，避免渲染后端并发限制导致部分 fetch 失败
+  var tasks = list.map(function(x, i){
+    return new Promise(function(res){
+      setTimeout(function(){ fetchPrice(x.code).then(res).catch(function(e){ pxErrors[x.code]=(e&&e.message)||String(e); res(null); }); }, i*120);
+    });
+  });
+  Promise.all(tasks).then(function(){
+    list.forEach(function(x){
       var r=pxCache[x.code];
       if(r){ if(!x.name) x.name=r.name; x.price=r.price; }
-      if(x.wlprice==null && x.price!=null) x.wlprice=x.price; // 首次加入时以当前价≈自选价
+      // wlprice 三段兜底：1)原值 2)本次拿到的价格 3)上次保存的价格（兼容老格式）
+      if(x.wlprice==null || !(x.wlprice>0)){
+        if(x.price!=null && x.price>0) x.wlprice=x.price;
+        else if(x._prevPrice!=null && x._prevPrice>0) x.wlprice=x._prevPrice;
+      }
       x.days=daysFrom(x.date);
     });
-    return computeChg(list);
+    return computeChg(list).catch(function(e){
+      console.warn('computeChg err', e);
+      list.forEach(function(x){ if(x.chg==null) x.chg=priceChg(x); });
+    });
   }).then(function(){
+    var errs=Object.keys(pxErrors);
+    if(errs.length){ setBanner('已更新；'+errs.length+' 只拉取失败（已重试 3 次）：'+errs.join('、')+' — '+errs.map(function(c){return c+':'+pxErrors[c];}).join('；'), 'err'); }
+    else { setBanner('自选已更新：'+list.length+' 只｜时间 '+new Date().toLocaleTimeString()); }
     saveW(list); render(); loadChart(!!force);
+  }).catch(function(e){
+    console.error('refresh err', e);
+    setBanner('自选刷新失败：'+((e&&e.message)||String(e)),'err');
+    try{ render(); }catch(_){}
   });
 }
 var cbMapCache=null;
@@ -334,7 +381,13 @@ function loadChart(force){
         return {date:p.date, v:(c/baseSh-1)*100};
       });
       lastWl=wl; lastSh=sh; renderChart();
+    }).catch(function(e){
+      console.warn('sh000001 kline err', e);
+      lastWl=wl; lastSh=wl.map(function(p){return {date:p.date, v:null};}); renderChart();
     });
+  }).catch(function(e){
+    console.error('loadChart err', e);
+    if(chart) chart.innerHTML='<div class="empty">走势图加载失败：'+((e&&e.message)||String(e))+'（请点刷新重试）</div>';
   });
 }
 function renderChart(){
