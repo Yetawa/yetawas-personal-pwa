@@ -3157,13 +3157,19 @@ def _history_save(data):
         print(f"    [历史] 写入失败: {e}")
 
 def history_append(kind, date, entries):
-    """追加当日入选记录。kind: pivot/top/cb；entries: 精简字段列表。"""
+    """追加当日入选记录。kind: pivot/top/cb；entries: 精简字段列表。
+    跨日自然累积；同一天多轮扫描按 code 合并去重（后到覆盖同 code），不丢已入选信号。"""
     if not entries:
         return
     with _HISTORY_LOCK:
         data = _history_load()
         bucket = data.setdefault(kind, {})
-        bucket[date] = entries
+        merged = {}
+        for e in bucket.get(date, []):
+            merged[e.get("code")] = e
+        for e in entries:
+            merged[e.get("code")] = e
+        bucket[date] = list(merged.values())
         # 只保留最近 5 个交易日（按日期字符串排序取后 5）
         dates = sorted(bucket.keys())
         for old in dates[:-HISTORY_MAX_DAYS]:
