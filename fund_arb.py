@@ -4197,6 +4197,14 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
             return
+        if parsed.path in ("/icon-192.png", "/icon-512.png"):
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
+            try:
+                with open(_fp, "rb") as _f:
+                    self._send(200, _f.read(), "image/png")
+            except Exception:
+                self._send(404, "Not Found", "text/plain; charset=utf-8")
+            return
         if parsed.path in ("/yupen", "/yupen.html", "/fish_basin.html"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fish_basin.html")
             try:
