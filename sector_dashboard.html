@@ -696,13 +696,16 @@ function renderStyle(){
   const s=D.style||{}, idx=D.indices||{};
   const get=n=> s[n] || (idx[n] ? [idx[n][0], idx[n][1]] : null);
   const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","沪深300","中证1000","中证500","中证2000","高估值","低估值","高动量","低动量"];
-  $("#styleRow").innerHTML = order.map(n=>{
+  // 仅渲染有数据的项；缺数据的项（如中证2000 提取失败）直接隐藏，不显示占位
+  const cells = order.map(n=>{
     const o=get(n);
-    if(!o) return `<div class="style-idx style-pending"><div class="n">${n}</div><div class="c" style="color:var(--txt3)">待数据</div></div>`;
+    if(!o) return "";
     const [v,c]=o;
     const bg = c>=0 ? "var(--upbg)" : "var(--downbg)";
     return `<div class="style-idx" style="background:${bg}"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
-  }).join("");
+  }).filter(x=>x!=="");
+  if(!cells.length){ $("#styleRow").innerHTML="<div class='src-note'>风格数据暂缺（数据源未返回，将在交易日快照更新后补齐）</div>"; }
+  else { $("#styleRow").innerHTML = cells.join(""); }
   renderStyleCurve();
 }
 /* 风格差值曲线（需求5）：基于 style_hist（{日期:{风格:[值,涨跌]}}）绘制差值序列 */
@@ -726,10 +729,11 @@ function renderStyleCurve(){
   const pairs=_styleDiffPairs();
   const chipsHtml = pairs.map(([n,a,b])=>{
     const v=(a!=null&&b!=null)? a-b : null;
-    const up=v>=0; const col= (v==null)?'var(--txt3)':(up?'var(--up)':'var(--down)');
-    const txt= (v==null)?'—':((up?'+':'')+v.toFixed(2)+'%');
+    if(v==null) return "";   // 任一侧缺数据则隐藏该差值卡，不显示占位
+    const up=v>=0; const col= up?'var(--up)':'var(--down)';
+    const txt=(up?'+':'')+v.toFixed(2)+'%';
     return `<div class="chip" style="min-width:118px"><div class="cn">${n}</div><div class="cv" style="color:${col}">${txt}</div></div>`;
-  }).join("");
+  }).filter(x=>x!=="").join("");
   base.innerHTML = `<div class="scb-bt">当前单日风格差值（基线）</div><div class="scb-chips">${chipsHtml}</div>`;
   if(!hist || !Object.keys(hist).length){
     box.innerHTML='<div class="src-note">历史趋势曲线（近3/5/10日）将在每日收盘快照更新后自动显示。正值=前者相对走强（如成长跑赢价值），负值=后者占优。当前展示最新单日差值基线。</div>';
