@@ -38,12 +38,13 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 @media(max-width:760px){
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  /* 顶栏品牌+8个链接在窄屏会折成2~3行，上边距必须覆盖多行导航，避免遮挡标题"自选池" */
-  .wrap{padding:120px 10px 50px}
+  /* 上边距不再写死：由 JS 按 .topnav 实际高度（含折行）动态设置 --nav-h，根治标题遮挡 */
 }
 /* 标题行置于固定导航之上，确保不被遮挡（手机端顶栏折行时尤重要） */
 .title-row{position:relative;z-index:1}
-.wrap{max-width:1080px;margin:0 auto;padding:64px 14px 50px}
+/* padding-top 由 JS 按顶栏实际高度(.topnav.offsetHeight，含折行)动态设置，
+   避免写死值导致窄屏顶栏折成多行时遮挡标题"自选池"与模式切换按钮 */
+.wrap{max-width:1080px;margin:0 auto;padding:calc(var(--nav-h,56px) + 14px) 14px 50px}
 h1{font-size:19px;font-weight:800;margin:0}
 .title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:0}
 /* 站点品牌（需求12） */
@@ -629,6 +630,19 @@ function rewriteNav(){
     a.href = web ? a.getAttribute('data-route') : a.getAttribute('data-file');
   });
 }
+// 动态测量固定顶栏(.topnav)实际高度（含窄屏折行），写入 --nav-h，
+// 让 .wrap 的 padding-top 精确避让，根治标题"自选池"与模式切换按钮被遮挡。
+function syncNavHeight(){
+  var nav=document.querySelector('.topnav'); if(!nav) return;
+  var h=nav.offsetHeight || 56;
+  try{ h += (window.screen && window.screen.height) ? 0 : 0; }catch(e){}
+  // 叠加 iOS/Android 刘海安全区
+  var safe=0;
+  try{ safe = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sat')||'0',10)||0; }catch(e){}
+  document.documentElement.style.setProperty('--nav-h', (h + safe) + 'px');
+}
+window.addEventListener('resize', syncNavHeight);
+window.addEventListener('orientationchange', function(){ setTimeout(syncNavHeight, 200); });
 
 // 表头点击排序（无三角，仅高亮当前排序列）
 document.querySelectorAll('#tbl thead th[data-k]').forEach(function(th){
@@ -637,9 +651,13 @@ document.querySelectorAll('#tbl thead th[data-k]').forEach(function(th){
 // 立即加载一次价格并定时刷新
 rewriteNav();
 initTheme();
+syncNavHeight();
 markSorted();
 refresh();
 setInterval(refresh, 120000);
+// 布局/字体稳定后再校正一次顶栏高度（避免初始测量偏差）
+window.addEventListener('load', syncNavHeight);
+setTimeout(syncNavHeight, 400);
 </script>
 <script>
 if('serviceWorker' in navigator){
