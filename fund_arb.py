@@ -4145,7 +4145,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(429, json.dumps({"error": "请求过于频繁，请稍后再试"}))
             return
         if parsed.path == "/manifest.json":
-            self._serve_file("manifest.json", MANIFEST_JSON, "application/manifest+json; charset=utf-8")
+            self._send(200, MANIFEST_JSON, "application/manifest+json; charset=utf-8")
+            return
         if parsed.path == "/sw.js":
             try:
                 _sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sw.js")
@@ -4199,13 +4200,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, "{}", "application/json; charset=utf-8")
             return
         if parsed.path == "/icon.svg":
-            self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
+            self._send(200, ICON_SVG, "image/svg+xml")
             return
         if parsed.path == "/icon-192.png":
-            self._serve_file("icon-192.png", ICON_PNG_192, "image/png")
+            self._send(200, ICON_PNG_192, "image/png")
             return
         if parsed.path == "/icon-512.png":
-            self._serve_file("icon-512.png", ICON_PNG_512, "image/png")
+            self._send(200, ICON_PNG_512, "image/png")
             return
         if parsed.path in ("/pivot_snapshot.json", "/cb_snapshot.json"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
