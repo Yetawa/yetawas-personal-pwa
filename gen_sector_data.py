@@ -138,6 +138,108 @@ def _fetch_quotes(secids_map):
     return out
 
 
+# 新浪/腾讯兜底源：东财 push2 偶发失败或限流时，用更稳定可达的源补齐风格指数
+_SINA_CODES = {
+    "中证500": "sh000905", "中证1000": "sh000852", "沪深300": "sh000300",
+    "上证50": "sh000016", "中证2000": "sz932000", "大盘成长": "sz399372",
+    "大盘价值": "sz399373", "小盘成长": "sz399376", "小盘价值": "sz399377",
+}
+_TENCENT_CODES = {
+    "中证500": "sh000905", "中证1000": "sh000852", "沪深300": "sh000300",
+    "上证50": "sh000016", "中证2000": "sz932000", "大盘成长": "sz399372",
+    "大盘价值": "sz399373", "小盘成长": "sz399376", "小盘价值": "sz399377",
+}
+
+
+def _fetch_quotes_sina(names):
+    """新浪实时行情兜底：返回 {name:[price, chg%]}。names 为想要的风格名集合。"""
+    want = {n: _SINA_CODES[n] for n in names if n in _SINA_CODES}
+    if not want:
+        return {}
+    out = {}
+    try:
+        codes = list(want.values())
+        url = "https://hq.sinajs.cn/list=" + ",".join(codes)
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn/"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            txt = r.read().decode("gbk", "replace")
+        for line in txt.split(";"):
+            line = line.strip()
+            if "=" not in line or '"' not in line:
+                continue
+            pre, _, body = line.partition("=")
+            code = pre.replace("var hq_str_", "").strip()
+            body = body.strip().strip('"')
+            if not body:
+                continue
+            f = body.split(",")
+            if len(f) < 4:
+                continue
+            try:
+                price = float(f[1]); yclose = float(f[2])
+            except (ValueError, IndexError):
+                continue
+            if price <= 0 or yclose <= 0:
+                continue
+            chg = (price - yclose) / yclose * 100
+            name = {v: k for k, v in want.items()}.get(code)
+            if name:
+                out[name] = [round(price, 2), round(chg, 2)]
+    except Exception:
+        return {}
+    return out
+
+
+def _fetch_quotes_tencent(names):
+    """腾讯实时行情兜底：返回 {name:[price, chg%]}。"""
+    want = {n: _TENCENT_CODES[n] for n in names if n in _TENCENT_CODES}
+    if not want:
+        return {}
+    out = {}
+    try:
+        codes = list(want.values())
+        url = "https://qt.gtimg.cn/q=" + ",".join(codes)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            txt = r.read().decode("gbk", "replace")
+        for line in txt.split(";"):
+            line = line.strip()
+            if "~" not in line or "=" not in line:
+                continue
+            pre, _, body = line.partition("=")
+            code = pre.replace("v_", "").strip()
+            f = body.strip('"').split("~")
+            if len(f) < 33:
+                continue
+            try:
+                price = float(f[3]); yclose = float(f[4])
+            except (ValueError, IndexError):
+                continue
+            if price <= 0 or yclose <= 0:
+                continue
+            chg = (price - yclose) / yclose * 100
+            name = {v: k for k, v in want.items()}.get(code)
+            if name:
+                out[name] = [round(price, 2), round(chg, 2)]
+    except Exception:
+        return {}
+    return out
+
+
+def _fetch_style_quotes(secids_map):
+    """风格指数实时报价：东财优先，失败则用新浪/腾讯兜底补齐缺失项。"""
+    out = _fetch_quotes(secids_map)
+    missing = [n for n in secids_map.values() if n not in out]
+    if missing:
+        out.update(_fetch_quotes_sina(missing))
+    if missing:
+        still = [n for n in missing if n not in out]
+        if still:
+            out.update(_fetch_quotes_tencent(still))
+    return out
+
+
 def _fetch_style_hist(n_days=10):
     """近 n_days 交易日风格指数收盘历史（需求5：风格差值曲线）。
     返回 {YYYY-MM-DD: {风格名:[收盘, 涨跌幅%]}}；失败返回 {}。"""
@@ -494,8 +596,8 @@ def main():
         sys.stderr.write("WARN: 东财取数失败，未覆盖现有 sector_data.json\n")
         sys.exit(2)
 
-    # 指数 + 风格指数（失败则缺省，前端会用内置兜底补齐，不影响行业数据）
-    idx_style = _fetch_quotes(INDEX_SECIDS)
+    # 指数 + 风格指数（东财优先，新浪/腾讯兜底补齐，失败则缺省，前端会用内置兜底补齐）
+    idx_style = _fetch_style_quotes(INDEX_SECIDS)
     indices = {k: idx_style[k] for k in INDEX_NAMES if k in idx_style}
     style = {k: idx_style[k] for k in STYLE_NAMES if k in idx_style}
 
