@@ -3888,11 +3888,11 @@ def cb_api_payload(force=False):
         prog = dict(_CB["progress"])
         err = _CB["error"]
     today = bj_now().strftime("%Y-%m-%d")
+    # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
     stale = (res is None) or (res.get("trade_date") != today)
-    # 恢复手动刷新权：force=1 任何时候都可触发后台重扫（含周末），让用户能主动获取最新数据。
-    # 日期一致性由扫描侧保证（cb_compute/pivot 扫描均用真实交易日作为 trade_date，与涨跌幅同源），
-    # 因此不再以"非交易日"为由禁止重扫；stale 也会触发自动重扫。
-    if ((force) or stale) and not scanning:
+    # 智能冻结：非更新窗口（周末/夜间/盘中早段）不自动重扫，直接复用缓存静态展示；
+    # 仅在交易日 14:45 后且当日尚未扫描时才自动刷。force=1 任何时候都可手动触发。
+    if (force or _auto_refresh_due(res)) and not scanning:
         cb_run_scan_bg()
         scanning = True
     if res is None:
@@ -4298,7 +4298,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, json.dumps({"error": "日期格式非法，应为 YYYY-MM-DD"}))
                 return
             if not date:
-                date = datetime.now().strftime("%Y-%m-%d")
+                # 默认展示「最近 1 个交易日」的结果（静态），避免周末/非交易时段每次打开都触发实时抓取。
+                date = _last_trading_day()
             try:
                 threshold = float(qs.get("threshold", ["1.5"])[0])
             except ValueError:
@@ -4311,24 +4312,38 @@ class Handler(BaseHTTPRequestHandler):
             dgate = max(-10.0, min(-0.1, dgate))
             force = qs.get("force", ["0"])[0] in ("1", "true", "True")
             cache_key = f"top|{date}|{threshold}|{dgate}"
+            bj = bj_now()
+            today_str = bj.strftime("%Y-%m-%d")
             if force:
-                # 强制重算：绕过内存快照与缓存，确保数据刷新到「今天」（解决快照卡死旧日期问题）
+                # 手动刷新：若在交易日更新窗口内则刷新「今天」，否则刷新最近交易日快照。
+                _date = today_str if (_is_trading_day(bj) and _in_update_window(bj)) else date
                 try:
-                    out = compute_top_arbitrage(date, threshold, dgate, 20)
+                    out = compute_top_arbitrage(_date, threshold, dgate, 20)
                     out = dict(out); out["stale"] = False; out["forced"] = True
                     with self._API_CACHE_LOCK:
-                        self._API_CACHE[cache_key] = (time.time() + Handler._API_CACHE_TTL_TOP, out)
+                        self._API_CACHE[f"top|{_date}|{threshold}|{dgate}"] = (
+                            time.time() + Handler._API_CACHE_TTL_TOP, out)
+                    self._send(200, json.dumps(out, ensure_ascii=False))
+                except Exception as e:
+                    self._send(200, json.dumps({"error": str(e), "date": _date}, ensure_ascii=False))
+                return
+            # 非手动：仅当 date==今天 且处于更新窗口时才允许后台静默刷新；
+            # 其余（周末/夜间/盘中早段/历史日期）直接复用快照，不触发抓取，秒回静态结果。
+            if date == today_str and _in_update_window(bj):
+                try:
+                    data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL_TOP,
+                                                        lambda: serve_top_from_snapshot(date, threshold, dgate))
+                    out = dict(data); out["stale"] = stale
                     self._send(200, json.dumps(out, ensure_ascii=False))
                 except Exception as e:
                     self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
-                return
-            try:
-                data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL_TOP,
-                                                    lambda: serve_top_from_snapshot(date, threshold, dgate))
-                out = dict(data); out["stale"] = stale
-                self._send(200, json.dumps(out, ensure_ascii=False))
-            except Exception as e:
-                self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
+            else:
+                try:
+                    data = serve_top_from_snapshot(date, threshold, dgate)
+                    out = dict(data); out["stale"] = False
+                    self._send(200, json.dumps(out, ensure_ascii=False))
+                except Exception as e:
+                    self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
             return
         if parsed.path == "/api/data":
             qs = parse_qs(parsed.query)
@@ -4547,6 +4562,41 @@ class Handler(BaseHTTPRequestHandler):
 def _is_trading_day(d):
     """简易交易日判断：周一至周五（节假日未穷举，可按需扩展 HOLIDAYS 集合）。"""
     return d.weekday() < 5
+
+
+def _last_trading_day(now=None):
+    """回溯到最近一个交易日（含当天）。周末/假日返回上一周五。"""
+    if now is None:
+        now = bj_now()
+    d = now
+    while not _is_trading_day(d):
+        d = d - timedelta(days=1)
+    return d.strftime("%Y-%m-%d")
+
+
+def _in_update_window(now=None):
+    """是否在『当日行情更新窗口』：交易日且北京时间 >= 14:45。
+    此窗口之外（盘中早段、盘后、夜间、周末、假日）数据视为已收盘冻结，不应自动重扫。"""
+    if now is None:
+        now = bj_now()
+    if not _is_trading_day(now):
+        return False
+    return now.hour > 14 or (now.hour == 14 and now.minute >= 45)
+
+
+def _auto_refresh_due(res, trade_date_field="trade_date"):
+    """判定是否应自动后台重扫（非手动）：
+
+    仅在『交易日 + 已进入当日更新窗口(>=14:45) + 当日快照尚未生成』时才允许自动刷；
+    其余情况（非交易日/周末/假日、交易日 14:45 前、或当日快照已存在）→ 冻结，
+    直接复用缓存静态展示最近 1 个交易日的结果。
+
+    force=1（手动刷新）不受此限，任何时候都可触发，让用户能主动获取最新。"""
+    now = bj_now()
+    if not _in_update_window(now):
+        return False
+    td = now.strftime("%Y-%m-%d")
+    return (res is None) or (res.get(trade_date_field) != td)
 
 
 def _date_integrity(trade_date):
@@ -5224,19 +5274,13 @@ def pivot_api_payload(force=False):
         err = _PIVOT["error"]
 
     today = bj_now().strftime("%Y-%m-%d")
+    # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
     stale = (res is None) or (res.get("trade_date") != today)
-    # 收盘后(15:00 起)当日结果才算最终；盘中允许 30 分钟内的结果直接复用
-    if res and res.get("trade_date") == today:
-        try:
-            upd = datetime.strptime(res["updated"], "%Y-%m-%d %H:%M:%S")
-            if (bj_now() - upd).total_seconds() > 1800 and bj_now().hour < 15:
-                stale = True
-        except Exception:
-            pass
 
-    # 恢复手动刷新权：force=1 任何时候都可触发后台重扫（含周末）。
-    # 日期一致性由扫描侧保证（pivot 扫描用 K 线末根真实交易日作为 trade_date），不再以非交易日为由禁止。
-    if ((force) or stale) and not scanning:
+    # 智能冻结：非更新窗口（周末/夜间/盘中早段）不自动重扫，直接复用缓存静态展示
+    # 最近 1 个交易日的结果；仅在交易日 14:45 后且当日尚未扫描时才自动刷。
+    # force=1 任何时候都可手动触发，让用户能主动获取最新。
+    if (force or _auto_refresh_due(res)) and not scanning:
         pivot_run_scan_bg()
         scanning = True
 
