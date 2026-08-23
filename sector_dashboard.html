@@ -79,9 +79,9 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
 .tile{border-radius:11px;padding:9px 8px;border:1px solid var(--line);position:relative;overflow:hidden;cursor:default;transition:.12s}
 .tile:hover{transform:translateY(-2px);border-color:var(--accent);z-index:2}
-.tile .tn{font-size:12.5px;font-weight:700}
-.tile .tc{font-size:16px;font-weight:800;margin-top:2px}
-.tile .tm{font-size:11px;font-weight:600;opacity:.92;margin-top:1px}
+.tile .tn{font-size:16px;font-weight:800;line-height:1.25}   /* 行业名称大字（替代原涨跌幅大字，更精简） */
+.tile .tc{font-size:12.5px;font-weight:700;margin-top:4px;opacity:.95}   /* 涨跌幅小字（仅作副标） */
+.tile .tm{font-size:10.5px;font-weight:600;opacity:.85;margin-top:1px}
 .legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txt3);margin-top:10px;flex-wrap:wrap}
 .legend .bar{height:10px;width:160px;border-radius:6px;background:linear-gradient(90deg,var(--down),var(--flat) 50%,var(--up))}
 .spk{margin-top:5px;line-height:0;opacity:.9}
@@ -139,9 +139,6 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .style-idx{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:9px 10px;text-align:center}
 .style-idx .n{font-size:11.5px;color:var(--txt2)}
 .style-idx .c{font-size:15px;font-weight:800;margin-top:2px}
-.spread{display:flex;gap:10px;flex-wrap:wrap}
-.spread .chip{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px}
-.spread .chip b{font-size:14px}
 /* 风格差值曲线（需求5） */
 .style-curve-box{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
 .scb-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--txt2);margin-bottom:8px}
@@ -349,7 +346,6 @@ tr:hover td{background:var(--card2)}
     <div class="sect-h"><h2>⑤ 风格轮动强弱</h2><span class="tag" id="styleTag">— 收盘 · 巨潮风格指数</span></div>
     <div class="card">
       <div class="style-row" id="styleRow"></div>
-      <div class="spread" id="spread"></div>
       <div class="style-curve-box">
         <div class="scb-head">
           <span>风格差值曲线（看清成长/价值、大小盘切换趋势）</span>
@@ -360,6 +356,7 @@ tr:hover td{background:var(--card2)}
           </div>
         </div>
         <div class="style-curve" id="styleCurve"></div>
+        <div class="scb-baseline" id="scbBaseline" style="margin-top:10px"></div>
       </div>
     </div>
   </div>
@@ -583,12 +580,10 @@ function renderDay(){
     const mCol = m===null?"var(--txt3)":(white?"#ffffff":(m>=0?"var(--up)":"var(--down)"));
     const tag = rotationTag(n, days5);
     const tagHtml = tag ? `<div class="rtag rtag-${tag.k}">${tag.t}</div>` : "";
-    const chgLbl = c5 ? "5日涨跌" : "涨跌幅";
-    const mainLbl = m5 ? "5日主力" : "主力";
     return `<div class="tile" style="background:${bg};border-color:${bdCol}">
       <div class="tn" style="color:${txtCol}">${n}</div>
-      <div class="tc" style="color:${txtCol}">${chgLbl} ${fmtChg(c)}</div>
-      <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">${mainLbl} ${fmtMain(m)}</div>
+      <div class="tc" style="color:${txtCol}">${fmtChg(c)}</div>
+      <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">${fmtMain(m)}</div>
       ${sparkSVG(n, white)}
       ${tagHtml}
     </div>`;
@@ -662,61 +657,71 @@ function renderNarrative(day, ind){
 
 /* 风格轮动（使用最新交易日快照） */
 let _styleN = 5;   // 风格曲线窗口：3/5/10
+// 风格差值对定义（含 中证500 / 中证2000 趋势分析）
+function _styleDiffPairs(){
+  const s=D.style||{}, idx=D.indices||{};
+  const v=n=> (s[n]&&s[n][1]!=null)?s[n][1]:null;
+  const iv=n=> (idx[n]&&idx[n][1]!=null)?idx[n][1]:null;
+  return [
+    ["成长-价值(大盘)", v("大盘成长"), v("大盘价值")],
+    ["小盘-大盘(成长)", v("小盘成长"), v("大盘成长")],
+    ["小盘-大盘(价值)", v("小盘价值"), v("大盘价值")],
+    ["中证1000-沪深300", v("中证1000"), iv("沪深300")],
+    ["中证500-沪深300", v("中证500"), iv("沪深300")],
+    ["中证2000-中证1000", v("中证2000"), v("中证1000")],
+  ];
+}
 function renderStyle(){
   if(!D || !D.style){ $("#styleRow").innerHTML="<div class='src-note'>风格快照暂缺</div>"; return; }
   const s=D.style;
-  const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","中证1000"];
+  const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","中证1000","中证500","中证2000"];
   $("#styleRow").innerHTML = order.map(n=>{
-    const [v,c]=s[n];
-    // 涨=浅红背景、跌=浅绿背景（与热力图配色一致）
+    const o=s[n]; if(!o) return "";
+    const [v,c]=o;
     const bg = c>=0 ? "var(--upbg)" : "var(--downbg)";
     return `<div class="style-idx" style="background:${bg}"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
   }).join("");
-  const gv=s["大盘价值"][1], gc=s["大盘成长"][1], sc=s["小盘成长"][1], sv=s["小盘价值"][1];
-  const hs=D.indices["沪深300"][1];
-  const zz=s["中证1000"][1];
-  const chips=[
-    ["成长-价值(大盘)", (gc-gv).toFixed(2)+"%", gc-gv>=0],
-    ["小盘-大盘(成长)", (sc-gc).toFixed(2)+"%", sc-gc>=0],
-    ["小盘-大盘(价值)", (sv-gv).toFixed(2)+"%", sv-gv>=0],
-    ["中证1000-沪深300", (zz-hs).toFixed(2)+"%", zz-hs>=0],
-  ];
-  $("#spread").innerHTML = chips.map(([n,v,up])=>`<div class="chip">${n}<br><b class="${up?'':''}" style="color:${up?'var(--up)':'var(--down)'}">${up?'+':''}${v}</b></div>`).join("");
   renderStyleCurve();
 }
 /* 风格差值曲线（需求5）：基于 style_hist（{日期:{风格:[值,涨跌]}}）绘制差值序列 */
+function _styleDiffVal(hist, d, a, b){
+  // a/b 可来自 style 或 indices（沪深300）
+  const _val=(name)=>{
+    if(hist && hist[d] && hist[d][name]) return hist[d][name][0];
+    const s=D.style||{}, idx=D.indices||{};
+    if(s[name] && s[name][0]!=null) return s[name][0];
+    if(idx[name] && idx[name][0]!=null) return idx[name][0];
+    return null;
+  };
+  const va=_val(a), vb=_val(b);
+  return (va!=null&&vb!=null)? va-vb : null;
+}
 function renderStyleCurve(){
   const box=$("#styleCurve"); if(!box) return;
+  const base=$("#scbBaseline"); if(!base) return;
   const hist = D.style_hist;
+  // 始终渲染差值基线卡（含 中证500 / 中证2000）
+  const pairs=_styleDiffPairs();
+  const chipsHtml = pairs.map(([n,a,b])=>{
+    const v=(a!=null&&b!=null)? a-b : null;
+    const up=v>=0; const col= (v==null)?'var(--txt3)':(up?'var(--up)':'var(--down)');
+    const txt= (v==null)?'—':((up?'+':'')+v.toFixed(2)+'%');
+    return `<div class="chip" style="min-width:118px"><div class="cn">${n}</div><div class="cv" style="color:${col}">${txt}</div></div>`;
+  }).join("");
+  base.innerHTML = `<div class="scb-bt">当前单日风格差值（基线）</div><div class="scb-chips">${chipsHtml}</div>`;
   if(!hist || !Object.keys(hist).length){
-    // 无历史序列时：用单日快照的风格差值做静态基线，避免模块空白；趋势曲线需每日快照更新后显示
-    if(!D || !D.style){ box.innerHTML='<div class="src-note">风格数据暂缺。</div>'; return; }
-    const s=D.style;
-    const gv=s["大盘价值"]&&s["大盘价值"][1], gc=s["大盘成长"]&&s["大盘成长"][1];
-    const sc=s["小盘成长"]&&s["小盘成长"][1], sv=s["小盘价值"]&&s["小盘价值"][1];
-    const hs=s["沪深300"]&&s["沪深300"][1], zz=s["中证1000"]&&s["中证1000"][1];
-    const chips=[
-      ["成长-价值(大盘)", gc-gv],
-      ["小盘-大盘(成长)", sc-gc],
-      ["小盘-大盘(价值)", sv-gv],
-      ["中证1000-沪深300", zz-hs],
-    ];
-    const html = chips.map(([n,v])=>{
-      const up=v>=0; const col=up?"var(--up)":"var(--down)";
-      return `<div class="chip" style="min-width:120px"><div class="cn">${n}</div><div class="cv" style="color:${col}">${up?'+':''}${v==null?'—':v.toFixed(2)+'%'}</div></div>`;
-    }).join("");
-    box.innerHTML=`<div class="scb-baseline"><div class="scb-bt">当前单日风格差值（基线）</div><div class="scb-chips">${html}</div>`
-      +`<div class="src-note" style="margin-top:6px">历史趋势曲线（近3/5/10日）将在每日收盘快照更新后自动显示。正值=前者相对走强（如成长跑赢价值），负值=后者占优。</div></div>`;
+    box.innerHTML='<div class="src-note">历史趋势曲线（近3/5/10日）将在每日收盘快照更新后自动显示。正值=前者相对走强（如成长跑赢价值），负值=后者占优。当前展示最新单日差值基线。</div>';
     return;
   }
   const dates=Object.keys(hist).sort().slice(-_styleN);
-  // 三条差值：成长-价值(大盘)、小盘-大盘(成长)、中证1000-沪深300
   const series=[
-    {name:"成长-价值(大盘)", col:"var(--accent)", f:d=>{const a=hist[d]["大盘成长"],b=hist[d]["大盘价值"]; return (a&&b)?a[0]-b[0]:null;}},
-    {name:"小盘-大盘(成长)", col:"#f5b94a", f:d=>{const a=hist[d]["小盘成长"],b=hist[d]["大盘成长"]; return (a&&b)?a[0]-b[0]:null;}},
-    {name:"中证1000-沪深300", col:"#a78bfa", f:d=>{const a=hist[d]["中证1000"],b=hist[d]["沪深300"]; return (a&&b)?a[0]-b[0]:null;}},
+    {name:"成长-价值(大盘)", col:"var(--accent)", f:d=>_styleDiffVal(hist,d,"大盘成长","大盘价值")},
+    {name:"小盘-大盘(成长)", col:"#f5b94a", f:d=>_styleDiffVal(hist,d,"小盘成长","大盘成长")},
+    {name:"中证1000-沪深300", col:"#a78bfa", f:d=>_styleDiffVal(hist,d,"中证1000","沪深300")},
+    {name:"中证500-沪深300", col:"#f59e0b", f:d=>_styleDiffVal(hist,d,"中证500","沪深300")},
+    {name:"中证2000-中证1000", col:"#34d399", f:d=>_styleDiffVal(hist,d,"中证2000","中证1000")},
   ];
-  const W=680,H=180,padL=8,padR=8,padT=12,padB=22;
+  const W=680,H=200,padL=8,padR=8,padT=12,padB=22;
   const allV=[];
   series.forEach(se=>dates.forEach(d=>{ const v=se.f(d); if(v!=null) allV.push(v); }));
   if(!allV.length){ box.innerHTML='<div class="src-note">风格历史数据不完整，暂无法绘制曲线。</div>'; return; }
@@ -735,7 +740,7 @@ function renderStyleCurve(){
     paths+=`<path d="${out.trim()}" fill="none" stroke="${se.col}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
   });
   const legend=series.map(se=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);margin-right:12px"><span style="width:14px;height:3px;background:${se.col};display:inline-block;border-radius:2px"></span>${se.name}</span>`).join("");
-  box.innerHTML=`<div class="scb-legend">${legend}</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${paths}</svg><div class="src-note" style="margin-top:4px">数值=两组指数点差，曲线上行代表前者相对走强（如成长跑赢价值）。</div>`;
+  box.innerHTML=`<div class="scb-legend">${legend}</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${paths}</svg><div class="src-note" style="margin-top:4px">数值=两组指数点差，曲线上行代表前者相对走强（如成长跑赢价值）；切换近3/5/10日查看不同窗口趋势。</div>`;
 }
 
 /* 北向 + 两融 */
