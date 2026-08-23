@@ -4205,6 +4205,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
+        if parsed.path in ("/pivot_snapshot.json", "/cb_snapshot.json"):
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
+            try:
+                with open(_fp, encoding="utf-8") as _f:
+                    self._send(200, _f.read(), "application/json; charset=utf-8")
+            except Exception:
+                self._send(404, "{}", "application/json; charset=utf-8")
+            return
         if parsed.path in ("/yupen", "/yupen.html", "/fish_basin.html"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fish_basin.html")
             try:
