@@ -135,6 +135,70 @@ def _fetch_quotes(secids_map):
     return out
 
 
+def _fetch_style_hist(n_days=10):
+    """近 n_days 交易日风格指数收盘历史（需求5：风格差值曲线）。
+    返回 {YYYY-MM-DD: {风格名:[收盘, 涨跌幅%]}}；失败返回 {}。"""
+    secids = {
+        "0.399372": "大盘成长", "0.399373": "大盘价值", "0.399376": "小盘成长",
+        "0.399377": "小盘价值", "1.000016": "上证50", "1.000852": "中证1000",
+    }
+    hosts = ["%d.push2his.eastmoney.com" % random.randint(1, 99) for _ in range(6)]
+    hosts += ["push2his.eastmoney.com"]
+    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    # 收集每只指数的 [日期, 收盘, 涨跌幅]
+    raw = {}  # name -> {date: [close, chg]}
+    for host in hosts:
+        try:
+            for secid, name in secids.items():
+                url = ("https://%s/api/qt/stock/kline/get?secid=%s"
+                       "&fields1=f1&fields2=f3,f4,f8&klt=101&fqt=0"
+                       "&end=20500101&lmt=%d&ut=fa5fd1943c7b386f172d6893dbfba10b&_=%d"
+                       % (host, secid, n_days + 1, int(time.time() * 1000)))
+                req = urllib.request.Request(url, headers={
+                    "User-Agent": ua, "Referer": "https://quote.eastmoney.com/",
+                })
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    j = json.loads(r.read().decode("utf-8", "replace"))
+                kls = ((j or {}).get("data") or {}).get("klines") or []
+                buf = {}
+                for row in kls:
+                    parts = row.split(",")
+                    if len(parts) < 3:
+                        continue
+                    d = parts[0]
+                    try:
+                        close = float(parts[2])  # 收盘价
+                        chg = float(parts[3]) if len(parts) > 3 else 0.0  # 涨跌幅
+                    except (ValueError, IndexError):
+                        continue
+                    buf[d] = [round(close, 2), round(chg, 2)]
+                if buf:
+                    raw[name] = buf
+            if len(raw) >= len(secids):
+                break
+        except Exception:
+            continue
+    if not raw:
+        return {}
+    # 合并为按日期的矩阵；仅保留全部风格都有的日期
+    all_dates = set()
+    for buf in raw.values():
+        all_dates |= set(buf.keys())
+    out = {}
+    for d in sorted(all_dates):
+        rec = {}
+        ok = True
+        for name, buf in raw.items():
+            if d not in buf:
+                ok = False
+                break
+            rec[name] = buf[d]
+        if ok and len(rec) == len(secids):
+            out[d] = rec
+    return out
+
+
 def _get(url, timeout=10, retries=2):
     """带退避重试的 JSON GET（历史行情接口偶发连接重置）。"""
     ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -428,6 +492,16 @@ def main():
     idx_style = _fetch_quotes(INDEX_SECIDS)
     indices = {k: idx_style[k] for k in INDEX_NAMES if k in idx_style}
     style = {k: idx_style[k] for k in STYLE_NAMES if k in idx_style}
+
+    # 风格指数近10日历史（需求5：风格差值曲线）。拉取失败则 style_hist 为空，前端降级提示。
+    style_hist = {}
+    try:
+        style_hist = _fetch_style_hist()
+        if style_hist:
+            print("    风格历史: %d 个交易日" % len(style_hist))
+    except Exception as e:
+        print("    风格历史抓取失败（前端将降级）:", e)
+
     static = _static_sections(today)
 
     today_str = today.isoformat()
@@ -510,6 +584,8 @@ def main():
         D["indices"] = indices
     if style:
         D["style"] = style
+    if style_hist:
+        D["style_hist"] = style_hist
     if static:
         for _k in ("north", "margin", "judge", "etfs"):
             if static.get(_k):
