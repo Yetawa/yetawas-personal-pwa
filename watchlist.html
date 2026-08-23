@@ -36,11 +36,12 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 @media(max-width:760px){
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  .wrap{padding:100px 10px 50px}
+  /* 顶栏品牌+8个链接在窄屏会折成2~3行，留出充足上边距避免遮挡标题（与其他页一致） */
+  .wrap{padding:132px 10px 50px}
 }
 .wrap{max-width:1080px;margin:0 auto;padding:64px 14px 50px}
-h1{font-size:19px;font-weight:800}
-.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:2px}
+h1{font-size:19px;font-weight:800;margin-top:4px}
+.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:6px}
 /* 站点品牌（需求12） */
 .topnav .brand{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--txt);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap;flex:none;cursor:pointer;padding:6px 8px;margin-right:2px}
 .topnav .brand:hover{color:var(--accent)}
@@ -154,7 +155,7 @@ h1{font-size:19px;font-weight:800}
 
   <div class="chart-box">
     <div class="chart-head">
-      <b>自选池 vs 上证指数：累计涨跌幅 &amp; 滚动回测</b>
+      <b>自选池 vs 上证指数累计涨幅</b>
       <div class="range">
         <span class="rng-grp">区间</span>
         <button class="rng" data-d="5">5日</button>
