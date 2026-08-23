@@ -2,6 +2,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
 <title>自选池</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='17' r='9' fill='none' stroke='%231f6feb' stroke-width='2.4'/%3E%3Cpath d='M7 11 L16 5 L25 11' fill='none' stroke='%23ef4444' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M7 23 L16 29 L25 23' fill='none' stroke='%2322c55e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#0b0f17; --bg2:#111827; --card:#151c2c; --card2:#1b2436; --line:#243049;
@@ -35,10 +36,15 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 @media(max-width:760px){
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  .wrap{padding:96px 10px 50px}
+  .wrap{padding:88px 10px 50px}
 }
-.wrap{max-width:1080px;margin:0 auto;padding:74px 14px 50px}
+.wrap{max-width:1080px;margin:0 auto;padding:64px 14px 50px}
 h1{font-size:19px;font-weight:800}
+.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0}
+/* 站点品牌（需求12） */
+.topnav .brand{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--txt);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap;flex:none;cursor:pointer;padding:6px 8px;margin-right:2px}
+.topnav .brand:hover{color:var(--accent)}
+.topnav .brand svg{width:20px;height:20px;flex:none}
 .sub{font-size:12px;color:var(--txt3);margin:6px 0 14px;line-height:1.7}
 /* 添加区 */
 .addbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
@@ -103,20 +109,23 @@ h1{font-size:19px;font-weight:800}
 </head>
 <body>
 <div class="topnav">
+  <a class="brand" data-file="sector_dashboard.html" data-route="/sector" href="sector_dashboard.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
   <a class="navlink" data-file="sector_dashboard.html" data-route="/sector">行业轮动</a>
   <a class="navlink" data-file="fish_basin.html" data-route="/yupen">鱼盆模型</a>
   <a class="navlink" data-file="fund_arb.html" data-route="/arb">套利看板</a>
   <a class="navlink" data-file="fund_arb_ranking.html" data-route="/ranking">排行表</a>
   <a class="navlink" data-file="fund_arb_top.html" data-route="/top">TOP套利</a>
-  <a class="navlink" data-file="https://fund-arb.onrender.com/pivot" data-route="/pivot">口袋支点</a>
+  <a class="navlink" data-file="pivot_live.html" data-route="/pivot">口袋支点</a>
   <a class="navlink" data-file="cb.html" data-route="/cb">可转债套利</a>
   <a class="navlink active" data-file="watchlist.html" data-route="/watch">自选池</a>
   <span class="navspacer"></span>
-  <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
 </div>
 
 <div class="wrap">
-  <h1>自选池</h1>
+  <div class="title-row">
+    <h1>自选池</h1>
+    <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
+  </div>
   <div class="sub">长按 / 右键任意页面里的基金代码即可加入；也可手动输入代码添加。数据保存在本地浏览器。</div>
 
   <div class="addbar">
@@ -193,6 +202,7 @@ function daysFrom(s){
   return Math.max(0, Math.round((d0-d1)/86400000));
 }
 var BASE=(location.protocol==='file:')?'http://localhost:8000':'';
+var btN=10;   // 回测滚动窗口（需求7修复：初始默认值，避免 renderChart 时未定义导致序列为空）
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);}); }
 function fmt(v){ if(v==null||isNaN(v)) return '—'; return Number(v).toFixed(3); }
 function fmtPct(v){ if(v==null||isNaN(v)) return '—'; return (v>0?'+':'')+Number(v).toFixed(2)+'%'; }
@@ -412,7 +422,10 @@ function loadChart(force){
     }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; lastPool=[]; });
   Promise.all([shPromise, wlPromise]).then(function(){ renderChart(); }).catch(function(e){
     console.error('loadChart err', e);
-    if(chart) chart.innerHTML='<div class="empty">走势图加载失败：'+((e&&e.message)||String(e))+'（请点刷新重试）</div>';
+    var hint = (location.protocol==='file:')
+      ? '（本地打开需先启动 fund_arb.py 本地服务：python fund_arb.py，否则无法取行情）'
+      : '（线上环境受网络限制可能无法拉取行情，请在本机或国内节点使用）';
+    if(chart) chart.innerHTML='<div class="empty">走势图加载失败：'+((e&&e.message)||String(e))+hint+'</div>';
   });
 }
 function renderChart(){
@@ -594,7 +607,7 @@ function initTheme(){
 // ===== 导航链接：file:// 用兄弟文件名，http(s) 用站点路由（避免 Web 端前缀 404）=====
 function rewriteNav(){
   var web=(location.protocol!=='file:');
-  document.querySelectorAll('.topnav a.navlink[data-route]').forEach(function(a){
+  document.querySelectorAll('.topnav a[data-route]').forEach(function(a){
     a.href = web ? a.getAttribute('data-route') : a.getAttribute('data-file');
   });
 }
