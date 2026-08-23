@@ -110,9 +110,10 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .frow:hover .fname{color:var(--accent);text-decoration:underline}
 /* 轮动状态标签（需求4，客观状态非信号） */
 .rtag{display:inline-block;margin-top:3px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;line-height:1.4}
-.rtag-acc{background:rgba(34,197,94,.16);color:#22c55e}
-.rtag-cash{background:rgba(239,68,68,.16);color:#ef4444}
-.rtag-push{background:rgba(31,111,235,.16);color:#1f6feb}
+/* 配色铁律：资金流入=红色系，资金流出=绿色系（红涨绿跌一致） */
+.rtag-acc{background:rgba(239,68,68,.16);color:#ef4444}
+.rtag-push{background:rgba(239,68,68,.16);color:#ef4444}
+.rtag-cash{background:rgba(34,197,94,.16);color:#22c55e}
 /* 行业详情弹层（需求6） */
 .ind-detail-mask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:5000;display:flex;align-items:center;justify-content:center;padding:16px}
 .ind-detail{background:var(--card);border:1px solid var(--line);border-radius:14px;width:min(380px,94vw);max-height:86vh;overflow:auto;box-shadow:var(--shadow)}
@@ -148,6 +149,12 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .scb-btn{border:1px solid var(--line);background:var(--card2);color:var(--txt2);border-radius:7px;padding:3px 10px;font-size:11px;cursor:pointer}
 .scb-btn.active{background:var(--accent);border-color:var(--accent);color:#06121f;font-weight:700}
 .scb-legend{display:flex;flex-wrap:wrap;margin-bottom:6px}
+.scb-baseline{display:flex;flex-direction:column;gap:8px}
+.scb-bt{font-size:12px;font-weight:700;color:var(--txt)}
+.scb-chips{display:flex;gap:10px;flex-wrap:wrap}
+.scb-chips .chip{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;text-align:center;min-width:120px}
+.scb-chips .chip .cn{font-size:11px;color:var(--txt2);margin-bottom:3px}
+.scb-chips .chip .cv{font-size:15px;font-weight:700}
 
 /* north / margin */
 .kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
@@ -555,9 +562,14 @@ function renderDay(){
   const days5 = recentDays(5);
   // 热力图：按当前指标降序
   const names=Object.keys(ind).sort((a,b)=>(metricVal(b,ind)||-1e18)-(metricVal(a,ind)||-1e18));
-  const maxAbs=Math.max(0.6,...names.map(n=>Math.abs(ind[n].chg||0)));
+  // 各指标下，色块展示的「主数值」与「主力值」（累计指标用近5日累计，保证切换后数值真正变化）
+  const c5 = _metric==="chg5";   // 5日累计涨跌幅
+  const m5 = _metric==="main5";  // 5日主力累计净流入
+  const dispChg = n => c5 ? cumChg(n, days5) : (ind[n] ? ind[n].chg : null);
+  const dispMain = n => m5 ? cumMain(n, days5) : (ind[n] ? ind[n].main : null);
+  const maxAbs=Math.max(0.6,...names.map(n=>Math.abs((c5?cumChg(n,days5):(ind[n]?ind[n].chg||0:0))||0)));
   $("#heat").innerHTML = names.map(n=>{
-    const o=ind[n]; const c=o.chg, m=o.main;
+    const c=dispChg(n), m=dispMain(n);
     let bg, txtCol, bdCol;
     if(c===null){ bg="var(--card2)"; txtCol="var(--txt2)"; bdCol="var(--line)"; }
     else {
@@ -571,10 +583,12 @@ function renderDay(){
     const mCol = m===null?"var(--txt3)":(white?"#ffffff":(m>=0?"var(--up)":"var(--down)"));
     const tag = rotationTag(n, days5);
     const tagHtml = tag ? `<div class="rtag rtag-${tag.k}">${tag.t}</div>` : "";
+    const chgLbl = c5 ? "5日涨跌" : "涨跌幅";
+    const mainLbl = m5 ? "5日主力" : "主力";
     return `<div class="tile" style="background:${bg};border-color:${bdCol}">
       <div class="tn" style="color:${txtCol}">${n}</div>
-      <div class="tc" style="color:${txtCol}">${fmtChg(c)}</div>
-      <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">主力 ${fmtMain(m)}</div>
+      <div class="tc" style="color:${txtCol}">${chgLbl} ${fmtChg(c)}</div>
+      <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">${mainLbl} ${fmtMain(m)}</div>
       ${sparkSVG(n, white)}
       ${tagHtml}
     </div>`;
@@ -674,7 +688,27 @@ function renderStyle(){
 function renderStyleCurve(){
   const box=$("#styleCurve"); if(!box) return;
   const hist = D.style_hist;
-  if(!hist || !Object.keys(hist).length){ box.innerHTML='<div class="src-note">暂无风格历史数据（数据更新后显示近3/5/10日差值曲线）。当前仅展示单日差值（见上方标签）。</div>'; return; }
+  if(!hist || !Object.keys(hist).length){
+    // 无历史序列时：用单日快照的风格差值做静态基线，避免模块空白；趋势曲线需每日快照更新后显示
+    if(!D || !D.style){ box.innerHTML='<div class="src-note">风格数据暂缺。</div>'; return; }
+    const s=D.style;
+    const gv=s["大盘价值"]&&s["大盘价值"][1], gc=s["大盘成长"]&&s["大盘成长"][1];
+    const sc=s["小盘成长"]&&s["小盘成长"][1], sv=s["小盘价值"]&&s["小盘价值"][1];
+    const hs=s["沪深300"]&&s["沪深300"][1], zz=s["中证1000"]&&s["中证1000"][1];
+    const chips=[
+      ["成长-价值(大盘)", gc-gv],
+      ["小盘-大盘(成长)", sc-gc],
+      ["小盘-大盘(价值)", sv-gv],
+      ["中证1000-沪深300", zz-hs],
+    ];
+    const html = chips.map(([n,v])=>{
+      const up=v>=0; const col=up?"var(--up)":"var(--down)";
+      return `<div class="chip" style="min-width:120px"><div class="cn">${n}</div><div class="cv" style="color:${col}">${up?'+':''}${v==null?'—':v.toFixed(2)+'%'}</div></div>`;
+    }).join("");
+    box.innerHTML=`<div class="scb-baseline"><div class="scb-bt">当前单日风格差值（基线）</div><div class="scb-chips">${html}</div>`
+      +`<div class="src-note" style="margin-top:6px">历史趋势曲线（近3/5/10日）将在每日收盘快照更新后自动显示。正值=前者相对走强（如成长跑赢价值），负值=后者占优。</div></div>`;
+    return;
+  }
   const dates=Object.keys(hist).sort().slice(-_styleN);
   // 三条差值：成长-价值(大盘)、小盘-大盘(成长)、中证1000-沪深300
   const series=[
@@ -789,6 +823,13 @@ function refreshLive(){
   $("#liveTag").textContent="● 刷新中…";
   fetch("/api/sector_live",{signal:ctrl.signal}).then(r=>r.json()).then(res=>{
     if(res && res.industries){
+      // 非交易日（周末/节假日）：东财返回的是上一交易日收盘，不能把日期误标为今天，
+      // 否则会把非交易日插进 days 污染「近5交易日」统计。直接沿用快照，不注入新日。
+      if(res.non_trading || (res.date && new Date(res.date).getDay() % 6 === 0)){
+        $("#liveTag").textContent="● 今日非交易日，显示最新收盘快照（"+D.today+"）";
+        markLive(false);
+        return;
+      }
       // 实时数据的实际日期（东财盘中即今日）；快照无该日时动态新增并保持最新5日窗口
       const liveDate = res.date || D.today;
       if(!D.days[liveDate]){
