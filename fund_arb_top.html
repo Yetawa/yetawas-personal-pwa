@@ -45,6 +45,10 @@ a.theme-btn{text-decoration:none}
 .topnav .navlink.active{background:var(--btn);border-color:var(--btn);color:#fff}
 .topnav .navspacer{flex:1 1 auto}
 .topnav .navtheme{margin-left:6px}
+/* 站点品牌（需求12：logo + 套利工具平台，点击回首页） */
+.topnav .brand{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--text);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap;flex:none;cursor:pointer;padding:6px 8px;margin-right:2px}
+.topnav .brand:hover{color:var(--btn)}
+.topnav .brand svg{width:20px;height:20px;flex:none}
 .stale-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;line-height:1;padding:5px 9px;border-radius:7px;background:color-mix(in srgb,var(--est) 12%,transparent);color:var(--est);border:1px solid color-mix(in srgb,var(--est) 35%,transparent);white-space:nowrap;flex:none;animation:stalePulse 1.4s ease-in-out infinite}
 .stale-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--est);flex:none}
 @keyframes stalePulse{0%,100%{opacity:.55}50%{opacity:1}}
@@ -167,7 +171,8 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   </div>
   <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   <div class="topnav">
-    <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
+    <a class="brand" href="sector_dashboard.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
+    <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
     <a class="navlink" href="fund_arb.html">套利看板</a>
     <a class="navlink" href="fund_arb_ranking.html">排行表</a>
     <a class="navlink active" href="fund_arb_top.html">TOP套利</a>
