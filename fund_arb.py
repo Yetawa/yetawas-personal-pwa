@@ -3561,6 +3561,7 @@ CB_CFG = dict(
     fallback_if_empty=True,    # 无严格折价时降级显示"最接近折价"的前 N 只
 )
 CB_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_cache.json")
+CB_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_snapshot.json")
 _CB_LOCK = threading.Lock()
 _CB = dict(result=None, scanning=False, error="", progress=dict(done=0, total=0, phase=""))
 
@@ -3758,22 +3759,34 @@ def cb_scan(progress=None):
 
 
 def _cb_load_disk():
+    """启动时回填磁盘缓存；若磁盘缓存缺失（如云平台重新部署后本地文件系统被重置），
+    则回退到仓库内置的快照文件 cb_snapshot.json，保证页面打开即有数据，无需等待重扫。"""
     try:
+        data = None
+        src = ""
         if os.path.exists(CB_CACHE_FILE):
             with open(CB_CACHE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, dict) and data.get("picks") is not None:
-                with _CB_LOCK:
-                    _CB["result"] = data
-                print("    [可转债] 载入磁盘缓存：%s 命中 %d 只" %
-                      (data.get("updated"), data.get("total_picks")))
+            src = "磁盘缓存"
+        if not (isinstance(data, dict) and data.get("picks") is not None) and os.path.exists(CB_SNAP_FILE):
+            with open(CB_SNAP_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            src = "内置快照"
+        if isinstance(data, dict) and data.get("picks") is not None:
+            with _CB_LOCK:
+                _CB["result"] = data
+            print("    [可转债] 载入%s：%s 命中 %d 只" %
+                  (src, data.get("updated"), data.get("total_picks")))
     except Exception as e:
-        print("    [可转债] 磁盘缓存载入失败: %s" % e)
+        print("    [可转债] 缓存载入失败: %s" % e)
 
 
 def _cb_save_disk(res):
     try:
         with open(CB_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(res, f, ensure_ascii=False)
+        # 同步更新内置快照（仓库随源码提交，云端重部署后首个请求即可秒回数据）
+        with open(CB_SNAP_FILE, "w", encoding="utf-8") as f:
             json.dump(res, f, ensure_ascii=False)
     except Exception as e:
         print("    [可转债] 磁盘缓存写入失败: %s" % e)
@@ -5005,6 +5018,7 @@ def pivot_scan(progress=None):
 
 # ------------------------------------------------------------------ 缓存与调度
 PIVOT_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pivot_cache.json")
+PIVOT_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pivot_snapshot.json")
 
 _PIVOT = {
     "result": None,      # 最近一次完整扫描结果
@@ -5016,22 +5030,33 @@ _PIVOT_LOCK = threading.Lock()
 
 
 def _pivot_load_disk():
-    """启动时回填磁盘缓存，使休眠/重启后首个请求即可秒回上次结果。"""
+    """启动时回填磁盘缓存；若磁盘缓存缺失（云平台重新部署后本地文件系统被重置），
+    则回退到仓库内置的快照文件 pivot_snapshot.json，保证页面打开即有数据。"""
     try:
+        data = None
+        src = ""
         if os.path.exists(PIVOT_CACHE_FILE):
             with open(PIVOT_CACHE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, dict) and data.get("picks") is not None:
-                with _PIVOT_LOCK:
-                    _PIVOT["result"] = data
-                print(f"    [口袋支点] 载入磁盘缓存：{data.get('updated')} 命中 {data.get('total_picks')} 只")
+            src = "磁盘缓存"
+        if not (isinstance(data, dict) and data.get("picks") is not None) and os.path.exists(PIVOT_SNAP_FILE):
+            with open(PIVOT_SNAP_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            src = "内置快照"
+        if isinstance(data, dict) and data.get("picks") is not None:
+            with _PIVOT_LOCK:
+                _PIVOT["result"] = data
+            print(f"    [口袋支点] 载入{src}：{data.get('updated')} 命中 {data.get('total_picks')} 只")
     except Exception as e:
-        print(f"    [口袋支点] 磁盘缓存载入失败: {e}")
+        print(f"    [口袋支点] 缓存载入失败: {e}")
 
 
 def _pivot_save_disk(res):
     try:
         with open(PIVOT_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(res, f, ensure_ascii=False)
+        # 同步更新内置快照（仓库随源码提交，云端重部署后首个请求即可秒回数据）
+        with open(PIVOT_SNAP_FILE, "w", encoding="utf-8") as f:
             json.dump(res, f, ensure_ascii=False)
     except Exception as e:
         print(f"    [口袋支点] 磁盘缓存写入失败: {e}")
