@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8"><link rel="icon" href="icon.svg" type="image/svg+xml"><script>(function(){try{var h=new Date().getHours(),t=localStorage.getItem("arb_theme")||((h>=18||h<6)?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8"><link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg"><script>(function(){try{var h=new Date().getHours(),t=localStorage.getItem("arb_theme")||((h>=18||h<6)?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
 
@@ -294,7 +295,10 @@ async function load(){
       d2.stale=true; d2.scanning=false;
       render(d2);
       const ei=document.getElementById('elapsedInfo');
-      if(ei) ei.textContent='　｜　离线快照（数据日期 '+ (d2.updated||'-') +'，服务未连接）';
+      if(ei) ei.textContent='　｜　离线快照（数据日期 '+ (d2.updated||'-') +'，服务未连接，数据可能滞后）';
+      // 离线快照醒目提示：线上部署（美节点不可达东财）只能展示冻结快照，非实时
+      const dw=document.getElementById('dateWarn');
+      if(dw){ dw.style.display='inline-block'; dw.textContent='⚠ 当前为离线快照数据（'+ (d2.trade_date||'-') +'），非实时行情。如需最新数据请在本地启动 fund_arb.py（python fund_arb.py）后刷新。'; }
       document.getElementById('staleBadge').style.display='none';
       if(POLL){ clearInterval(POLL); POLL=null; }
       return;
@@ -481,4 +485,4 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('/sw.js').catch(function(err){ console.log('SW 注册失败：',err); });
   });
 }</script>
-<script src="watchlist.js"></script></body></html>
+</body></html>
