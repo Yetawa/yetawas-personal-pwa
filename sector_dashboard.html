@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <script>(function(){try{var h=new Date().getHours(),t=localStorage.getItem("arb_theme")||((h>=18||h<6)?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f17">
 <title>A股行业轮动与资金流向监控</title>
-<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22A%E8%82%A1%E8%A1%8C%E4%B8%9A%E8%BD%AE%E5%8A%A8%E7%9B%91%E6%8E%A7%22%2C%22short_name%22%3A%22%E8%A1%8C%E4%B8%9A%E8%BD%AE%E5%8A%A8%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230b0f17%22%2C%22theme_color%22%3A%22%230b0f17%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3Dhttp%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D100%20height%3D100%20rx%3D20%20fill%3D%22%230b0f17%22%2F%3E%3Ctext%20x%3D50%20y%3D68%20font-size%3D54%20text-anchor%3Dmiddle%20fill%3D%22%23ef4444%22%3E%E8%A1%8C%3C%2Ftext%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+<link rel="manifest" href="manifest.webmanifest">
 <style>
 :root{
   --bg:#0b0f17; --bg2:#111827; --card:#151c2c; --card2:#1b2436; --line:#243049;
@@ -29,7 +30,7 @@
   --upbg:rgba(225,29,72,.12); --downbg:rgba(22,163,74,.12);
   --up-rgb:225,29,72; --down-rgb:22,163,74; --flat-rgb:148,163,184;
   --shadow:0 6px 20px rgba(120,90,40,.12);
-  --tile-name:#16110a;   /* 浅色主题下行业名称为黑（用户要求统一黑，不再红/绿/白跳变） */
+  --tile-name:#4a4036;   /* 浅色主题下行业名称为灰黑（协调不突兀，不再红/绿/白跳变） */
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -143,6 +144,7 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .style-idx{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:9px 10px;text-align:center}
 .style-idx .n{font-size:11.5px;color:var(--txt2)}
 .style-idx .c{font-size:15px;font-weight:800;margin-top:2px}
+.style-idx.style-pending{background:repeating-linear-gradient(45deg,var(--card2),var(--card2) 6px,var(--bg2) 6px,var(--bg2) 12px);border-style:dashed;opacity:.7}
 /* 风格差值曲线（需求5） */
 .style-curve-box{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
 .scb-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--txt2);margin-bottom:8px}
@@ -695,7 +697,8 @@ function renderStyle(){
   const get=n=> s[n] || (idx[n] ? [idx[n][0], idx[n][1]] : null);
   const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","沪深300","中证1000","中证500","中证2000","高估值","低估值","高动量","低动量"];
   $("#styleRow").innerHTML = order.map(n=>{
-    const o=get(n); if(!o) return "";
+    const o=get(n);
+    if(!o) return `<div class="style-idx style-pending"><div class="n">${n}</div><div class="c" style="color:var(--txt3)">待数据</div></div>`;
     const [v,c]=o;
     const bg = c>=0 ? "var(--upbg)" : "var(--downbg)";
     return `<div class="style-idx" style="background:${bg}"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
@@ -810,10 +813,12 @@ function renderNB(){
   const dv = deltas.map(x=>x.v);
   const dlo = Math.min(0, ...dv), dhi = Math.max(0, ...dv);
   const drng = (dhi-dlo)||1;
-  const dy0 = dpadT + (0-dlo)/drng*(dh-dpadT-dpadB);
-  const step = (dw-2*dpadX)/Math.max(1,deltas.length-1);
-  const dx = i => dpadX + i*step;
-  const dy = v => dpadT + (v-dlo)/drng*(dh-dpadT-dpadB);
+  // 与上方柱状图对齐：delta[i] 对应第 (i+1) 根柱（tr[i+1]），x 坐标复用柱状图布局
+  const dbw = (dw-2*dpadX)/tr.length;
+  const dx = i => dpadX + (i+1)*dbw + dbw/2;   // delta[i] 对齐第 i+1 根柱中心
+  // Y 轴正向朝上：正值在上方、负值在下方（修复原反向 bug）
+  const dy = v => dpadT + (dhi - v)/drng*(dh-dpadT-dpadB);
+  const dy0 = dy(0);
   const baseLine = `<line x1="${dpadX}" y1="${dy0.toFixed(1)}" x2="${dw-dpadX}" y2="${dy0.toFixed(1)}" stroke="var(--txt3)" stroke-width="0.6" stroke-dasharray="3,3"/>`;
   let pts="", labels="";
   deltas.forEach((x,i)=>{
@@ -821,9 +826,10 @@ function renderNB(){
     const col = x.v>=0 ? "var(--up)" : "var(--down)";
     pts += (i?"L":"M")+X.toFixed(1)+" "+Y.toFixed(1)+" ";
     labels += `<circle cx="${X.toFixed(1)}" cy="${Y.toFixed(1)}" r="2.6" fill="${col}"/>`
-            + `<text x="${X.toFixed(1)}" y="${(Y + (x.v>=0?-7:12)).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${col}">${x.v>0?'+':''}${x.v}</text>`
-            + `<text x="${X.toFixed(1)}" y="${dh-4}" text-anchor="middle" font-size="9" fill="var(--txt3)">${x.date}</text>`;
+            + `<text x="${X.toFixed(1)}" y="${(Y + (x.v>=0?-7:12)).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${col}">${x.v>0?'+':''}${x.v}</text>`;
   });
+  // 日期标签与柱状图对齐：delta[0] 对应第 1 根柱起的日期
+  tr.forEach((x,i)=>{ if(i===0) return; const X=dx(i-1); labels += `<text x="${X.toFixed(1)}" y="${dh-4}" text-anchor="middle" font-size="9" fill="var(--txt3)">${x.date}</text>`; });
   dc.innerHTML = `<svg viewBox="0 0 ${dw} ${dh}" style="width:100%;height:auto;display:block">${baseLine}<path d="${pts.trim()}" fill="none" stroke="var(--gold)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>${labels}</svg>`;
 }
 
@@ -1044,5 +1050,5 @@ function safeRender(){
 })();
 </script>
 
-<script src="watchlist.js"></script></body>
+</body>
 </html>
