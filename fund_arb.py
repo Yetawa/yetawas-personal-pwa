@@ -3838,7 +3838,10 @@ def cb_api_payload(force=False):
         err = _CB["error"]
     today = bj_now().strftime("%Y-%m-%d")
     stale = (res is None) or (res.get("trade_date") != today)
-    if (force or (stale and _is_trading_day(bj_now()))) and not scanning:
+    # 非交易日（周末/节假日）禁止重扫：东财返回的是上一交易日收盘，强行重扫会把
+    # 日期误标为今天、覆盖周五收盘缓存，导致「缓存 vs 重扫数据不一致」。仅交易日才允许扫描。
+    _can_scan = _is_trading_day(bj_now())
+    if ((force and _can_scan) or (stale and _can_scan)) and not scanning:
         cb_run_scan_bg()
         scanning = True
     if res is None:
@@ -4066,8 +4069,13 @@ class Handler(BaseHTTPRequestHandler):
                         "main": round((main or 0) / 1e8, 2) if isinstance(main, (int, float)) else None,
                     }
                 if ind:
-                    return {"live": True, "date": datetime.now().strftime("%Y-%m-%d"),
-                            "count": len(ind), "industries": ind}
+                    # 非交易日（周末/节假日）东方财富仍返回上一交易日收盘，
+                    # 不能把日期误标为今天，否则前端会把非交易日插进 days 污染近5日统计
+                    now_bj = datetime.now()
+                    live_date = now_bj.strftime("%Y-%m-%d") if _is_trading_day(now_bj) else None
+                    return {"live": True, "date": live_date,
+                            "count": len(ind), "industries": ind,
+                            "non_trading": live_date is None}
                 last_err = "empty diff from " + host
             except Exception as e:
                 last_err = str(e)
@@ -5119,7 +5127,9 @@ def pivot_api_payload(force=False):
         except Exception:
             pass
 
-    if (force or (stale and _is_trading_day(bj_now()))) and not scanning:
+    # 非交易日禁止重扫（同 cb）：避免用上一交易日收盘覆盖缓存、造成日期误标
+    _can_scan = _is_trading_day(bj_now())
+    if ((force and _can_scan) or (stale and _can_scan)) and not scanning:
         pivot_run_scan_bg()
         scanning = True
 
