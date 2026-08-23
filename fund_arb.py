@@ -41,7 +41,7 @@ import os
 import threading
 import statistics
 import collections
-from fund_arb_tpl import (COMMON_CSS, PAGE_HTML, PAGE2_HTML, PAGE3_HTML, PAGE4_HTML, PAGE5_HTML, MANIFEST_JSON, ICON_SVG, SW_JS)
+from fund_arb_tpl import (COMMON_CSS, PAGE_HTML, PAGE2_HTML, PAGE3_HTML, PAGE4_HTML, PAGE5_HTML, MANIFEST_JSON, ICON_SVG, ICON_PNG_192, ICON_PNG_512, SW_JS)
 
 # 导出表格/图片浮动条（来源：公众号 航城大叔），在线页面统一注入
 EXPORT_BAR_HTML = ""
@@ -3934,6 +3934,10 @@ class Handler(BaseHTTPRequestHandler):
     _DIR = os.path.dirname(os.path.abspath(__file__))
 
     def _serve_file(self, fname, fallback, ctype):
+        # 若 fallback 本身就是二进制内容（如内嵌 PNG），直接 serve，不依赖磁盘文件
+        if isinstance(fallback, (bytes, bytearray)):
+            self._send(200, bytes(fallback), ctype)
+            return
         p = os.path.join(self._DIR, fname)
         if os.path.exists(p):
             with open(p, "r", encoding="utf-8") as f:
@@ -4197,13 +4201,11 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/icon.svg":
             self._serve_file("icon.svg", ICON_SVG, "image/svg+xml")
             return
-        if parsed.path in ("/icon-192.png", "/icon-512.png"):
-            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
-            try:
-                with open(_fp, "rb") as _f:
-                    self._send(200, _f.read(), "image/png")
-            except Exception:
-                self._send(404, "Not Found", "text/plain; charset=utf-8")
+        if parsed.path == "/icon-192.png":
+            self._serve_file("icon-192.png", ICON_PNG_192, "image/png")
+            return
+        if parsed.path == "/icon-512.png":
+            self._serve_file("icon-512.png", ICON_PNG_512, "image/png")
             return
         if parsed.path in ("/pivot_snapshot.json", "/cb_snapshot.json"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
