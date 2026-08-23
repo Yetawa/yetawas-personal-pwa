@@ -2,6 +2,7 @@
 <html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <script>(function(){try{var h=new Date().getHours(),t=localStorage.getItem("arb_theme")||((h>=18||h<6)?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f17">
@@ -97,6 +98,39 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .fbar.neg{right:50%;background:var(--downbg);border-right:3px solid var(--down)}
 .fval{font-size:12px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
 .fval.pos{color:var(--up)} .fval.neg{color:var(--down)}
+/* 指标切换栏（需求3） */
+.metric-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 8px}
+.metric-bar .mb-label{font-size:11px;color:var(--txt3);margin-right:2px}
+.mbtn{border:1px solid var(--line);background:var(--card);color:var(--txt2);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:.12s}
+.mbtn:hover{border-color:var(--accent);color:var(--accent)}
+.mbtn.active{background:var(--accent);border-color:var(--accent);color:#06121f}
+/* flow 旁 sparkline + 提示 */
+.flow-note{font-size:11px;color:var(--txt3);margin:0 0 8px;line-height:1.6}
+.frow .fspk{flex:none;width:64px;display:flex;align-items:center;justify-content:flex-end;opacity:.92}
+.frow:hover .fname{color:var(--accent);text-decoration:underline}
+/* 轮动状态标签（需求4，客观状态非信号） */
+.rtag{display:inline-block;margin-top:3px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;line-height:1.4}
+.rtag-acc{background:rgba(34,197,94,.16);color:#22c55e}
+.rtag-cash{background:rgba(239,68,68,.16);color:#ef4444}
+.rtag-push{background:rgba(31,111,235,.16);color:#1f6feb}
+/* 行业详情弹层（需求6） */
+.ind-detail-mask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:5000;display:flex;align-items:center;justify-content:center;padding:16px}
+.ind-detail{background:var(--card);border:1px solid var(--line);border-radius:14px;width:min(380px,94vw);max-height:86vh;overflow:auto;box-shadow:var(--shadow)}
+.idd-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+.idd-head b{font-size:15px;font-weight:800}
+.idd-x{border:none;background:var(--card2);color:var(--txt2);border-radius:8px;width:28px;height:28px;font-size:14px;cursor:pointer}
+.idd-x:hover{color:var(--up);border:1px solid var(--up)}
+.idd-body{padding:12px 16px 16px}
+.idd-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.idd-tbl td{padding:7px 8px;border-bottom:1px solid var(--line)}
+.idd-tbl td.l{color:var(--txt2);text-align:left}
+.idd-tbl td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.idd-sub{font-size:12px;color:var(--txt2);font-weight:700;margin:12px 0 6px}
+.idd-days{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.idd-d{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:6px 4px;text-align:center}
+.idd-d .d{font-size:10px;color:var(--txt3)}
+.idd-d .c{font-size:12px;font-weight:700;margin-top:2px}
+.idd-d .m{font-size:10px;margin-top:1px}
 
 /* style */
 .style-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px}
@@ -107,6 +141,13 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .spread{display:flex;gap:10px;flex-wrap:wrap}
 .spread .chip{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px}
 .spread .chip b{font-size:14px}
+/* 风格差值曲线（需求5） */
+.style-curve-box{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.scb-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--txt2);margin-bottom:8px}
+.scb-rng{display:flex;gap:5px}
+.scb-btn{border:1px solid var(--line);background:var(--card2);color:var(--txt2);border-radius:7px;padding:3px 10px;font-size:11px;cursor:pointer}
+.scb-btn.active{background:var(--accent);border-color:var(--accent);color:#06121f;font-weight:700}
+.scb-legend{display:flex;flex-wrap:wrap;margin-bottom:6px}
 
 /* north / margin */
 .kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
@@ -157,7 +198,9 @@ tr:hover td{background:var(--card2)}
 .mini b{font-weight:800;font-variant-numeric:tabular-nums}
 .mini .up{color:var(--up)} .mini .down{color:var(--down)}
 .mini .sep{color:var(--txt3);margin:0 2px}
-.mini .lead{color:var(--accent);font-weight:700}
+.mini .lead{font-weight:700}
+/* 主线标签：保留涨跌色（红涨绿跌），不被 lead 覆盖 */
+.mini .lead.up{color:var(--up)} .mini .lead.down{color:var(--down)}
 
 .scroll-hint{display:none;font-size:11px;color:var(--txt3);text-align:center;padding:6px 0 2px}
 @media(max-width:620px){.scroll-hint{display:block}}
@@ -174,6 +217,9 @@ tr:hover td{background:var(--card2)}
   .topnav .navlink:hover{border-color:var(--accent);color:var(--accent)}
   .topnav .navlink.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
   [data-theme="light"] .topnav .navlink.active{background:#2563eb;border-color:#2563eb;color:#fff}
+  .topnav .brand{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--txt);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap;flex:none;cursor:pointer;padding:6px 8px;margin-right:2px}
+  .topnav .brand:hover{color:#1f6feb}
+  .topnav .brand svg{width:20px;height:20px;flex:none}
   .topnav .navspacer{flex:1 1 auto}
   .topnav .navtheme{margin-left:6px}
 
@@ -201,11 +247,12 @@ tr:hover td{background:var(--card2)}
 </div>
 
   <div class="topnav">
+    <a class="brand" href="sector_dashboard.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
     <a class="navlink active" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
     <a class="navlink" href="fund_arb.html">套利看板</a>
     <a class="navlink" href="fund_arb_ranking.html">排行表</a>
     <a class="navlink" href="fund_arb_top.html">TOP套利</a>
-    <a class="navlink" href="https://fund-arb.onrender.com/pivot">口袋支点</a>
+    <a class="navlink" href="pivot_live.html">口袋支点</a>
     <a class="navlink" href="cb.html">可转债套利</a>
     <a class="navlink" href="watchlist.html">自选池</a>
     <span class="navspacer"></span>
@@ -220,7 +267,9 @@ tr:hover td{background:var(--card2)}
         'fund_arb.html': '/arb',
         'fund_arb_ranking.html': '/ranking',
         'fund_arb_top.html': '/top',
-        'cb.html': '/cb'
+        'pivot_live.html': '/pivot',
+        'cb.html': '/cb',
+        'watchlist.html': '/watch'
       };
       document.querySelectorAll('.topnav .navlink').forEach(function(a){
         var h = a.getAttribute('href');
@@ -262,6 +311,12 @@ tr:hover td{background:var(--card2)}
   <div class="sect">
     <div class="sect-h"><h2>③ 行业涨跌热力 & 资金净流入</h2><span class="tag">近5个交易日可切换</span></div>
     <div class="dates" id="dates"></div>
+    <div class="metric-bar" id="metricBar">
+      <span class="mb-label">排序指标</span>
+      <button class="mbtn active" data-m="chg">单日涨跌幅</button>
+      <button class="mbtn" data-m="chg5">5日累计涨跌幅</button>
+      <button class="mbtn" data-m="main5">5日主力累计净流入</button>
+    </div>
     <div class="src-note" id="srcNote"></div>
     <div class="heat" id="heat"></div>
     <div class="legend"><span>跌</span><span class="bar"></span><span>涨</span><span style="margin-left:8px">色块深浅 = 涨跌幅绝对值</span></div>
@@ -269,8 +324,17 @@ tr:hover td{background:var(--card2)}
 
   <!-- 资金净流入排行 -->
   <div class="sect">
-    <div class="sect-h"><h2>④ 主力资金行业净流入排行（双向条形）</h2><span class="tag">红=净流入 · 绿=净流出（亿元）</span></div>
+    <div class="sect-h"><h2>④ 主力资金行业净流入排行（双向条形）</h2><span class="tag">红=净流入 · 绿=净流出（亿元）· 点击行业看详情</span></div>
+    <div class="flow-note">每行右侧迷你折线为近5日主力净流入趋势（Sparkline），连续流入比单日更具参考价值。</div>
     <div class="card"><div class="flow" id="flow"></div></div>
+  </div>
+
+  <!-- 行业详情弹层 -->
+  <div class="ind-detail-mask" id="indMask" style="display:none">
+    <div class="ind-detail" id="indDetail">
+      <div class="idd-head"><b id="iddName">—</b><button class="idd-x" id="iddX" title="关闭">✕</button></div>
+      <div class="idd-body" id="iddBody"></div>
+    </div>
   </div>
 
   <!-- 风格轮动 -->
@@ -279,6 +343,17 @@ tr:hover td{background:var(--card2)}
     <div class="card">
       <div class="style-row" id="styleRow"></div>
       <div class="spread" id="spread"></div>
+      <div class="style-curve-box">
+        <div class="scb-head">
+          <span>风格差值曲线（看清成长/价值、大小盘切换趋势）</span>
+          <div class="scb-rng">
+            <button class="scb-btn" data-n="3">近3日</button>
+            <button class="scb-btn active" data-n="5">近5日</button>
+            <button class="scb-btn" data-n="10">近10日</button>
+          </div>
+        </div>
+        <div class="style-curve" id="styleCurve"></div>
+      </div>
     </div>
   </div>
 
@@ -377,6 +452,27 @@ function renderDates(){
   }).join("");
   document.querySelectorAll(".date-btn").forEach(b=>b.onclick=()=>{curDay=b.dataset.k;renderDates();renderDay();});
 }
+/* 指标切换（需求3） */
+function bindMetricBar(){
+  const bar=$("#metricBar"); if(!bar) return;
+  bar.querySelectorAll(".mbtn").forEach(b=>{
+    b.onclick=()=>{
+      _metric=b.dataset.m;
+      bar.querySelectorAll(".mbtn").forEach(x=>x.classList.toggle("active", x===b));
+      renderDay();
+    };
+  });
+}
+/* 风格曲线区间切换（需求5） */
+function bindStyleRange(){
+  document.querySelectorAll(".scb-btn").forEach(b=>{
+    b.onclick=()=>{
+      _styleN=parseInt(b.dataset.n,10)||5;
+      document.querySelectorAll(".scb-btn").forEach(x=>x.classList.toggle("active", x===b));
+      renderStyleCurve();
+    };
+  });
+}
 
 /* 行业近5日涨跌 sparkline（取 days 历史中该行业的 chg 序列） */
 function sparkSVG(name, white){
@@ -399,14 +495,66 @@ function sparkSVG(name, white){
 }
 
 /* 行业热力 + 资金条形 + 主线（按当前日） */
+/* 近5日累计（按 days 历史窗口，取含 curDay 在内的最近5个交易日） */
+function recentDays(n){
+  return Object.keys(D.days).sort().reverse().slice(0, n).reverse();
+}
+function cumChg(name, days){
+  let s=0, ok=false;
+  days.forEach(d=>{ const o=(D.days[d].industries||{})[name]; if(o && typeof o.chg==="number"){ s+=o.chg; ok=true; } });
+  return ok? s : null;
+}
+function cumMain(name, days){
+  let s=0, ok=false;
+  days.forEach(d=>{ const o=(D.days[d].industries||{})[name]; if(o && typeof o.main==="number"){ s+=o.main; ok=true; } });
+  return ok? s : null;
+}
+/* 轮动状态标签（客观状态，非买卖信号）：资金持续流入但股价未大涨 / 股价大涨资金流出兑现 */
+function rotationTag(name, days){
+  const cm = cumMain(name, days);          // 近5日主力累计净流入
+  const cc = cumChg(name, days);           // 近5日累计涨跌幅
+  if(cm===null || cc===null) return "";
+  const inflow = cm > 30;                  // 累计净流入显著（亿元）
+  const outflow = cm < -30;
+  const upBig = cc > 6;                    // 累计涨幅较大
+  const flat = Math.abs(cc) <= 4;          // 股价未明显上涨
+  if(inflow && flat)  return {t:"资金流入蓄势", k:"acc"};       // 资金进、价未动
+  if(upBig && outflow) return {t:"拉高兑现", k:"cash"};          // 价大涨、资金撤
+  if(inflow && upBig) return {t:"资金推动上行", k:"push"};       // 量价齐升
+  return "";
+}
+/* 行业近5日主力净流入 sparkline（需求2：双向条形旁的趋势线） */
+function mainSparkSVG(name, days){
+  const pts = days.map(d=>{ const o=(D.days[d].industries||{})[name]; return (o&&typeof o.main==="number")?o.main:null; })
+                  .filter(v=>typeof v==="number");
+  if(pts.length < 2) return "";
+  const w=64,h=16,pad=2;
+  const min=Math.min(...pts), max=Math.max(...pts), rng=(max-min)||1;
+  const coords=pts.map((v,i)=>[ pad+i*(w-2*pad)/(pts.length-1), h-pad-(v-min)/rng*(h-2*pad) ]);
+  const lastPos = pts[pts.length-1] >= 0;
+  const col = lastPos ? "var(--up)" : "var(--down)";
+  const d = coords.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:64px;height:16px;display:block">
+    <line x1="0" y1="${h/2}" x2="${w}" y2="${h/2}" stroke="var(--line)" stroke-width="0.5"/>
+    <path d="${d}" fill="none" style="stroke:${col}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+let _metric = "chg";   // 当前排序指标：chg / chg5 / main5
+function metricVal(name, ind){
+  const days5 = recentDays(5);
+  if(_metric==="chg5")  return cumChg(name, days5);
+  if(_metric==="main5") return cumMain(name, days5);
+  return (ind[name] && ind[name].chg!=null) ? ind[name].chg : null;
+}
+function metricLabel(){ return _metric==="chg"?"单日涨跌幅":(_metric==="chg5"?"5日累计涨跌幅":"5日主力累计净流入"); }
+
 function renderDay(){
   const day=D.days[curDay];
-  $("#srcNote").textContent = "数据来源：" + day.source;
-  $("#datestr").textContent = curDay;
+  $("#srcNote").textContent = "数据来源：" + day.source + "　·　当前排序：" + metricLabel() + "（由大到小）";
   const ind = day.industries;
-  // heatmap
-  // 热力图：按涨跌幅降序排列（涨多在前），色块越深越用白字保证对比度，并附近5日走势 sparkline
-  const names=Object.keys(ind).sort((a,b)=>(ind[b].chg||0)-(ind[a].chg||0));
+  const days5 = recentDays(5);
+  // 热力图：按当前指标降序
+  const names=Object.keys(ind).sort((a,b)=>(metricVal(b,ind)||-1e18)-(metricVal(a,ind)||-1e18));
   const maxAbs=Math.max(0.6,...names.map(n=>Math.abs(ind[n].chg||0)));
   $("#heat").innerHTML = names.map(n=>{
     const o=ind[n]; const c=o.chg, m=o.main;
@@ -415,33 +563,73 @@ function renderDay(){
     else {
       const up = c>=0;
       const inten = Math.min(0.92, Math.abs(c)/maxAbs*0.82 + 0.16);
-      // 色块越深越用白字，避免「大红字压大红底」看不清；浅色块用涨跌色字更跳
       txtCol = inten>=0.5 ? "#ffffff" : (up?"var(--up)":"var(--down)");
       bdCol = up?"var(--up)":"var(--down)";
       bg = up ? `rgba(var(--up-rgb),${inten.toFixed(3)})` : `rgba(var(--down-rgb),${inten.toFixed(3)})`;
     }
-    // 底色够深（涨红或跌绿）即白字/白线，保证对比度
     const white = (c!==null && (Math.min(0.92, Math.abs(c)/maxAbs*0.82 + 0.16)>=0.5));
     const mCol = m===null?"var(--txt3)":(white?"#ffffff":(m>=0?"var(--up)":"var(--down)"));
+    const tag = rotationTag(n, days5);
+    const tagHtml = tag ? `<div class="rtag rtag-${tag.k}">${tag.t}</div>` : "";
     return `<div class="tile" style="background:${bg};border-color:${bdCol}">
       <div class="tn" style="color:${txtCol}">${n}</div>
       <div class="tc" style="color:${txtCol}">${fmtChg(c)}</div>
       <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">主力 ${fmtMain(m)}</div>
       ${sparkSVG(n, white)}
+      ${tagHtml}
     </div>`;
   }).join("");
-  // flow bars
+  // flow bars（按当前日主力净流入排序），附近5日资金 sparkline + 点击详情
   const arr=names.map(n=>({n, m:ind[n].main})).filter(x=>x.m!==null&&x.m!==undefined).sort((a,b)=>b.m-a.m);
   const maxAbsM=Math.max(1,...arr.map(x=>Math.abs(x.m)));
   $("#flow").innerHTML = arr.map(x=>{
     const pct=Math.abs(x.m)/maxAbsM*50;
     const pos=x.m>=0;
-    return `<div class="frow"><span class="fname">${x.n}</span>
+    return `<div class="frow" data-ind="${x.n}" style="cursor:pointer">
+      <span class="fname" title="点击查看 ${x.n} 详情">${x.n}</span>
       <div class="ftrack"><div class="fbar ${pos?'pos':'neg'}" style="width:${pct}%"></div></div>
-      <span class="fval ${pos?'pos':'neg'}">${fmtMain(x.m)}</span></div>`;
+      <span class="fval ${pos?'pos':'neg'}">${fmtMain(x.m)}</span>
+      <span class="fspk" title="近5日主力净流入趋势">${mainSparkSVG(x.n, days5)}</span>
+    </div>`;
   }).join("");
+  // 点击行业 → 详情弹层
+  document.querySelectorAll("#flow .frow").forEach(r=>{
+    r.onclick=()=>showIndDetail(r.dataset.ind, days5);
+  });
   renderNarrative(day, ind);
 }
+/* 行业详情弹层（需求6） */
+function showIndDetail(name, days5){
+  const day=D.days[curDay];
+  const o=(day.industries||{})[name] || {};
+  const c=o.chg, m=o.main;
+  const cc=cumChg(name, days5), cm=cumMain(name, days5);
+  const tag=rotationTag(name, days5);
+  $("#iddName").textContent = name + (tag? `（${tag.t}）`:"");
+  let rows = [
+    ["单日涨跌幅", c==null?"—":fmtChg(c), c==null?null:(c>=0?"up":"down")],
+    ["单日主力资金", m==null?"—":fmtMain(m), m==null?null:(m>=0?"up":"down")],
+    ["近5日累计涨幅", cc==null?"—":fmtChg(cc), cc==null?null:(cc>=0?"up":"down")],
+    ["近5日主力累计净流入", cm==null?"—":fmtMain(cm), cm==null?null:(cm>=0?"up":"down")],
+  ];
+  let html = '<table class="idd-tbl"><tbody>' + rows.map(r=>{
+    const col = r[2] ? (r[2]==="up"?"var(--up)":"var(--down)") : "var(--txt)";
+    return `<tr><td class="l">${r[0]}</td><td style="color:${col};font-weight:700">${r[1]}</td></tr>`;
+  }).join("") + '</tbody></table>';
+  // 近5日每日明细
+  html += '<div class="idd-sub">近5交易日每日明细</div><div class="idd-days">';
+  days5.forEach(d=>{
+    const od=(D.days[d].industries||{})[name]||{};
+    const dc=od.chg, dm=od.main;
+    const dcCol=dc==null?"var(--txt3)":(dc>=0?"var(--up)":"var(--down)");
+    const dmCol=dm==null?"var(--txt3)":(dm>=0?"var(--up)":"var(--down)");
+    html += `<div class="idd-d"><div class="d">${d.slice(5)}</div><div class="c" style="color:${dcCol}">${dc==null?"—":fmtChg(dc)}</div><div class="m" style="color:${dmCol}">${dm==null?"—":fmtMain(dm)}</div></div>`;
+  });
+  html += '</div>';
+  $("#iddBody").innerHTML = html;
+  $("#indMask").style.display = "flex";
+}
+function hideIndDetail(){ $("#indMask").style.display="none"; }
 
 /* 资金主线文案（完全基于当天数据动态生成，避免写死旧日期文案） */
 function renderNarrative(day, ind){
@@ -459,6 +647,7 @@ function renderNarrative(day, ind){
 }
 
 /* 风格轮动（使用最新交易日快照） */
+let _styleN = 5;   // 风格曲线窗口：3/5/10
 function renderStyle(){
   if(!D || !D.style){ $("#styleRow").innerHTML="<div class='src-note'>风格快照暂缺</div>"; return; }
   const s=D.style;
@@ -479,6 +668,40 @@ function renderStyle(){
     ["中证1000-沪深300", (zz-hs).toFixed(2)+"%", zz-hs>=0],
   ];
   $("#spread").innerHTML = chips.map(([n,v,up])=>`<div class="chip">${n}<br><b class="${up?'':''}" style="color:${up?'var(--up)':'var(--down)'}">${up?'+':''}${v}</b></div>`).join("");
+  renderStyleCurve();
+}
+/* 风格差值曲线（需求5）：基于 style_hist（{日期:{风格:[值,涨跌]}}）绘制差值序列 */
+function renderStyleCurve(){
+  const box=$("#styleCurve"); if(!box) return;
+  const hist = D.style_hist;
+  if(!hist || !Object.keys(hist).length){ box.innerHTML='<div class="src-note">暂无风格历史数据（数据更新后显示近3/5/10日差值曲线）。当前仅展示单日差值（见上方标签）。</div>'; return; }
+  const dates=Object.keys(hist).sort().slice(-_styleN);
+  // 三条差值：成长-价值(大盘)、小盘-大盘(成长)、中证1000-沪深300
+  const series=[
+    {name:"成长-价值(大盘)", col:"var(--accent)", f:d=>{const a=hist[d]["大盘成长"],b=hist[d]["大盘价值"]; return (a&&b)?a[0]-b[0]:null;}},
+    {name:"小盘-大盘(成长)", col:"#f5b94a", f:d=>{const a=hist[d]["小盘成长"],b=hist[d]["大盘成长"]; return (a&&b)?a[0]-b[0]:null;}},
+    {name:"中证1000-沪深300", col:"#a78bfa", f:d=>{const a=hist[d]["中证1000"],b=hist[d]["沪深300"]; return (a&&b)?a[0]-b[0]:null;}},
+  ];
+  const W=680,H=180,padL=8,padR=8,padT=12,padB=22;
+  const allV=[];
+  series.forEach(se=>dates.forEach(d=>{ const v=se.f(d); if(v!=null) allV.push(v); }));
+  if(!allV.length){ box.innerHTML='<div class="src-note">风格历史数据不完整，暂无法绘制曲线。</div>'; return; }
+  let max=Math.max(...allV,1), min=Math.min(...allV,-1);
+  const rng=(max-min)||1;
+  const y0 = padT + (0-min)/rng*(H-padT-padB);
+  const X=i=> padL + (dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
+  const Y=v=> padT + (v-min)/rng*(H-padT-padB);
+  let grid=`<line x1="${padL}" y1="${y0.toFixed(1)}" x2="${W-padR}" y2="${y0.toFixed(1)}" stroke="var(--txt3)" stroke-width="0.6" stroke-dasharray="3,3"/>`;
+  const lblIdx=[0, Math.floor((dates.length-1)/2), dates.length-1];
+  lblIdx.forEach(i=>{ grid+=`<text x="${X(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--txt3)">${dates[i].slice(5)}</text>`; });
+  let paths="";
+  series.forEach(se=>{
+    let started=false, out="";
+    dates.forEach((d,i)=>{ const v=se.f(d); if(v==null) return; out+=(started?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)+" "; started=true; });
+    paths+=`<path d="${out.trim()}" fill="none" stroke="${se.col}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+  });
+  const legend=series.map(se=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--txt2);margin-right:12px"><span style="width:14px;height:3px;background:${se.col};display:inline-block;border-radius:2px"></span>${se.name}</span>`).join("");
+  box.innerHTML=`<div class="scb-legend">${legend}</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${paths}</svg><div class="src-note" style="margin-top:4px">数值=两组指数点差，曲线上行代表前者相对走强（如成长跑赢价值）。</div>`;
 }
 
 /* 北向 + 两融 */
@@ -659,8 +882,12 @@ function safeRender(){
   }
   curDay = D.today;
   safeRender();
+  bindMetricBar();
+  bindStyleRange();
   $("#snapNote").innerHTML = `提示：本页行业轮动数据为每日收盘后自动生成的快照（由 /sector_data.json 提供，自动日更）；右上角「实时刷新」走 /api/sector_live，仅在本地或国内网络可连通东方财富。当前展示 <b>(${D.today})</b> 快照（数据生成于 ${D.generatedAt||'—'}）。`;
   $("#narrToggle").onclick=()=>{ const n=$("#narr"); const hid=n.style.display==="none"; n.style.display=hid?"":"none"; $("#narrToggle").textContent=hid?"▾":"▸"; };
+  $("#iddX").onclick=hideIndDetail;
+  $("#indMask").onclick=(e)=>{ if(e.target.id==="indMask") hideIndDetail(); };
   markLive(false); // 默认按快照呈现，实时刷新成功后再翻为「实时」
   refreshLive();  // 首屏拉取实时数据并启动定时刷新
 })();
