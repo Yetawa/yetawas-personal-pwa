@@ -3717,9 +3717,20 @@ def cb_compute(items, progress=None):
     for i, p in enumerate(picks):
         p["rank"] = i + 1
     elapsed = round(time.time() - t0, 1)
+    # trade_date 取数据实际对应的交易日：非交易日回溯到最近一个交易日，
+    # 避免标签(如周日8/23)与可转债真实涨跌幅(周五8/21收盘)对不上。
+    _now_bj = bj_now()
+    if _is_trading_day(_now_bj):
+        _real_td = _now_bj.strftime("%Y-%m-%d")
+    else:
+        _d = _now_bj
+        while not _is_trading_day(_d):
+            _d = _d - timedelta(days=1)
+        _real_td = _d.strftime("%Y-%m-%d")
     return dict(
-        trade_date=bj_now().strftime("%Y-%m-%d"),
-        updated=bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+        trade_date=_real_td,
+        kline_last_date=_real_td,
+        updated=_now_bj.strftime("%Y-%m-%d %H:%M:%S"),
         picks=picks, total_picks=len(picks), mode=mode,
         stats=dict(universe=len(rows), strict=len(strict),
                    discount=len(strict)),
@@ -3878,10 +3889,10 @@ def cb_api_payload(force=False):
         err = _CB["error"]
     today = bj_now().strftime("%Y-%m-%d")
     stale = (res is None) or (res.get("trade_date") != today)
-    # 非交易日（周末/节假日）禁止重扫：东财返回的是上一交易日收盘，强行重扫会把
-    # 日期误标为今天、覆盖周五收盘缓存，导致「缓存 vs 重扫数据不一致」。仅交易日才允许扫描。
-    _can_scan = _is_trading_day(bj_now())
-    if ((force and _can_scan) or (stale and _can_scan)) and not scanning:
+    # 恢复手动刷新权：force=1 任何时候都可触发后台重扫（含周末），让用户能主动获取最新数据。
+    # 日期一致性由扫描侧保证（cb_compute/pivot 扫描均用真实交易日作为 trade_date，与涨跌幅同源），
+    # 因此不再以"非交易日"为由禁止重扫；stale 也会触发自动重扫。
+    if ((force) or stale) and not scanning:
         cb_run_scan_bg()
         scanning = True
     if res is None:
@@ -5223,9 +5234,9 @@ def pivot_api_payload(force=False):
         except Exception:
             pass
 
-    # 非交易日禁止重扫（同 cb）：避免用上一交易日收盘覆盖缓存、造成日期误标
-    _can_scan = _is_trading_day(bj_now())
-    if ((force and _can_scan) or (stale and _can_scan)) and not scanning:
+    # 恢复手动刷新权：force=1 任何时候都可触发后台重扫（含周末）。
+    # 日期一致性由扫描侧保证（pivot 扫描用 K 线末根真实交易日作为 trade_date），不再以非交易日为由禁止。
+    if ((force) or stale) and not scanning:
         pivot_run_scan_bg()
         scanning = True
 
