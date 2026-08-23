@@ -36,11 +36,11 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 @media(max-width:760px){
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  .wrap{padding:88px 10px 50px}
+  .wrap{padding:100px 10px 50px}
 }
 .wrap{max-width:1080px;margin:0 auto;padding:64px 14px 50px}
 h1{font-size:19px;font-weight:800}
-.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0}
+.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:2px}
 /* 站点品牌（需求12） */
 .topnav .brand{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--txt);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap;flex:none;cursor:pointer;padding:6px 8px;margin-right:2px}
 .topnav .brand:hover{color:var(--accent)}
@@ -189,7 +189,7 @@ function setBanner(msg, kind){
   var bar=document.getElementById('wlBanner');
   if(!bar){ bar=document.createElement('div'); bar.id='wlBanner'; bar.style.cssText='margin:8px 0;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.5;word-break:break-all'; document.querySelector('.addbar').parentNode.insertBefore(bar, document.querySelector('.addbar').nextSibling); }
   bar.style.background = kind==='err' ? 'rgba(120,30,30,.18)' : 'rgba(13,148,136,.16)';
-  bar.style.color = kind==='err' ? '#ffb3b3' : '#9be7da';
+  bar.style.color = kind==='err' ? '#ffb3b3' : 'var(--txt)';
   bar.style.border = '1px solid ' + (kind==='err' ? 'rgba(255,80,80,.4)' : 'rgba(13,148,136,.4)');
   bar.textContent=msg;
   if(kind!=='err') setTimeout(function(){ if(bar.textContent===msg) bar.textContent=''; }, 6000);
@@ -500,7 +500,7 @@ function renderChart(){
     var hint = (location.protocol==='file:')
       ? '（本地打开需先启动 fund_arb.py 本地服务：python fund_arb.py，且服务能连通行情源；否则自选池/回测序列无法绘制）'
       : '（线上环境受网络限制可能无法拉取个股/基金行情，请在本机或国内节点使用）';
-    diag = '<div class="src-note" style="margin-top:6px">仅上证指数可绘制：自选池平均涨跌幅与滚动回测缺数据。'+hint+'</div>';
+    diag = '<div style="margin-top:6px;font-size:11.5px;color:var(--txt3);line-height:1.8">仅上证指数可绘制：自选池平均涨跌幅与滚动回测缺数据。'+hint+'</div>';
   }
   box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svg+'</svg>'+caption+diag;
 }
