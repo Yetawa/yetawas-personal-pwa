@@ -5022,12 +5022,17 @@ def pivot_scan(progress=None):
     metrics, done = {}, 0
     lock = threading.Lock()
 
+    kdates = []  # 收集全市场 K 线末根日期，trade_date 取最晚一根，避免"标签≠数值"错位
+
     def _one(sym):
         try:
             k = pivot_fetch_ohlcv(sym)
             if len(k["close"]) < 150:
                 return sym, None
-            return sym, pivot_compute(k["open"], k["high"], k["low"], k["close"], k["volume"])
+            m = pivot_compute(k["open"], k["high"], k["low"], k["close"], k["volume"])
+            if m and k.get("date"):
+                m["_kdate"] = k["date"][-1]  # K 线最后一根的真实交易日
+            return sym, m
         except Exception:
             return sym, None
 
@@ -5037,6 +5042,8 @@ def pivot_scan(progress=None):
                 sym, m = fut.result()
                 if m:
                     metrics[sym] = m
+                    if m.get("_kdate"):
+                        kdates.append(m["_kdate"])
             except Exception:
                 pass
             with lock:
@@ -5094,10 +5101,13 @@ def pivot_scan(progress=None):
 
     picks.sort(key=lambda x: (-x["score"], -x["rs"]))
     grade_cnt = {g: sum(1 for p in picks if p["grade"] == g) for g in ("S", "A", "B", "C")}
+    # trade_date 取全市场 K 线末根的最晚交易日（而非运行时刻），防止标签与数值错位
+    real_td = max(kdates) if kdates else bj_now().strftime("%Y-%m-%d")
     return dict(
         version=PIVOT_VERSION,
         updated=bj_now().strftime("%Y-%m-%d %H:%M:%S"),
-        trade_date=bj_now().strftime("%Y-%m-%d"),
+        trade_date=real_td,
+        kline_last_date=real_td,
         elapsed=round(time.time() - t0, 1),
         market=market,
         stats=dict(universe=total, computed=len(metrics),
