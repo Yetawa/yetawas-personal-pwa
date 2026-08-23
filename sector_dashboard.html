@@ -18,6 +18,7 @@
   --upbg:rgba(239,68,68,.16); --downbg:rgba(34,197,94,.16);
   --up-rgb:239,68,68; --down-rgb:34,197,94; --flat-rgb:100,116,139;
   --shadow:0 6px 24px rgba(0,0,0,.35);
+  --tile-name:#e6edf7;   /* 热力图行业名称：统一主题文字色（深底用浅字，保证可读且不跳色） */
 }
 [data-theme="light"]{
   --bg:#f5f1e8; --bg2:#efe9dc; --card:#fffdf8; --card2:#f3ede1; --line:#e3d9c6;
@@ -28,6 +29,7 @@
   --upbg:rgba(225,29,72,.12); --downbg:rgba(22,163,74,.12);
   --up-rgb:225,29,72; --down-rgb:22,163,74; --flat-rgb:148,163,184;
   --shadow:0 6px 20px rgba(120,90,40,.12);
+  --tile-name:#16110a;   /* 浅色主题下行业名称为黑（用户要求统一黑，不再红/绿/白跳变） */
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -134,8 +136,10 @@ header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14p
 .idd-d .m{font-size:10px;margin-top:1px}
 
 /* style */
-.style-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px}
+.style-row{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:12px}
+@media(max-width:1100px){.style-row{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:860px){.style-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.style-row{grid-template-columns:repeat(2,1fr)}}
 .style-idx{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:9px 10px;text-align:center}
 .style-idx .n{font-size:11.5px;color:var(--txt2)}
 .style-idx .c{font-size:15px;font-weight:800;margin-top:2px}
@@ -378,10 +382,12 @@ tr:hover td{background:var(--card2)}
         <div class="note">两融余额反映杠杆资金风险偏好，持续回升通常对应市场上行动能增强。</div>
       </div>
     </div>
-    <div class="card" style="margin-top:10px">
-      <div class="lbl">北向成交额 · 近 10 个交易日（亿元，红=较前日增加 绿=减少）</div>
-      <div id="nbChart" class="nb-chart"></div>
-    </div>
+      <div class="card" style="margin-top:10px">
+        <div class="lbl">北向成交额 · 近 10 个交易日（亿元，红=较前日增加 绿=减少）</div>
+        <div id="nbChart" class="nb-chart"></div>
+        <div class="lbl" style="margin-top:10px">每日较前一日增减量（亿元，折线图）</div>
+        <div id="nbDeltaChart" class="nb-chart"></div>
+      </div>
   </div>
 
   <!-- 研判 -->
@@ -581,7 +587,7 @@ function renderDay(){
     const tag = rotationTag(n, days5);
     const tagHtml = tag ? `<div class="rtag rtag-${tag.k}">${tag.t}</div>` : "";
     return `<div class="tile" style="background:${bg};border-color:${bdCol}">
-      <div class="tn" style="color:${txtCol}">${n}</div>
+      <div class="tn" style="color:var(--tile-name)">${n}</div>
       <div class="tc" style="color:${txtCol}">${fmtChg(c)}</div>
       <div class="tm" style="color:${m===null?'var(--txt3)':mCol}">${fmtMain(m)}</div>
       ${sparkSVG(n, white)}
@@ -662,21 +668,34 @@ function _styleDiffPairs(){
   const s=D.style||{}, idx=D.indices||{};
   const v=n=> (s[n]&&s[n][1]!=null)?s[n][1]:null;
   const iv=n=> (idx[n]&&idx[n][1]!=null)?idx[n][1]:null;
+  // 中证500/中证2000 可能在快照中缺失（线上抓取失败）：按用户要求做降级
+  // 中证500-沪深300 缺 → 退化 中证2000-中证500；仍缺 → 不展示该项
+  let zbPairs=[];
+  if(v("中证500")!=null && iv("沪深300")!=null)
+    zbPairs.push(["中证500-沪深300", v("中证500"), iv("沪深300")]);
+  else if(v("中证2000")!=null && v("中证500")!=null)
+    zbPairs.push(["中证2000-中证500", v("中证2000"), v("中证500")]);
+  let z2Pairs=[];
+  if(v("中证2000")!=null && v("中证1000")!=null)
+    z2Pairs.push(["中证2000-中证1000", v("中证2000"), v("中证1000")]);
+  else if(v("中证2000")!=null && v("中证500")!=null)
+    z2Pairs.push(["中证2000-中证500", v("中证2000"), v("中证500")]);
   return [
     ["成长-价值(大盘)", v("大盘成长"), v("大盘价值")],
     ["小盘-大盘(成长)", v("小盘成长"), v("大盘成长")],
     ["小盘-大盘(价值)", v("小盘价值"), v("大盘价值")],
     ["中证1000-沪深300", v("中证1000"), iv("沪深300")],
-    ["中证500-沪深300", v("中证500"), iv("沪深300")],
-    ["中证2000-中证1000", v("中证2000"), v("中证1000")],
+    ...zbPairs,
+    ...z2Pairs,
   ];
 }
 function renderStyle(){
   if(!D || !D.style){ $("#styleRow").innerHTML="<div class='src-note'>风格快照暂缺</div>"; return; }
-  const s=D.style;
-  const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","中证1000","中证500","中证2000"];
+  const s=D.style||{}, idx=D.indices||{};
+  const get=n=> s[n] || (idx[n] ? [idx[n][0], idx[n][1]] : null);
+  const order=["大盘成长","大盘价值","小盘成长","小盘价值","上证50","沪深300","中证1000","中证500","中证2000","高估值","低估值","高动量","低动量"];
   $("#styleRow").innerHTML = order.map(n=>{
-    const o=s[n]; if(!o) return "";
+    const o=get(n); if(!o) return "";
     const [v,c]=o;
     const bg = c>=0 ? "var(--upbg)" : "var(--downbg)";
     return `<div class="style-idx" style="background:${bg}"><div class="n">${n}</div><div class="c ${cls(c)}">${fmtChg(c)}</div></div>`;
@@ -720,6 +739,8 @@ function renderStyleCurve(){
     {name:"中证1000-沪深300", col:"#a78bfa", f:d=>_styleDiffVal(hist,d,"中证1000","沪深300")},
     {name:"中证500-沪深300", col:"#f59e0b", f:d=>_styleDiffVal(hist,d,"中证500","沪深300")},
     {name:"中证2000-中证1000", col:"#34d399", f:d=>_styleDiffVal(hist,d,"中证2000","中证1000")},
+    {name:"高估值-低估值", col:"#f472b6", f:d=>_styleDiffVal(hist,d,"高估值","低估值")},
+    {name:"高动量-低动量", col:"#60a5fa", f:d=>_styleDiffVal(hist,d,"高动量","低动量")},
   ];
   const W=680,H=200,padL=8,padR=8,padT=12,padB=22;
   const allV=[];
@@ -777,6 +798,33 @@ function renderNB(){
       + `<text x="${(padX+i*bw+bw/2).toFixed(1)}" y="${(top-3).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="var(--txt3)">${x.v}</text>`;
   }).join("");
   ch.innerHTML = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">${axis}${bars}</svg>`;
+  // 每日较前一日增减量折线图（红=增加 绿=减少）
+  const dc = $("#nbDeltaChart");
+  if(!dc) return;
+  const deltas = [];
+  for(let i=1;i<tr.length;i++){
+    deltas.push({ date: tr[i].date, v: +(tr[i].v - tr[i-1].v).toFixed(1) });
+  }
+  if(deltas.length < 1){ dc.innerHTML = '<div class="src-note">暂无增减数据</div>'; return; }
+  const dw=720, dh=120, dpadB=18, dpadT=10, dpadX=8;
+  const dv = deltas.map(x=>x.v);
+  const dlo = Math.min(0, ...dv), dhi = Math.max(0, ...dv);
+  const drng = (dhi-dlo)||1;
+  const dy0 = dpadT + (0-dlo)/drng*(dh-dpadT-dpadB);
+  const step = (dw-2*dpadX)/Math.max(1,deltas.length-1);
+  const dx = i => dpadX + i*step;
+  const dy = v => dpadT + (v-dlo)/drng*(dh-dpadT-dpadB);
+  const baseLine = `<line x1="${dpadX}" y1="${dy0.toFixed(1)}" x2="${dw-dpadX}" y2="${dy0.toFixed(1)}" stroke="var(--txt3)" stroke-width="0.6" stroke-dasharray="3,3"/>`;
+  let pts="", labels="";
+  deltas.forEach((x,i)=>{
+    const X=dx(i), Y=dy(x.v);
+    const col = x.v>=0 ? "var(--up)" : "var(--down)";
+    pts += (i?"L":"M")+X.toFixed(1)+" "+Y.toFixed(1)+" ";
+    labels += `<circle cx="${X.toFixed(1)}" cy="${Y.toFixed(1)}" r="2.6" fill="${col}"/>`
+            + `<text x="${X.toFixed(1)}" y="${(Y + (x.v>=0?-7:12)).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${col}">${x.v>0?'+':''}${x.v}</text>`
+            + `<text x="${X.toFixed(1)}" y="${dh-4}" text-anchor="middle" font-size="9" fill="var(--txt3)">${x.date}</text>`;
+  });
+  dc.innerHTML = `<svg viewBox="0 0 ${dw} ${dh}" style="width:100%;height:auto;display:block">${baseLine}<path d="${pts.trim()}" fill="none" stroke="var(--gold)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>${labels}</svg>`;
 }
 
 /* 研判 + ETF（ETF 按最新交易日主力净流入由多到少排序，与④资金排行一致） */
