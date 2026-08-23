@@ -2,7 +2,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
 <title>自选池</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='17' r='9' fill='none' stroke='%231f6feb' stroke-width='2.4'/%3E%3Cpath d='M7 11 L16 5 L25 11' fill='none' stroke='%23ef4444' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M7 23 L16 29 L25 23' fill='none' stroke='%2322c55e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <style>
 :root{
   --bg:#0b0f17; --bg2:#111827; --card:#151c2c; --card2:#1b2436; --line:#243049;
@@ -31,17 +32,17 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 .topnav .navlink.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
 [data-theme="light"] .topnav .navlink.active{background:#2563eb;border-color:#2563eb;color:#fff}
 .topnav .navspacer{flex:1 1 auto}
-.theme-mini{flex:none;margin-left:6px;border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:8px;padding:6px 12px;font-size:13.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.theme-mini{flex:none;margin-left:6px;border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:8px;padding:2px 8px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;line-height:1.3}
 .theme-mini:hover{border-color:var(--accent);color:var(--accent)}
 @media(max-width:760px){
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  /* 顶栏品牌+8个链接在窄屏会折成2~3行，留出充足上边距避免遮挡标题（与其他页一致） */
-  .wrap{padding:132px 10px 50px}
+  /* 顶栏品牌+8个链接在窄屏会折成2~3行，留出与其他页一致的上边距避免遮挡标题 */
+  .wrap{padding:84px 10px 50px}
 }
 .wrap{max-width:1080px;margin:0 auto;padding:64px 14px 50px}
-h1{font-size:19px;font-weight:800;margin-top:4px}
-.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:6px}
+h1{font-size:19px;font-weight:800;margin:0}
+.title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:0}
 /* 站点品牌（需求12） */
 .topnav .brand{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--txt);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap;flex:none;cursor:pointer;padding:6px 8px;margin-right:2px}
 .topnav .brand:hover{color:var(--accent)}
@@ -94,7 +95,8 @@ h1{font-size:19px;font-weight:800;margin-top:4px}
 .hint b{color:var(--gold)}
 /* 走势图 */
 .chart-box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:14px}
-.chart-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
+.chart-title{text-align:center;font-size:14px;font-weight:800;color:var(--title,#e6edf7);margin-bottom:8px}
+.chart-head{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
 .chart-head .range{display:flex;gap:5px;flex-wrap:wrap}
 .chart-head .rng{background:var(--card2);border:1px solid var(--line);color:var(--txt2);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer}
 .chart-head .rng.active{background:#1f6feb;border-color:#1f6feb;color:#fff}
@@ -154,8 +156,8 @@ h1{font-size:19px;font-weight:800;margin-top:4px}
   <div class="hint">提示：点击任意表头即可按该列排序。</div>
 
   <div class="chart-box">
+    <div class="chart-title">自选池 vs 上证指数累计涨幅</div>
     <div class="chart-head">
-      <b>自选池 vs 上证指数累计涨幅</b>
       <div class="range">
         <span class="rng-grp">区间</span>
         <button class="rng" data-d="5">5日</button>
