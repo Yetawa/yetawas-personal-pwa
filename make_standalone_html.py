@@ -6,15 +6,14 @@ import os
 import fund_arb
 
 
-# 全站统一导航：7 个入口映射到同目录下的独立 HTML
-# （口袋支点无本地独立文件，指向线上 onrender 页面）
+# 全站统一导航：7 个入口映射到同目录下的独立 HTML（统一为相对路径）
 NAV_MAP = [
     ('href="/sector"', 'href="sector_dashboard.html"'),
     ('href="/yupen"', 'href="fish_basin.html"'),
     ('href="/arb"', 'href="fund_arb.html"'),
     ('href="/ranking"', 'href="fund_arb_ranking.html"'),
     ('href="/top"', 'href="fund_arb_top.html"'),
-    ('href="/pivot"', 'href="https://fund-arb.onrender.com/pivot"'),
+    ('href="/pivot"', 'href="pivot_live.html"'),
     ('href="/cb"', 'href="cb.html"'),
     ('href="/watch"', 'href="watchlist.html"'),
 ]
@@ -62,4 +61,27 @@ make_page(
     "fund_arb_top.html",
     [("const url='/api/top?date='", "const url=BASE+'/api/top?date='")],
     NAV_MAP,
+)
+
+# 界面四：口袋支点（独立版，依赖本地服务 /api/pivot、/api/history）
+_p4 = fund_arb.PAGE4_HTML
+# 注入 BASE（file:// 走本地服务，线上走同源）
+_p4 = _p4.replace(
+    "let RAW=null, POLL=null;",
+    "const BASE=(location.protocol==='file:')?'http://localhost:8000':'';\nlet RAW=null, POLL=null;",
+    1,
+)
+# fetch 路径加 BASE
+_p4 = _p4.replace("fetch('/api/pivot", "fetch(BASE+'/api/pivot")
+_p4 = _p4.replace("fetch('/api/history", "fetch(BASE+'/api/history")
+# 标题里站点资源在 file:// 下会 404，去掉以免控制台报错（无副作用）
+_p4 = _p4.replace('<link rel="manifest" href="/manifest.json">', "")
+_p4 = _p4.replace('<link rel="apple-touch-icon" href="/icon.svg">', "")
+make_page(
+    _p4,
+    "pivot_live.html",
+    [],
+    [
+        ('href="/pivot"', 'href="pivot_live.html"'),  # 防止 NAV_MAP 已替换，双重保险
+    ],
 )
