@@ -198,6 +198,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 </div>
   <div id="tbl" class="tablebox"></div>
   <div id="statusbar" class="statusbar"></div>
+  <div id="dateWarn" class="tzline" style="display:none;color:#ff4d4f;border-color:#ff4d4f55;background:#2a1416"></div>
   <div id="summary" class="summary"></div>
   <div class="ops">
     <button class="btn" id="rescanBtn" onclick="rescan()">立即重扫</button>
@@ -219,6 +220,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <script>
 var cbTimer = null;
 function fmt(x, d){ if(x===null||x===undefined||x==="") return "-"; var n=Number(x); if(isNaN(n)) return x; return n.toFixed(d===undefined?2:d); }
+function isFri(s){ try{ return new Date(s.replace(/-/g,'/')).getDay()===5; }catch(e){ return false; } }
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme', t);
   var icon=document.getElementById('themeIcon');
@@ -261,10 +263,17 @@ function renderSnap(d){
 function render(d){
   var scanning = d.scanning;
   var modeTxt = {"strict":"严格折价","mixed":"折价+临界补足","fallback":"无折价(临界参考)"}[d.mode] || d.mode || "-";
+  var td = d.trade_date||"";
   var sb = document.getElementById("statusbar");
   sb.innerHTML = '<span class="sitem">更新：'+(d.updated||"-")+'</span>'
+    + '<span class="sitem">数据日期：'+td+(isFri(td)?'（周五）':'')+'</span>'
     + '<span class="sitem">模式：'+modeTxt+'</span>'
     + (scanning ? '<span class="sitem stale-badge">扫描中…</span>' : '<span class="sitem">就绪</span>');
+  // 数据日期异常明确标注
+  var dw=document.getElementById("dateWarn");
+  if(dw){ if(d.date_warning){ dw.style.display="block"; dw.textContent="⚠ "+d.date_warning; } else { dw.style.display="none"; } }
+  // 最多展示前 30 只（用户要求）；后端 CB 榜单本就 ≤10，此处仅作防御性兜底
+  if((d.picks||[]).length>30) d.picks=d.picks.slice(0,30);
   var s = d.stats || {};
   document.getElementById("summary").innerHTML =
     card("全市场可转债", s.universe||0) + card("严格折价", s.discount||0) + card("榜单", d.total_picks||0);
