@@ -3177,7 +3177,12 @@ def history_append(kind, date, entries):
         _history_save(data)
 
 def history_payload(kind, days=5):
-    """返回近 N 个交易日的入选记录（按日期升序拼接，附 date 字段）。"""
+    """返回近 N 个交易日的入选记录（按日期升序拼接，附 date 字段）。
+    线上节点（onrender 美国节点）无法连通东财/腾讯行情，扫描恒失败，
+    history_entries.json 长期为空 → 近5日统计表空白。此时回退用已提交的
+    pivot_snapshot.json / cb_snapshot.json（随仓库发布、redeploy 不丢）派生单日入选记录，
+    保证线上也能展示最近一个交易日的入选清单；用户在本机/国内节点运行后，实时历史会自然覆盖。
+    """
     with _HISTORY_LOCK:
         data = _history_load()
         bucket = data.get(kind, {})
@@ -3188,7 +3193,42 @@ def history_payload(kind, days=5):
                 row = dict(e)
                 row["date"] = d
                 out.append(row)
-        return out
+        if out:
+            return out
+    # 回退：实时历史为空 → 用快照派生（仅当没有真实历史时）
+    snap_rows = _history_from_snapshot(kind)
+    if snap_rows:
+        return snap_rows[-days:]
+    return []
+
+
+def _history_from_snapshot(kind):
+    """从已提交的快照文件派生近 N 日入选记录（线上兜底）。"""
+    if kind == "pivot":
+        fn = PIVOT_SNAP_FILE
+        entries_fn = _pivot_history_entries
+    elif kind == "cb":
+        fn = CB_SNAP_FILE
+        entries_fn = _cb_history_entries
+    else:
+        return []
+    try:
+        if not os.path.exists(fn):
+            return []
+        with open(fn, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+        td = snap.get("trade_date") or snap.get("updated") or (snap.get("picks") and "")
+        if not td:
+            return []
+        # trade_date 可能是 "2026-08-21"；取前10字符作日期
+        date_str = td[:10] if isinstance(td, str) else ""
+        entries = entries_fn(snap)
+        if not entries:
+            return []
+        return [{**e, "date": date_str} for e in entries]
+    except Exception as e:
+        print(f"    [历史] 快照派生失败({kind}): {e}")
+        return []
 
 def _pivot_history_entries(res):
     """口袋支点：A级及以上（S/A）入选记录。"""
