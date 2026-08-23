@@ -3893,6 +3893,9 @@ def cb_api_payload(force=False):
     out["progress"] = prog
     out["error"] = err
     out["stale"] = stale
+    _ok, _warn = _date_integrity(res.get("trade_date"))
+    out["date_ok"] = _ok
+    out["date_warning"] = _warn
     return out
 
 
@@ -4515,6 +4518,30 @@ def _is_trading_day(d):
     """简易交易日判断：周一至周五（节假日未穷举，可按需扩展 HOLIDAYS 集合）。"""
     return d.weekday() < 5
 
+
+def _date_integrity(trade_date):
+    """校验快照 trade_date 的可信度，返回 (ok, warn_msg)。
+    - 必须为交易日（周一~周五），周末数据必是上一交易日收盘被误标，属异常；
+    - 距今天数超过 7 天（>1 周无更新）提示数据过旧。
+    线上/离线兜底场景：返回 ok=False 时前端应明确标注，绝不可伪装成「实时/今日」。"""
+    if not trade_date:
+        return False, "无数据日期"
+    try:
+        td = datetime.strptime(trade_date[:10], "%Y-%m-%d")
+    except Exception:
+        return False, "日期格式异常:" + str(trade_date)
+    warn = ""
+    if not _is_trading_day(td):
+        warn = "数据日期 %s 非交易日（周末），疑似误标，请核查数据源" % trade_date[:10]
+        return False, warn
+    days_old = (bj_now().date() - td.date()).days
+    if days_old < 0:
+        warn = "数据日期 %s 晚于当前日期，疑似时区/抓取异常" % trade_date[:10]
+        return False, warn
+    if days_old > 7:
+        warn = "数据已 %d 天未更新（最新交易日 %s）" % (days_old, trade_date[:10])
+    return (len(warn) == 0), warn
+
 # ===========================================================================
 # 口袋支点量化选股引擎（纯标准库，无 numpy/pandas；源自 pivot_engine.py，内联复用
 # fund_arb 的 bj_now / http_get_text / _is_trading_day / _threading 等定义）
@@ -4559,7 +4586,7 @@ PIVOT_CFG = dict(
     max_workers=24,         # 抓取并发
     min_price=3.0, max_price=400.0,
     min_amount_wan=5000.0,  # 当日成交额下限（万元）
-    top_n=60,               # 网页展示条数上限
+    top_n=30,               # 网页展示条数上限（用户要求最多前30只）
     scan_hour=14, scan_minute=50,   # 收盘前 10 分钟自动扫描
 )
 # 抓取并发可用环境变量覆盖（避免盲目调大导致上游 429/超时）
@@ -5182,6 +5209,9 @@ def pivot_api_payload(force=False):
     out["progress"] = prog
     out["error"] = err
     out["stale"] = stale
+    _ok, _warn = _date_integrity(res.get("trade_date"))
+    out["date_ok"] = _ok
+    out["date_warning"] = _warn
     return out
 
 
