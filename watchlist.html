@@ -3,7 +3,8 @@
 <meta name="theme-color" content="#0d1117">
 <title>自选池</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="manifest" href="/manifest.json">
 <style>
 :root{
   --bg:#0b0f17; --bg2:#111827; --card:#151c2c; --card2:#1b2436; --line:#243049;
@@ -37,9 +38,11 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 @media(max-width:760px){
   .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
   .topnav .navlink{padding:4px 8px;font-size:12px}
-  /* 顶栏品牌+8个链接在窄屏会折成2~3行，留出与其他页一致的上边距避免遮挡标题 */
-  .wrap{padding:84px 10px 50px}
+  /* 顶栏品牌+8个链接在窄屏会折成2~3行，上边距必须覆盖多行导航，避免遮挡标题"自选池" */
+  .wrap{padding:120px 10px 50px}
 }
+/* 标题行置于固定导航之上，确保不被遮挡（手机端顶栏折行时尤重要） */
+.title-row{position:relative;z-index:1}
 .wrap{max-width:1080px;margin:0 auto;padding:64px 14px 50px}
 h1{font-size:19px;font-weight:800;margin:0}
 .title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:0}
@@ -95,7 +98,7 @@ h1{font-size:19px;font-weight:800;margin:0}
 .hint b{color:var(--gold)}
 /* 走势图 */
 .chart-box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:14px}
-.chart-title{text-align:center;font-size:14px;font-weight:800;color:var(--title,#e6edf7);margin-bottom:8px}
+.chart-title{text-align:center;font-size:14px;font-weight:800;color:var(--txt);margin-bottom:8px}
 .chart-head{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:8px;font-size:13px}
 .chart-head .range{display:flex;gap:5px;flex-wrap:wrap}
 .chart-head .rng{background:var(--card2);border:1px solid var(--line);color:var(--txt2);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer}
@@ -504,6 +507,9 @@ function renderChart(){
       ? '（本地打开需先启动 fund_arb.py 本地服务：python fund_arb.py，且服务能连通行情源；否则自选池/回测序列无法绘制）'
       : '（线上环境受网络限制可能无法拉取个股/基金行情，请在本机或国内节点使用）';
     diag = '<div style="margin-top:6px;font-size:11.5px;color:var(--txt3);line-height:1.8">仅上证指数可绘制：自选池平均涨跌幅与滚动回测缺数据。'+hint+'</div>';
+  } else if(wl.length && !bt.length){
+    // 自选累计线有、回测线无：通常是历史交易日不足（需 ≥ btN+1 日）或 kline 取数不全
+    diag = '<div style="margin-top:6px;font-size:11.5px;color:var(--txt3);line-height:1.8">回测滚动线暂未显示：需至少 '+(btN+1)+' 个交易日的个股/基金历史行情（当前历史不足或取数不完整）。加入自选并等待数日积累历史后即可显示。</div>';
   }
   box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svg+'</svg>'+caption+diag;
 }
@@ -634,5 +640,12 @@ initTheme();
 markSorted();
 refresh();
 setInterval(refresh, 120000);
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('/sw.js').catch(function(err){ console.log('SW 注册失败：',err); });
+  });
+}
 </script>
 </body></html>
