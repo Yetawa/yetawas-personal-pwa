@@ -4,8 +4,14 @@
 生成 fund_arb PWA 图标：icon-192.png / icon-512.png
 
 品牌样式（用户定义）：深岩蓝底 + 蓝色圆环 + 上方红色弧 + 下方绿色弧。
-关键：iOS Safari 的 apple-touch-icon 必须是"不透明 RGB PNG"（color_type=2），
-     不能是 RGBA 带 alpha 通道，否则 iOS 会强制加灰色圆圈背景，显示成"小圆圈"。
+
+关键约束：
+1. iOS Safari / Android Chrome 的 apple-touch-icon、manifest 图标必须是
+   "不透明 RGB PNG"（color_type=2），不能带 alpha 通道，否则系统会强制加
+   灰色圆圈背景，显示成"小圆圈"。
+2. MIUI / Android maskable 图标会被圆形/圆角遮罩裁切到"安全区"（约中心 80%
+   直径）。如果品牌图形贴边，裁切后只剩一圈 ring 露出来 -> 用户看到"圈圈"。
+   所以主体必须缩进中心 60% 区域，四周用背景色铺满，确保裁切后仍是完整图形。
 """
 import struct
 import zlib
@@ -26,12 +32,15 @@ def _png_chunk(typ, data):
 
 
 def make_png(size, path):
-    """生成不透明 RGB PNG，color_type=2，背景 BG 填满。"""
+    """生成不透明 RGB PNG，color_type=2，背景 BG 填满，主体缩进安全区。"""
     cx = cy = size / 2.0
-    ring_r = size * 0.28          # 圆环半径
-    ring_w = size * 0.095         # 圆环线宽
-    arc_r = size * 0.20           # 红/绿弧半径
-    arc_w = size * 0.085
+
+    # 安全区：主体整体限制在中心 60% 直径内（maskable 要求四周留白 >=20%）
+    # 比例基于 size 的一半（半径）来定义
+    ring_r = size * 0.165          # 圆环半径（相对整图）
+    ring_w = size * 0.058         # 圆环线宽
+    arc_r = size * 0.118          # 红/绿弧半径
+    arc_w = size * 0.052
 
     raw = bytearray()
     for y in range(size):
@@ -39,16 +48,13 @@ def make_png(size, path):
         for x in range(size):
             px = x + 0.5
             py = y + 0.5
-            # 默认背景
+            # 默认背景（铺满整张，保证不透明且 maskable 边缘是品牌底色）
             r, g, b = BG
 
             # 蓝色圆环（中心圆）
             d_center = math.hypot(px - cx, py - cy)
             if abs(d_center - ring_r) <= ring_w / 2:
                 r, g, b = RING
-            elif d_center < ring_r - ring_w / 2:
-                # 圆内仍用背景
-                pass
 
             # 上方红色弧：位于圆环上半部分外侧
             d_arc_up = math.hypot(px - cx, py - (cy - ring_r - arc_r))
@@ -76,7 +82,7 @@ def make_png(size, path):
 
     with open(path, 'wb') as f:
         f.write(out)
-    print(f"wrote {path}: {size}x{size} RGB PNG, color_type=2")
+    print(f"wrote {path}: {size}x{size} RGB PNG, color_type=2 (maskable-safe)")
 
 
 if __name__ == '__main__':
