@@ -100,6 +100,20 @@ tbody tr:hover{background:var(--row-hover)}
 #loading{color:var(--muted);padding:20px;text-align:center}
 #err{color:var(--pos);padding:14px}
 code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--code-text)}
+/* ===== 近5日严格折价统计表 ===== */
+.histbox{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:12px 0}
+.histbox h3{font-size:12.5px;margin:2px 0 8px;color:var(--title);white-space:nowrap}
+.histtbl{font-size:11.5px;table-layout:auto;width:max-content;min-width:100%;border-collapse:collapse;white-space:nowrap}
+.histtbl th{background:#1f6feb;color:#fff;font-weight:700;padding:5px 7px;position:sticky;top:0;z-index:3;text-align:center;cursor:pointer;user-select:none}
+.histtbl td:first-child{text-align:left}
+.histtbl td.l{text-align:left}
+.histtbl td{padding:4px 7px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums}
+.histtbl tbody tr:hover td{background:var(--row-hover)}
+.histtbl .pos{color:var(--pos);font-weight:600}
+.histtbl .neg{color:var(--neg);font-weight:600}
+.histtbl .codelink{color:var(--code-text);text-decoration:none;font-weight:600}
+.histtbl .codelink:hover{text-decoration:underline}
+.hist-empty{color:var(--muted);font-size:12px;padding:12px;text-align:center}
 /* 响应式布局：窄屏（手机）自适应 */
 @media (max-width:760px){
   body{padding:12px;padding-top:max(82px,env(safe-area-inset-top))}
@@ -190,6 +204,11 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <span id="scanState" class="tzline"></span>
     <span class="tzline" style="margin-left:auto">每交易日 14:45 自动更新</span>
   </div>
+
+  <div class="histbox" id="cbHist">
+    <h3>近 5 个交易日严格折价信号</h3>
+    <div id="cbHistBody"></div>
+  </div>
   <div class="note">
     <b>套利逻辑</b>：转股溢价率 &lt; 0（折价）即具备"买入转债 + 融券卖空正股 + 转股"的折价套利条件，
     套利收益率(粗略，未扣费) = (转股价值 − 转债现价) / 转债现价。
@@ -221,11 +240,11 @@ function initTheme(){
 var _cbUsingSnap=false;
 function load(){
   fetch("/api/cb?t=" + Date.now()).then(function(r){return r.json();}).then(function(d){
-    _cbUsingSnap=false; render(d);
+    _cbUsingSnap=false; render(d); loadCbHist();
   }).catch(function(e){
     // 离线 / 服务未启动：回退到仓库内置快照 cb_snapshot.json，保证打开即有数据
     fetch("cb_snapshot.json?t=" + Date.now()).then(function(r){return r.json();}).then(function(d){
-      _cbUsingSnap=true; renderSnap(d);
+      _cbUsingSnap=true; renderSnap(d); loadCbHist();
     }).catch(function(){
       document.getElementById("tbl").innerHTML = '<div class="empty">加载失败：'+e+'（请确认本地服务已启动，或检查 cb_snapshot.json）</div>';
     });
@@ -279,6 +298,46 @@ function render(d){
   // 离线快照模式下不再频繁轮询实时接口（数据基本不变），每 5 分钟轻探一次即可
   cbTimer = setTimeout(load, scanning ? 4000 : (_cbUsingSnap ? 300000 : 60000));
 }
+function loadCbHist(){
+  fetch("/api/history?type=cb&days=5&t=" + Date.now()).then(function(r){return r.json();}).then(function(d){
+    window._cbHistRows = d.rows||[];
+    renderCbHist();
+  }).catch(function(e){
+    // 离线 / 服务未启动：直接从快照文件派生严格折价记录
+    fetch("cb_snapshot.json?t=" + Date.now()).then(function(r){return r.json();}).then(function(d){
+      var disc=(d.picks||[]).filter(function(p){ return p.is_discount; });
+      window._cbHistRows = disc.map(function(p){
+        return {date:(d.trade_date||d.updated||"").slice(0,10), code:p.code, name:p.name,
+                price:p.price, stock_code:p.stock_code, stock_name:p.stock_name, arb:p.arb};
+      });
+      renderCbHist();
+    }).catch(function(e2){
+      var box=document.getElementById('cbHist');
+      if(box) box.innerHTML='<div class="hist-empty">统计表加载失败：'+e2.message+'</div>';
+    });
+  });
+}
+function renderCbHist(){
+  var box=document.getElementById('cbHistBody'); if(!box) return;
+  var rows=(window._cbHistRows||[]).slice();
+  if(!rows.length){ box.innerHTML='<div class="hist-empty">暂无近 5 日严格折价信号记录（线上环境受网络限制无法扫描时，将展示最近交易日快照中的折价标的）</div>'; return; }
+  var head='<th>入选日期</th><th>转债代码</th><th>转债名称</th><th>入选价</th><th>正股</th><th>套利收益率</th><th>至今涨跌</th>';
+  var body=rows.map(function(r){
+    var arbCls=(r.arb==null)?'':(r.arb>=0?'pos':'neg');
+    var sc=String(r.stock_code||'');
+    return '<tr>'
+      +'<td>'+esc(r.date)+'</td>'
+      +'<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+esc(r.code)+'.html" target="_blank" rel="noopener">'+esc(r.code)+'</a></td>'
+      +'<td class="l">'+esc(r.name||'')+'</td>'
+      +'<td>'+fmt(r.price)+'</td>'
+      +'<td class="l"><a class="codelink" href="https://quote.eastmoney.com/'+esc(sc)+'.html" target="_blank" rel="noopener">'+esc(r.stock_name||'')+'</a></td>'
+      +'<td class="'+(arbCls||'l')+'">'+(r.arb==null?'—':fmt(r.arb)+'%')+'</td>'
+      +'<td class="l" style="color:var(--muted)">—</td>'
+      +'</tr>';
+  }).join("");
+  box.innerHTML='<table class="histtbl"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);}); }
 function card(t, v){ return '<div class="card"><div class="card-v">'+v+'</div><div class="card-t">'+t+'</div></div>'; }
 function fmtConvStart(s){ if(!s||s.length<8) return "-"; return s.substr(0,4)+"-"+s.substr(4,2)+"-"+s.substr(6,2); }
 function rescan(){
