@@ -438,10 +438,11 @@ function renderChart(){
   // 自选归一（窗口起点=0%，与指数同基准便于对比）
   var wlBase = wlWin.length? wlWin[0].cum : null;
   var wl = (wlBase!=null) ? wlWin.map(function(p){ return {date:p.date, v:p.cum - wlBase}; }) : [];
-  // 回测：全历史等权指数近 N 日滚动涨跌幅（不依赖自选日，始终可绘制）
+  // 回测：全历史等权指数近 N 日滚动涨跌幅。用完整 lastPool 计算（不受 chartDays 截断影响），
+  // 再按显示窗口的日期对齐，避免短周期（如5/10日）下因窗口不足 btN 而整条缺失。
   var bt=[];
-  for(var i=btN;i<poolWin.length;i++){
-    bt.push({date:poolWin[i].date, v:poolWin[i].idx-poolWin[i-btN].idx});
+  for(var i=btN;i<lastPool.length;i++){
+    bt.push({date:lastPool[i].date, v:lastPool[i].idx-lastPool[i-btN].idx});
   }
   // 合并日期轴（交易并集，缺失日跳过）
   var dateSet={}; sh.forEach(function(p){ dateSet[p.date]=1; }); wl.forEach(function(p){ dateSet[p.date]=1; }); bt.forEach(function(p){ dateSet[p.date]=1; });
@@ -493,7 +494,15 @@ function renderChart(){
     + (wl.length? '<path d="'+path(wlMap)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>':'')
     + (bt.length? '<path d="'+path(btMap)+'" fill="none" stroke="'+btCol+'" stroke-width="1.6" stroke-dasharray="5,4" stroke-linejoin="round" stroke-linecap="round"/>':'');
   var caption = (lastBt!=null) ? '<div style="text-align:center;font-size:12px;color:'+(lastBt>=0?'var(--up)':'var(--down)')+';font-weight:700;margin-top:4px">当前近'+btN+'日滚动涨跌幅：'+(lastBt>=0?'+':'')+lastBt.toFixed(2)+'%</div>' : '';
-  box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svg+'</svg>'+caption;
+  // 诊断：上证有数据但自选/回测缺失——通常是自选池各标的行情序列（/api/kline）未能取到
+  var diag = '';
+  if(sh.length && !wl.length && !bt.length){
+    var hint = (location.protocol==='file:')
+      ? '（本地打开需先启动 fund_arb.py 本地服务：python fund_arb.py，且服务能连通行情源；否则自选池/回测序列无法绘制）'
+      : '（线上环境受网络限制可能无法拉取个股/基金行情，请在本机或国内节点使用）';
+    diag = '<div class="src-note" style="margin-top:6px">仅上证指数可绘制：自选池平均涨跌幅与滚动回测缺数据。'+hint+'</div>';
+  }
+  box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svg+'</svg>'+caption+diag;
 }
 
 document.querySelectorAll('.rng').forEach(function(b){
