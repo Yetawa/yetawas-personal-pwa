@@ -9,7 +9,7 @@ gen_fish_model.py — 生成鱼盆页【全模型】快照 fish_model.json
   内置示例值、无法随公开 ETF 数据自动更新。
 
   本脚本在【能访问国内行情的环境】（本机/自动化/CloudStudio）收盘后：
-    1) 用新浪日 K 线(sina，沙箱可达)拉取每只 ETF 近 ~320 交易日收盘+成交量（东财 push2his 兜底）；
+    1) 用日 K 线拉取每只 ETF 近 ~320 交易日收盘+成交量（新浪优先，东财 push2his 次之，腾讯 ifzq 兜底）；
     2) 用腾讯 qt.gtimg.cn 取当日实时价/涨跌幅；
     3) 用与前端 fish_basin.html computeModel() 完全一致的算法算出全部模型字段；
     4) 输出 fish_model.json，鱼盆页打开时自动读取（同域 fetch，无代理问题），全字段刷新。
@@ -105,8 +105,29 @@ def fetch_kline_em(code, days=340):
     return bars
 
 
+def fetch_kline_tencent(code, days=340):
+    """腾讯 ifzq 日 K 兜底：返回 [(close, vol), ...] 升序（web.ifzq.gtimg.cn 沙箱可达）。"""
+    url = ("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=%s,day,,,%d,qfq"
+           % (code, days))
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=25) as r:
+        j = json.loads(r.read().decode("utf-8", "replace"))
+    d = (j or {}).get("data", {}) or {}
+    node = d.get(code) or {}
+    kl = node.get("qfqday") or node.get("day") or []
+    bars = []
+    for s in kl:
+        if not isinstance(s, (list, tuple)) or len(s) < 6:
+            continue
+        try:
+            bars.append((float(s[2]), float(s[5])))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return bars
+
+
 def fetch_kline(code, days=340):
-    """多源兜底：新浪优先，东财兜底。"""
+    """多源兜底：新浪优先，东财次之，腾讯 ifzq 兜底（腾讯间歇超时，失败重试一次）。"""
     for fn in (fetch_kline_sina, fetch_kline_em):
         try:
             bars = fn(code, days)
@@ -114,6 +135,13 @@ def fetch_kline(code, days=340):
                 return bars
         except Exception as e:
             sys.stderr.write("  kline %s via %s 失败: %s\n" % (code, fn.__name__, e))
+    for attempt in (1, 2):
+        try:
+            bars = fetch_kline_tencent(code, days)
+            if len(bars) >= 60:
+                return bars
+        except Exception as e:
+            sys.stderr.write("  kline %s via tencent(attempt %d) 失败: %s\n" % (code, attempt, e))
     return []
 
 
@@ -240,7 +268,7 @@ def main():
     snap = {
         "date": today,
         "ts": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "source": "sina_kline + tencent_quote",
+        "source": "multi_kline(sina/em/tencent) + tencent_quote",
         "items": items,
     }
     out = os.path.join(HERE, "fish_model.json")
