@@ -297,7 +297,7 @@ tr:hover td{background:var(--card2)}
     <div class="spacer"></div>
     <span class="live" id="liveTag"></span>
     <button class="btn icon" id="themeBtn" onclick="setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')" title="切换主题">🌙</button>
-    <button class="btn icon" id="refreshBtn" title="尝试拉取东方财富实时数据">⟳</button>
+    <button class="btn icon" id="refreshBtn" title="实时刷新：资金主线 / 行业热力 / 资金净流入（需本地或国内网络连通东方财富；风格轮动/北向/两融为日更快照，不随此刷新变化）">⟳</button>
   </header>
 
 
@@ -983,7 +983,10 @@ function safeRender(){
   safeRender();
   bindMetricBar();
   bindStyleRange();
-  $("#snapNote").innerHTML = `提示：本页行业轮动数据为每日收盘后自动生成的快照（由 /sector_data.json 提供，自动日更）；右上角「实时刷新」走 /api/sector_live，仅在本地或国内网络可连通东方财富。当前展示 <b>(${D.today})</b> 快照（数据生成于 ${D.generatedAt||'—'}）。`;
+  $("#snapNote").innerHTML = `提示：本页数据为每日收盘后自动生成的快照（由 /sector_data.json 提供，自动日更）。`
+    + `<br>· <b>可实时刷新</b>（点右上角 ⟳）：资金主线 / 行业涨跌热力 / 资金净流入 —— 走 /api/sector_live（仅本地或国内网络可连通东方财富）。`
+    + `<br>· <b>日更快照</b>（不随手动刷新变化）：风格轮动强弱、北向资金、两融余额、指数强弱 —— 数据日内不变，次日收盘后自动更新。`
+    + `<br>当前展示 <b>(${D.today})</b> 快照（数据生成于 ${D.generatedAt||'—'}）。线上 onrender 节点无法连通东财，实时刷新需在本地 localhost:8000 环境使用。`;
   $("#narrToggle").onclick=()=>{ const n=$("#narr"); const hid=n.style.display==="none"; n.style.display=hid?"":"none"; $("#narrToggle").textContent=hid?"▾":"▸"; };
   $("#iddX").onclick=hideIndDetail;
   $("#indMask").onclick=(e)=>{ if(e.target.id==="indMask") hideIndDetail(); };
