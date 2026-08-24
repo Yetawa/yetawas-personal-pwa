@@ -2204,7 +2204,15 @@ def compute(code, days=30, display_days=None, start="", end="", underlying=None,
             effective = "index"
             holdings_error = f"持仓估算失败: {e}"
 
-    nav_map, price_map = dict(nav), dict(price)
+    nav_map = dict(nav)
+    price_map = dict(price)
+    # 纯指数/ETF（无标的，场内价本就≈净值）：场内价抓取失败（熔断/限流/上游抖动）时，
+    # 用最新净值兜底，避免自选池/估值页出现「无价格数据」。价差将≈0（ETF 价格≈净值），
+    # 远比空白有用；盘中实时价恢复后下一次强制刷新即自动覆盖为真实场内价。
+    if not price_map and und is None and nav_map:
+        price_map = dict(nav_map)
+        psrc = psrc + "(净值兜底)" if psrc else "净值兜底"
+        print(f"    [价格兜底] 场内价抓取失败，改用净值({len(price_map)}日)作为价格")
 
     # —— 今日估算行（官方净值 T+1 公布前的盘中视图）——
     # 详细表默认只显示「已公布官方净值」的日期；QDII/普通基金官方净值常于 T+1 下午才公布，
@@ -3194,7 +3202,20 @@ def history_payload(kind, days=5):
                 row["date"] = d
                 out.append(row)
         if out:
-            return out
+            # 合并：若已提交快照的交易日比实时历史更新（用户本地扫了新快照但还没推
+            # history_entries.json），把该最新一日补进表尾，保证「近N日」始终含最新扫描日，
+            # 避免 onrender 上「今天刷新后历史被快照覆盖/变空」的观感。
+            out_dates = {r.get("date") for r in out}
+            max_hist = max(out_dates) if out_dates else ""
+            snap_rows = _history_from_snapshot(kind)
+            if snap_rows:
+                snap_latest = snap_rows[-1].get("date")
+                if snap_latest and snap_latest > max_hist and snap_latest not in out_dates:
+                    existing = {r.get("code") for r in out if r.get("date") == snap_latest}
+                    for e in snap_rows:
+                        if e.get("code") not in existing:
+                            out.append(e)
+            return out[-days:]
     # 回退：实时历史为空 → 用快照派生（仅当没有真实历史时）
     snap_rows = _history_from_snapshot(kind)
     if snap_rows:
