@@ -214,13 +214,15 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){retu
 function fmt(v){ if(v==null||isNaN(v)) return '—'; return Number(v).toFixed(3); }
 function fmtPct(v){ if(v==null||isNaN(v)) return '—'; return (v>0?'+':'')+Number(v).toFixed(2)+'%'; }
 
-// 现价缓存（会话内）
+// 现价缓存（会话内）：values: {price,name} | undefined(未取) | null(取失败)
 var pxCache={}, pxErrors={};
-function fetchPrice(code, attempt){
+function fetchPrice(code, attempt, force){
   attempt = attempt||0;
   return new Promise(function(res){
-    if(pxCache[code]!==undefined){ res(pxCache[code]); return; }
-    fetch(BASE+'/api/data?code='+encodeURIComponent(code)+'&days=3&t='+Date.now(), {cache:'no-store'})
+    // 仅当已有有效缓存(非 null/undefined)且非强制时复用；null 必须重试
+    if(!force && Object.prototype.hasOwnProperty.call(pxCache, code) && pxCache[code]!==null){ res(pxCache[code]); return; }
+    var url = BASE+'/api/data?code='+encodeURIComponent(code)+'&days=3&t='+Date.now()+(force?'&force=1':'');
+    fetch(url, {cache:'no-store'})
       .then(function(r){
         if(!r.ok) throw new Error('HTTP '+r.status);
         return r.json();
@@ -230,6 +232,8 @@ function fetchPrice(code, attempt){
         var rows=d.rows||[], name=d.name||'';
         var p=null;
         for(var i=rows.length-1;i>=0;i--){ if(rows[i]&&rows[i].price!=null){ p=rows[i].price; break; } }
+        // 兜底：rows 末根无价时，用 compute() 返回的 latest_price（盘中实时价）
+        if(p==null && d.latest_price!=null){ p=d.latest_price; }
         if(p==null){ throw new Error('无价格数据'); }
         pxCache[code]={price:p, name:name};
         delete pxErrors[code];
@@ -237,7 +241,7 @@ function fetchPrice(code, attempt){
       })
       .catch(function(e){
         if(attempt<2){
-          setTimeout(function(){ fetchPrice(code, attempt+1).then(res); }, 350*(attempt+1));
+          setTimeout(function(){ fetchPrice(code, attempt+1, force).then(res); }, 350*(attempt+1));
         }else{
           pxErrors[code]=(e&&e.message)||String(e);
           pxCache[code]=null;
@@ -300,7 +304,7 @@ function render(){
 }
 
 function refresh(force){
-  if(force){ pxCache={}; pxErrors={}; }
+  if(force){ pxCache={}; pxErrors={}; chartCache={}; }
   list=loadW();
   // 备份上一次保存的数据，便于旧 localStorage（无 wlprice 字段）数据兼容
   list.forEach(function(x){ x._prevPrice = (x.price!=null)?Number(x.price):(x.wlprice!=null?Number(x.wlprice):null); });
@@ -309,7 +313,7 @@ function refresh(force){
   // 错峰启动：每只间隔 120ms，避免渲染后端并发限制导致部分 fetch 失败
   var tasks = list.map(function(x, i){
     return new Promise(function(res){
-      setTimeout(function(){ fetchPrice(x.code).then(res).catch(function(e){ pxErrors[x.code]=(e&&e.message)||String(e); res(null); }); }, i*120);
+      setTimeout(function(){ fetchPrice(x.code, 0, force).then(res).catch(function(e){ pxErrors[x.code]=(e&&e.message)||String(e); res(null); }); }, i*120);
     });
   });
   Promise.all(tasks).then(function(){
@@ -654,7 +658,30 @@ initTheme();
 syncNavHeight();
 markSorted();
 refresh();
-setInterval(refresh, 120000);
+// 自动刷新策略：
+// - 每 2 分钟轻量刷新一次（不带 force，复用后端 120s 缓存，省请求）；
+// - 每个交易日北京时间 14:45 这个时点，自动触发一次强制刷新（force=1），
+//   拉取当日盘中实时价，满足「收盘前 15 分钟自动更新当天行情」的需求；
+// - 手动点「刷新」按钮 = refresh(true)，随时强刷。
+var _autoForcedDate = '';
+function _isBJTradingNow(){
+  var n = new Date();
+  // 用本地时间近似（用户在国内，设备时区即北京时间）；周一到周五
+  var day = n.getDay(); if(day===0||day===6) return false;
+  var hm = n.getHours()*60 + n.getMinutes();
+  return hm >= 14*60+45 && hm <= 15*60+5;  // 14:45~15:05 窗口
+}
+function _autoRefresh(){
+  var d = new Date();
+  var key = d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+  if(_isBJTradingNow() && _autoForcedDate !== key){
+    _autoForcedDate = key;
+    refresh(true);   // 收盘前窗口：强制刷新当日行情
+  } else {
+    refresh(false);  // 其余时段：轻量刷新（缓存）
+  }
+}
+setInterval(_autoRefresh, 120000);
 // 布局/字体稳定后再校正一次顶栏高度（避免初始测量偏差）
 window.addEventListener('load', syncNavHeight);
 setTimeout(syncNavHeight, 400);
