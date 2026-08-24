@@ -3594,8 +3594,8 @@ except NameError:
 
 CB_CFG = dict(
     top_n=10,                  # 榜单条数
-    scan_hour=14,              # 每交易日自动扫描时刻
-    scan_minute=45,            # 尾盘 14:45
+    scan_hour=15,              # 每交易日自动扫描时刻（收盘后，确保东财入库）
+    scan_minute=15,            # 15:15 收盘数据已稳定
     min_arb_pct=-100.0,        # 套利收益率下限（仅作保险，正常取 >0 即折价）
     exclude_st=True,           # 排除 ST/*ST 正股（强赎/退市风险）
     fallback_if_empty=True,    # 无严格折价时降级显示"最接近折价"的前 N 只
@@ -4373,13 +4373,21 @@ class Handler(BaseHTTPRequestHandler):
             mode = qs.get("mode", [""])[0] or None
             if mode not in ("auto", "holdings", "index"):
                 mode = None
+            force = qs.get("force", ["0"])[0] in ("1", "true", "True")
             cache_key = f"data|{code}|{days}|{threshold}|{start}|{end}|{underlying}|{mode}"
             try:
-                data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL,
-                                    lambda: compute(code, display_days=days, start=start, end=end, underlying=underlying, threshold=threshold, mode=mode))
-                data = dict(data)
-                data["error"] = None
-                data["stale"] = stale
+                if force:
+                    # 手动强制刷新：绕过缓存直接重算（自选池"刷新"按钮需要拿到最新价）
+                    data = compute(code, display_days=days, start=start, end=end, underlying=underlying, threshold=threshold, mode=mode)
+                    data = dict(data); data["error"] = None; data["stale"] = False; data["forced"] = True
+                    with self._API_CACHE_LOCK:
+                        self._API_CACHE[cache_key] = (time.time() + Handler._API_CACHE_TTL, data)
+                else:
+                    data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL,
+                                        lambda: compute(code, display_days=days, start=start, end=end, underlying=underlying, threshold=threshold, mode=mode))
+                    data = dict(data)
+                    data["error"] = None
+                    data["stale"] = stale
                 self._send(200, json.dumps(data, ensure_ascii=False))
             except Exception as e:
                 self._send(200, json.dumps({"error": str(e), "code": code}, ensure_ascii=False))
@@ -4575,28 +4583,52 @@ def _last_trading_day(now=None):
 
 
 def _in_update_window(now=None):
-    """是否在『当日行情更新窗口』：交易日且北京时间 >= 14:45。
-    此窗口之外（盘中早段、盘后、夜间、周末、假日）数据视为已收盘冻结，不应自动重扫。"""
+    """是否在『当日行情更新窗口』：交易日且北京时间 >= 15:15。
+
+    选 15:15 而非 14:45：A股 15:00 收盘，东财行情/K线入库有约 10-15 分钟延迟，
+    15:15 后抓到的才是当日真实收盘（trade_date 与涨跌幅严格同源=当日），
+    避免盘中 14:45 扫到的 K 线末根仍是上一交易日而导致『上上个交易日』错位。
+    此窗口之外（盘中早段、盘后 15:15 前、夜间、周末、假日）数据视为已收盘冻结。"""
     if now is None:
         now = bj_now()
     if not _is_trading_day(now):
         return False
-    return now.hour > 14 or (now.hour == 14 and now.minute >= 45)
+    return now.hour > 15 or (now.hour == 15 and now.minute >= 15)
 
 
 def _auto_refresh_due(res, trade_date_field="trade_date"):
-    """判定是否应自动后台重扫（非手动）：
+    """判定是否应自动后台重扫（非手动 force）：
 
-    仅在『交易日 + 已进入当日更新窗口(>=14:45) + 当日快照尚未生成』时才允许自动刷；
-    其余情况（非交易日/周末/假日、交易日 14:45 前、或当日快照已存在）→ 冻结，
-    直接复用缓存静态展示最近 1 个交易日的结果。
+    触发条件（满足任一即允许自动刷）：
+    1) 缓存为空（首次）；或
+    2) 当前处于每日更新窗口(>=15:15) 且缓存 trade_date 不是「今天」→ 当日收盘未扫，需补；或
+    3) 缓存 trade_date 落后「最近交易日」超过 1 天（说明上次扫描因故漏掉/数据陈旧）→ 允许补刷，
+       避免一直显示上上个交易日的旧数据。
+
+    其余情况（非交易日/周末/假日、交易日 15:15 前、当日快照已存在且未过期）→ 冻结，
+    直接复用缓存静态展示最近 1 个交易日的结果，不浪费扫描资源。
 
     force=1（手动刷新）不受此限，任何时候都可触发，让用户能主动获取最新。"""
     now = bj_now()
-    if not _in_update_window(now):
-        return False
-    td = now.strftime("%Y-%m-%d")
-    return (res is None) or (res.get(trade_date_field) != td)
+    if res is None:
+        return True
+    cached_td = res.get(trade_date_field)
+    # 条件2：更新窗口内且当日尚未扫描
+    if _in_update_window(now):
+        td = now.strftime("%Y-%m-%d")
+        if cached_td != td:
+            return True
+    # 条件3：缓存落后最近交易日超过 1 天（漏扫保护）
+    try:
+        if cached_td:
+            from datetime import datetime as _dt
+            cached_d = _dt.strptime(cached_td, "%Y-%m-%d").date()
+            last_d = _dt.strptime(_last_trading_day(now), "%Y-%m-%d").date()
+            if (last_d - cached_d).days > 1:
+                return True
+    except Exception:
+        pass
+    return False
 
 
 def _date_integrity(trade_date):
@@ -4667,7 +4699,7 @@ PIVOT_CFG = dict(
     min_price=3.0, max_price=400.0,
     min_amount_wan=5000.0,  # 当日成交额下限（万元）
     top_n=30,               # 网页展示条数上限（用户要求最多前30只）
-    scan_hour=14, scan_minute=50,   # 收盘前 10 分钟自动扫描
+    scan_hour=15, scan_minute=15,   # 收盘后 15:15 自动扫描（东财入库后，数据准确）
 )
 # 抓取并发可用环境变量覆盖（避免盲目调大导致上游 429/超时）
 PIVOT_CFG["max_workers"] = int(os.environ.get("FUND_ARB_PIVOT_WORKERS", PIVOT_CFG["max_workers"]))
