@@ -252,7 +252,7 @@ async function load(){
   try{
     let url='/api/data?code='+encodeURIComponent(code)+'&days='+encodeURIComponent(days)
           +'&threshold='+encodeURIComponent(threshold)+'&mode='+encodeURIComponent(currentMode);
-    const r=await fetch(url); const d=await r.json();
+    const r=await fetch(url, {cache:'no-store'}); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
     render(d);
   }catch(e){
@@ -379,7 +379,7 @@ async function loadValidate(code){
   box.style.display='none'; box.innerHTML='';
   const bt=document.getElementById('btinline'); if(bt) bt.innerHTML='';
   try{
-    const r=await fetch('/api/validate?code='+encodeURIComponent(code)+'&days=30&mode='+encodeURIComponent(currentMode));
+    const r=await fetch('/api/validate?code='+encodeURIComponent(code)+'&days=30&mode='+encodeURIComponent(currentMode), {cache:'no-store'});
     const d=await r.json();
     if(d.error) return;
     let comp='';
@@ -690,7 +690,7 @@ async function load(){
   document.getElementById('rankbar').style.display='none'; document.getElementById('summary2').innerHTML='';
   try{
     const url='/api/ranking?date='+encodeURIComponent(date)+'&codes='+encodeURIComponent(codes.join(','))+'&threshold='+encodeURIComponent(threshold);
-    const r=await fetch(url); const d=await r.json();
+    const r=await fetch(url, {cache:'no-store'}); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
     currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d);
   }catch(e){
@@ -995,7 +995,7 @@ async function load(){
   document.getElementById('rankbar').style.display='none'; document.getElementById('summary2').innerHTML='';
   try{
     const url='/api/top?date='+encodeURIComponent(date)+'&threshold='+encodeURIComponent(threshold)+'&dgate='+encodeURIComponent(dgate);
-    const r=await fetch(url); const d=await r.json();
+    const r=await fetch(url, {cache:'no-store'}); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
     currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d); loadTopHist();
   }catch(e){
@@ -1420,7 +1420,7 @@ ICON_SVG = r"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <path d="M112 176 L256 80 L400 176" fill="none" stroke="#ef4444" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M112 368 L256 464 L400 368" fill="none" stroke="#22c55e" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>"""
-SW_JS = r"""const CACHE='fundarb-v1.4';
+SW_JS = r"""const CACHE='fundarb-v1.5';
 const SHELL=['/','/ranking','/top','/manifest.json','/icon-192.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));
@@ -1431,10 +1431,11 @@ self.addEventListener('activate',e=>{
 self.addEventListener('fetch',e=>{
   const url=new URL(e.request.url);
   // 数据接口：网络优先，失败回退缓存
-  if(url.pathname.startsWith('/api/')){
+  if(url.pathname.startswith('/api/')){
+    // 数据接口：每次都走网络取最新，避免把部署异常期的单行/错误响应缓存住；
+    // 仅当网络彻底失败时才回退历史缓存，且绝不写回缓存。
     e.respondWith(
-      fetch(e.request).then(r=>{const cp=r.clone();caches.open(CACHE).then(c=>c.put(e.request,cp));return r;})
-        .catch(()=>caches.match(e.request))
+      fetch(e.request, {cache:'no-store'}).catch(()=>caches.match(e.request))
     );
     return;
   }
