@@ -1198,34 +1198,90 @@ def fetch_hk_index_sina(symbol="HSSI", n=5):
     return [(yday, prev), (today, price)]
 
 
+# ---- 新浪期货 last-good 磁盘缓存（美西节点不可达时的兜底）----
+# 仓库内置 sina_futures_cache.json（随源码提交），存放 AU0/AG0 等连续合约的历史日K
+# 收盘；在线抓取失败时退回该缓存，保证国内商品标的（黄金/白银ETF）仍返回完整历史序列
+# （≥display_days 行），而非退化为 1 行。在线成功且新鲜时自写缓存自愈。
+_SINA_FUTURES_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sina_futures_cache.json")
+_SINA_FUTURES_CACHE = None
+
+def _load_sina_futures_disk_cache():
+    global _SINA_FUTURES_CACHE
+    if _SINA_FUTURES_CACHE is not None:
+        return _SINA_FUTURES_CACHE
+    _SINA_FUTURES_CACHE = {}
+    try:
+        with open(_SINA_FUTURES_CACHE_FILE, "r", encoding="utf-8") as f:
+            _SINA_FUTURES_CACHE = json.load(f) or {}
+    except Exception:
+        _SINA_FUTURES_CACHE = {}
+    return _SINA_FUTURES_CACHE
+
+def _save_sina_futures_disk_cache(sym, series):
+    try:
+        cache = _load_sina_futures_disk_cache()
+        cache[sym] = [[d, c] for d, c in series]
+        with open(_SINA_FUTURES_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+    except Exception:
+        pass
+
 def fetch_kline_sina_futures(symbol, n=120):
     """新浪财经期货连续合约 K 线（日线）。symbol 如 AG0、AU0、RB0、SC0 等。
-    返回 [(date, close), ...] 按日期升序。"""
+    返回 [(date, close), ...] 按日期升序。
+    多源容错：jsonp 主源 → stock2 JSON 备源 → 仓库内置 last-good 磁盘缓存。
+    任一在线源成功且新鲜即写入磁盘缓存自愈；在线全失败/不新鲜则退回磁盘缓存，
+    确保 AU0/AG0 等国内商品标的在美西节点不可达时仍返回完整历史序列。"""
+    series = []
+    # 主源：jsonp 包裹
     url = (f"https://stock.finance.sina.com.cn/futures/api/jsonp.php"
            f"/var=/InnerFuturesNewService.getDailyKLine?symbol={symbol}&_=1")
     try:
         txt = http_get_text(url, timeout=15, retries=3)
+        m = re.search(r'var=\((.*)\);', txt, re.DOTALL)
+        if m:
+            arr = json.loads(m.group(1))
+            if isinstance(arr, list):
+                for r in arr[-n:]:
+                    d, c = r.get("d"), r.get("c")
+                    if d and c:
+                        try:
+                            series.append((d, float(c)))
+                        except (ValueError, TypeError):
+                            pass
     except Exception:
-        return []
-    m = re.search(r'var=\((.*)\);', txt, re.DOTALL)
-    if not m:
-        return []
-    try:
-        arr = json.loads(m.group(1))
-    except Exception:
-        return []
-    if not isinstance(arr, list):
-        return []
-    out = []
-    for r in arr[-n:]:
-        d, c = r.get("d"), r.get("c")
-        if d and c:
-            try:
-                out.append((d, float(c)))
-            except (ValueError, TypeError):
-                pass
-    out.sort()
-    return out
+        pass
+    # 备源：stock2 直出 JSON
+    if len(series) < 2:
+        try:
+            url2 = (f"https://stock2.finance.sina.com.cn/futures/api/json.php"
+                    f"/InnerFuturesNewService.getDailyKLine?symbol={symbol}")
+            txt2 = http_get_text(url2, timeout=15, retries=2)
+            arr2 = json.loads(txt2)
+            if isinstance(arr2, list):
+                s2 = []
+                for r in arr2[-n:]:
+                    d, c = r.get("d"), r.get("c")
+                    if d and c:
+                        try:
+                            s2.append((d, float(c)))
+                        except (ValueError, TypeError):
+                            pass
+                if len(s2) > len(series):
+                    series = s2
+        except Exception:
+            pass
+    series = sorted(set(series)) if series else series
+    # 在线成功且新鲜 → 写磁盘缓存自愈
+    if series and _series_is_fresh(series):
+        _save_sina_futures_disk_cache(symbol, series)
+        return series[-n:]
+    # 在线失败/不新鲜 → 退回 last-good 磁盘缓存
+    disk = _load_sina_futures_disk_cache().get(symbol) or []
+    if disk:
+        dseries = sorted((d, float(c)) for d, c in disk)
+        return dseries[-n:]
+    return series[-n:] if series else []
 
 
 def _str_to_date(s):
