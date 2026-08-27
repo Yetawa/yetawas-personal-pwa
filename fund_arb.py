@@ -145,7 +145,7 @@ UNDERLYING_MAP = {
     "518850": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 华夏黄金ETF
     "518800": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 国泰黄金ETF
     "159934": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 易方达黄金ETF
-    "159937": {"sina_futures": "AU0", "ufx": "AU0", "use_fx": False},  # 博时黄金ETF
+    "159937": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 博时黄金ETF
     "518660": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 工银黄金ETF
     "518680": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 富国黄金ETF
     "518860": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 中银黄金ETF
