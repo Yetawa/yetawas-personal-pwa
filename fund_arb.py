@@ -3486,15 +3486,60 @@ def _top_should_refresh(force=False):
     return _is_trading_day(bj) and _in_update_window(bj)
 
 
+_TOP_NET_PROBE = {"ok": None, "ts": 0.0}
+
+
+def _em_reachable(timeout=4.0, cache_sec=60.0):
+    """行情源 push2.eastmoney.com 是否**真能取到数据**（结果缓存 60 秒）。
+
+    ⚠️ 必须用 HTTP 层探测，不能用 TCP 建连：实测在受限网络（沙箱/onrender 美西）
+    TCP 三次握手能成功（0.09s），但一发 HTTP 请求就被对端断连
+    （RemoteDisconnected: Remote end closed connection without response）。
+    若只探测 TCP 会误判为「可达」，后台线程照样空转几十秒。
+
+    不可达时直接给出明确原因，避免用户点「扫描全市场」后页面一直转。
+    """
+    now = time.time()
+    if _TOP_NET_PROBE["ok"] is not None and now - _TOP_NET_PROBE["ts"] < cache_sec:
+        return _TOP_NET_PROBE["ok"]
+    ok = False
+    try:
+        req = Request(
+            "https://push2.eastmoney.com/api/qt/ulist.np/get"
+            "?fltt=2&invt=2&fields=f2,f3&secids=1.000001",
+            headers={"User-Agent": "Mozilla/5.0",
+                     "Referer": "https://quote.eastmoney.com/"})
+        with urlopen(req, timeout=timeout) as _r:
+            _r.read(128)
+            ok = True
+    except Exception:
+        ok = False
+    _TOP_NET_PROBE["ok"] = ok
+    _TOP_NET_PROBE["ts"] = now
+    return ok
+
+
 def _top_kick(date, threshold, dgate, top_n=20, force=False):
     """后台起一次全市场扫描并回写快照；已在进行/冷却中则跳过。返回是否真的启动了。
 
     背景：onrender 位于美西，访问 push2.eastmoney.com 会被 GFW 黑洞（连接挂起、
     既不成功也不失败）。旧实现在「快照日期不匹配」时同步调用 compute_top_arbitrage，
     实测 /api/top 60s 超时、TOP 页直接打不开。现全部改为后台线程：请求路径恒定
-    毫秒级返回，扫描结果落地后下一次请求自动生效。
+    毫秒级返回，扫描结果落地后下一次请求自动生效（前端需轮询 scanning 才能看到结果）。
     """
     if not _top_should_refresh(force=force):
+        return False
+    # 先探测行情源：云端不可达时明确报错，避免后台线程空转几十秒
+    if not _em_reachable():
+        with _TOP_TASK_LOCK:
+            if not _TOP_TASK["scanning"]:
+                _TOP_TASK.update(
+                    scanning=False, phase="行情源不可达",
+                    error="当前运行环境无法访问 push2.eastmoney.com（HTTP 层被断连，"
+                          "常见于境外服务器或受限网络），无法重算 TOP 榜。"
+                          "请在可访问东财的网络环境（如本机）生成快照后提交，"
+                          "或将服务部署在国内节点。",
+                    finished=time.time())
         return False
     with _TOP_TASK_LOCK:
         if _TOP_TASK["scanning"]:

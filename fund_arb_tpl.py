@@ -909,7 +909,7 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
   <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <div class="field"><label>折价阈值 %</label><input id="dgate" value="-2" type="number" step="0.1" min="-10" max="-0.1"></div>
-  <button id="btn" onclick="load()">扫描全市场</button>
+  <button id="btn" onclick="load(true)">扫描全市场</button>
   <span class="sort-hint" style="color:var(--muted);font-size:12px">首次扫描约 30~90 秒（全市场取数），10 分钟内重复查询秒回。</span>
 </div>
 
@@ -985,8 +985,23 @@ function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":"
 function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function today(){ const s=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return s.replace(/\//g,'-'); }
+// 最近交易日：今天若是周六/周日则回溯到上周五。
+// 法定节假日由服务端 _A_SHARE_HOLIDAYS 兜底，这里只处理周末——
+// 否则周末打开页面时 rdate 是周六，与任何快照都不匹配，永远显示"尚未生成"。
+function lastTradingDay(){
+  const now=new Date();
+  const bj=new Date(now.getTime() + (8*60 + now.getTimezoneOffset())*60000);
+  const w=bj.getDay();                       // 0=周日 .. 6=周六
+  const back = (w===0)?2 : (w===6)?1 : 0;
+  const d=new Date(bj.getTime() - back*86400000);
+  const p=function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
 
-async function load(){
+let TOP_POLL=null;
+// force=true 表示用户点「扫描全市场」：允许服务端跳过冷却重扫一次。
+// 扫描在后台进行（云端行情源不可达时不会阻塞页面），故需轮询直到完成。
+async function load(force){
   const date=document.getElementById('rdate').value;
   const threshold=document.getElementById('threshold').value;
   const dgate=document.getElementById('dgate').value;
@@ -995,12 +1010,21 @@ async function load(){
   document.getElementById('err').textContent=''; document.getElementById('tablebox').style.display='none';
   document.getElementById('rankbar').style.display='none'; document.getElementById('summary2').innerHTML='';
   try{
-    const url='/api/top?date='+encodeURIComponent(date)+'&threshold='+encodeURIComponent(threshold)+'&dgate='+encodeURIComponent(dgate);
+    const url='/api/top?date='+encodeURIComponent(date)+'&threshold='+encodeURIComponent(threshold)+'&dgate='+encodeURIComponent(dgate)+(force?'&force=1':'');
     const r=await fetch(url, {cache:'no-store'}); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
     currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d); loadTopHist();
+    if(d.scanning){
+      btn.textContent='扫描中…';
+      if(!TOP_POLL) TOP_POLL=setInterval(function(){ load(false); }, 5000);
+    }else{
+      btn.textContent='扫描全市场';
+      if(TOP_POLL){ clearInterval(TOP_POLL); TOP_POLL=null; }
+      if(d.scan_error){ document.getElementById('err').textContent='扫描失败：'+d.scan_error; }
+    }
   }catch(e){
     document.getElementById('err').textContent='加载失败：'+e.message;
+    btn.textContent='扫描全市场';
   }finally{
     document.getElementById('loading').style.display='none'; btn.disabled=false;
   }
@@ -1148,7 +1172,7 @@ function tickClock(){
   el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
 }
 setInterval(tickClock, 1000); tickClock();
-(function(){ const d=document.getElementById('rdate'); d.value=today(); })();
+(function(){ const d=document.getElementById('rdate'); d.value=lastTradingDay(); })();
 load();
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err)); });
