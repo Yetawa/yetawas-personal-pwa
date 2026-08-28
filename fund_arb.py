@@ -2935,20 +2935,37 @@ def _hydrate_from_disk():
         # 历史教训：曾因规模过滤修复暂跳过回填（if False），导致 onrender 冷启动
         # 快照为空 → 全市场冷算在美西节点取不到东财行情 → 榜单缩水且估算全部回退
         # 官方净值（用户反馈"TOP 估算跟前一天一模一样"）。现恢复回填。
-        if os.path.exists(TOP_SNAP_FILE):
+        # 两个来源都读，取 date 更新的那个 —— 不能简单「磁盘缓存优先」：
+        # 磁盘缓存 fund_arb_cache_top.json 是运行时随手写的，线上 redeploy 后
+        # 又会从仓库恢复成很久以前的版本；而 top_snapshot.json 由
+        # regen_top_snapshot.py 在国内环境受控生成，通常才是最新的。
+        # 若固定优先级，新生成的快照会被旧缓存永久压制。
+        _cands = []
+        for _snap_path, _label in ((TOP_SNAP_FILE, "磁盘缓存"),
+                                   (TOP_BUILTIN_SNAP, "内置快照")):
+            if not os.path.exists(_snap_path):
+                continue
             try:
-                with open(TOP_SNAP_FILE, encoding="utf-8") as _tf:
+                with open(_snap_path, encoding="utf-8") as _tf:
                     _s = json.load(_tf)
                 if _s.get("rows"):
-                    with _TOP_SNAP_LOCK:
-                        _TOP_SNAPSHOT.update(ts=_s.get("ts", 0.0), date=_s.get("date"),
-                                             universe=_s.get("universe", 0),
-                                             tradable=_s.get("tradable", 0),
-                                             candidates=_s.get("candidates", 0),
-                                             rows=_s.get("rows", []))
-                    print(f"    [缓存] 已从磁盘回填 TOP 全量快照（{len(_s.get('rows', []))} 候选行）")
+                    _cands.append((str(_s.get("date") or ""), _s, _label))
             except Exception as _e:
-                print(f"    [缓存] TOP快照回填失败: {_e}")
+                print(f"    [缓存] TOP快照读取失败({_label}): {_e}")
+        if _cands:
+            _cands.sort(key=lambda x: x[0])          # 日期升序，取最后=最新
+            _date, _s, _label = _cands[-1]
+            with _TOP_SNAP_LOCK:
+                _TOP_SNAPSHOT.update(ts=_s.get("ts", 0.0), date=_s.get("date"),
+                                     universe=_s.get("universe", 0),
+                                     tradable=_s.get("tradable", 0),
+                                     candidates=_s.get("candidates", 0),
+                                     rows=_s.get("rows", []))
+            print(f"    [缓存] 已从{_label}回填 TOP 全量快照"
+                  f"（{_date}，{len(_s.get('rows', []))} 候选行）"
+                  + (f"，另一来源更新的有 {len(_cands) - 1} 个" if len(_cands) > 1 else ""))
+        else:
+            print("    [缓存] TOP 无可用快照（磁盘缓存与内置快照均缺失）")
         print(f"    [缓存] 已从磁盘回填 {len(Handler._API_CACHE)} 条 API 结果（含可能过期的旧数据）")
     except Exception as e:
         print(f"    [缓存] 磁盘回填失败: {e}")
@@ -3226,6 +3243,10 @@ def fetch_turnover(codes):
 # ---- TOP 套利榜「全量快照」：重计算只后台跑一次，参数化视图内存秒回 ----
 # 对齐 haoetf/palmmicro：用户请求只做 filter+sort，不再触发全市场网络扫描。
 TOP_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_arb_cache_top.json")
+# 仓库内置快照：随源码提交，onrender 重新部署清空磁盘后仍能秒回。
+# 由 regen_top_snapshot.py 在「可访问东财的环境（国内）」生成并推送——
+# 云端自身取不到行情，没有它线上 TOP 榜会永远停在很久以前的数据。
+TOP_BUILTIN_SNAP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "top_snapshot.json")
 _TOP_SNAPSHOT = {"ts": 0.0, "date": None, "universe": 0, "tradable": 0,
                 "candidates": 0, "filter_trace": {}, "rows": []}
 _TOP_SNAP_LOCK = _threading.Lock()
@@ -4465,7 +4486,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/icon-512.png":
             self._send(200, ICON_PNG_512, "image/png")
             return
-        if parsed.path in ("/pivot_snapshot.json", "/cb_snapshot.json"):
+        if parsed.path in ("/pivot_snapshot.json", "/cb_snapshot.json", "/top_snapshot.json"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
             try:
                 with open(_fp, encoding="utf-8") as _f:
