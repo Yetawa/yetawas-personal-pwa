@@ -28,8 +28,13 @@ def make_page(html, out_name, fetch_replacements, nav_replacements):
     )
     for old, new in fetch_replacements:
         html = html.replace(old, new, 1)
+    # 导航链接必须【全部】替换，不能只替换第一处。
+    # 旧版用 replace(..., 1)：模板里 href="/sector" 出现两次（左上角品牌链接 + 导航
+    # 「行业轮动」），品牌链接在 DOM 中靠前，会抢走唯一的替换名额，
+    # 导致导航里的「行业轮动」仍是绝对路径 /sector —— file:// 打开时点击直接 404。
+    # 模板内 href="/xxx" 全部是站内导航入口，不存在需要保留绝对路径的场景。
     for old, new in nav_replacements:
-        html = html.replace(old, new, 1)
+        html = html.replace(old, new)
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), out_name)
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
@@ -77,11 +82,11 @@ _p4 = _p4.replace("fetch('/api/history", "fetch(BASE+'/api/history")
 # 标题里站点资源在 file:// 下会 404，去掉以免控制台报错（无副作用）
 _p4 = _p4.replace('<link rel="manifest" href="/manifest.json">', "")
 _p4 = _p4.replace('<link rel="apple-touch-icon" href="/icon.svg">', "")
+# 旧版这里只传了 /pivot 一条映射，导致其余 7 个入口仍是绝对路径
+# （file:// 打开时点「行业轮动/鱼盆模型/套利看板…」全部 404）。改用完整 NAV_MAP。
 make_page(
     _p4,
     "pivot_live.html",
     [],
-    [
-        ('href="/pivot"', 'href="pivot_live.html"'),  # 防止 NAV_MAP 已替换，双重保险
-    ],
+    NAV_MAP,
 )

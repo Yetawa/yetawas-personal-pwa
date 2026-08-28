@@ -34,7 +34,7 @@ import urllib.request
 import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, date as _date_cls
+from datetime import datetime, timedelta, timezone, date as _date_cls
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import os
@@ -600,18 +600,27 @@ def _idx_push2_changes(idx_meta):
     if not idx_meta:
         return {}
     codes = list(idx_meta.keys())
-    hosts = ["%d.push2.eastmoney.com" % _random.randint(1, 99) for _ in range(8)]
+    # 【耗时预算】旧版内层 10 个 host × 8s = 80s，且外层还按 20 个代码分块循环，
+    # 多块时总耗时 = 块数 × 80s。云端访问东财被黑洞时，这会让估值接口整体挂死。
+    # 现压到 3 host × 4s，并给整个函数 15s 全局预算，超时直接放弃、返回已取到的部分。
+    hosts = ["%d.push2.eastmoney.com" % _random.randint(1, 99) for _ in range(2)]
     hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
     UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
           "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    _BUDGET, _HOST_TO = 15.0, 4.0
+    _t0 = time.time()
     out = {}
     for i in range(0, len(codes), 20):
+        if time.time() - _t0 > _BUDGET:
+            break
         chunk = codes[i:i + 20]
         secids = []
         for ic in chunk:
             secids.append("1." + ic)
             secids.append("0." + ic)
         for host in hosts:
+            if time.time() - _t0 > _BUDGET:
+                break
             try:
                 url = ("https://%s/api/qt/ulist.np/get?fields=%s&secids=%s"
                        "&ut=fa5fd1943c7b386f172d6893bfba10b&_=%d" % (
@@ -619,7 +628,8 @@ def _idx_push2_changes(idx_meta):
                 req = urllib.request.Request(url, headers={
                     "User-Agent": UA, "Referer": "https://quote.eastmoney.com/",
                     "Accept": "application/json, text/plain, */*"})
-                with urllib.request.urlopen(req, timeout=8) as r:
+                _remain = _BUDGET - (time.time() - _t0)
+                with urllib.request.urlopen(req, timeout=max(1.5, min(_HOST_TO, _remain))) as r:
                     j = json.loads(r.read().decode("utf-8", "replace"))
                 diff = ((j or {}).get("data") or {}).get("diff") or []
                 for x in diff:
@@ -919,8 +929,15 @@ def _cb_ok(cb):
 
 
 def bj_now():
-    """北京时间（UTC+8，中国不实行夏令时）。返回 naive datetime 表示北京墙钟。"""
-    return datetime.fromtimestamp(time.time() + 8 * 3600)
+    """北京时间（UTC+8，中国不实行夏令时）。返回 naive datetime 表示北京墙钟。
+
+    ⚠️ 必须用「带时区的 now」而不是 fromtimestamp(time.time() + 8h)：
+    fromtimestamp 会再按「进程本地时区」转换一次。onrender 服务器是 UTC，
+    结果恰好正确；但本机/任何 UTC+8 环境会**双加 8 小时**（11:35 应为 03:35），
+    导致 _in_update_window(>=15:15)、_auto_refresh_due 等时间判断全线错位，
+    且本地测试结论与线上行为不一致，极难排查。
+    """
+    return datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
 
 
 def http_get_json(url, referer=None, timeout=10, retries=2, sleep_base=0.5):
@@ -1191,8 +1208,8 @@ def fetch_hk_index_sina(symbol="HSSI", n=5):
         return []
     if price <= 0 or prev <= 0:
         return []
-    # 日期键用「UTC 安全」的北京时间（bj_now 依赖进程时区，本地 UTC+8 会双加 8h）
-    bj = datetime.utcnow() + timedelta(hours=8)
+    # bj_now() 已改为与时区无关的实现（见其文档字符串），这里直接复用即可
+    bj = bj_now()
     today = bj.strftime("%Y-%m-%d")
     yday = (bj - timedelta(days=1)).strftime("%Y-%m-%d")
     return [(yday, prev), (today, price)]
@@ -1507,8 +1524,8 @@ def fetch_fx(days=400):
     with FX_FETCH_LOCK:
         if FX_CACHE and (time.time() - FX_CACHE_TS) < 3600:
             return FX_CACHE
-        today = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        today = bj_now().strftime("%Y-%m-%d")
+    start = (bj_now() - timedelta(days=days)).strftime("%Y-%m-%d")
     out = {}
     # 主源：CFETS 人民币中间价（央行口径，招募书规定）
     try:
@@ -2790,7 +2807,9 @@ def compute_ranking(codes, target_date=None, threshold=THRESHOLD):
     """并行计算多基金某日快照，按官方溢价降序排列。"""
     codes = [c.strip() for c in codes if c.strip()]
     if not target_date:
-        target_date = datetime.now().strftime("%Y-%m-%d")
+        # 用「最近交易日」而非今天：非交易日东财返回的是上一交易日收盘，
+        # 若把标签写成今天就会出现「标签 8/29(周六)、数值 8/28」的错位（用户三令五申）。
+        target_date = _last_trading_day()
     fx_map = fetch_fx()
     # 预取去重后的显式标的（注册表 / UNDERLYING_MAP），写入缓存，避免 worker 内重复抓取触发限流
     explicit = set()
@@ -3210,6 +3229,12 @@ TOP_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_a
 _TOP_SNAPSHOT = {"ts": 0.0, "date": None, "universe": 0, "tradable": 0,
                 "candidates": 0, "filter_trace": {}, "rows": []}
 _TOP_SNAP_LOCK = _threading.Lock()
+# TOP 全市场扫描任务状态（对齐 pocket pivot / 可转债的后台扫描模式）：
+# 云端（onrender 美西节点）取不到东财行情，同步冷算会让 /api/top 挂死数十秒乃至超时。
+# 改为：请求永远只读内存快照秒回，冷算一律丢到后台线程，前端用 scanning 标志轮询。
+_TOP_TASK = dict(scanning=False, phase="", error="", started=0.0, finished=0.0, date="")
+_TOP_TASK_LOCK = _threading.Lock()
+_TOP_SCAN_COOLDOWN = 600   # 两次后台扫描的最小间隔（秒），避免刷不出数据时空转
 
 
 # ---- 近5日入选历史（口袋支点 / TOP / 可转债 三页统计表数据源）----
@@ -3409,18 +3434,87 @@ def serve_top_from_snapshot(date, threshold, dgate, top_n=20):
     快照判据：日期匹配 + 有行即用（不卡 TTL）——onrender 美西节点取不到东财行情，
     冷算只会产出缩水+全部回退官方净值的劣质榜单；磁盘快照是本机/自动化在国内
     定时算好的完整结果，日期一致时直接秒回，保证线上 TOP 与排行口径一致。"""
+    # 【只读快照，永不冷算】—— 云端同步冷算必然挂死，见下方 _top_kick 说明。
     with _TOP_SNAP_LOCK:
-        snap = (dict(_TOP_SNAPSHOT) if (_TOP_SNAPSHOT["date"] == date
-                and _TOP_SNAPSHOT["rows"]) else None)
-    if snap:
-        rows = _top_finalize(snap["rows"], threshold, dgate, top_n)
+        snap_date = _TOP_SNAPSHOT.get("date")
+        rows_all = list(_TOP_SNAPSHOT.get("rows") or [])
+        snap = dict(_TOP_SNAPSHOT)
+    if not rows_all:
+        with _TOP_TASK_LOCK:
+            scanning = bool(_TOP_TASK["scanning"]); phase = _TOP_TASK["phase"]
         return {"date": date, "threshold": threshold, "dgate": dgate,
-                "universe": snap["universe"], "tradable": snap["tradable"],
-                "candidates": snap["candidates"], "count": len(rows), "rows": rows,
-                "filter_trace": snap.get("filter_trace", {}),
-                "tz": "北京时间 (UTC+8)", "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
-                "server_ts": int(time.time()), "snapshot": True}
-    return compute_top_arbitrage(date, threshold, dgate, top_n)
+                "universe": 0, "tradable": 0, "candidates": 0, "count": 0, "rows": [],
+                "filter_trace": {}, "tz": "北京时间 (UTC+8)",
+                "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "server_ts": int(time.time()), "snapshot": False, "stale": True,
+                "snapshot_date": None, "date_mismatch": True,
+                "scanning": scanning, "scan_phase": phase,
+                "note": "尚无全市场快照，后台扫描中（云端获取行情可能失败，建议本机生成快照后提交）"}
+    rows = _top_finalize(rows_all, threshold, dgate, top_n)
+    match = (snap_date == date)
+    out = {"date": date, "threshold": threshold, "dgate": dgate,
+           "universe": snap.get("universe", 0), "tradable": snap.get("tradable", 0),
+           "candidates": snap.get("candidates", 0), "count": len(rows), "rows": rows,
+           "filter_trace": snap.get("filter_trace", {}),
+           "tz": "北京时间 (UTC+8)", "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+           "server_ts": int(time.time()), "snapshot": True, "stale": not match,
+           "snapshot_date": snap_date, "date_mismatch": not match}
+    if not match:
+        # 关键：宁可展示旧快照并如实标注日期，也不要冷算挂死或产出缩水的劣质榜单。
+        # 前端据此显示「快照日期 ≠ 请求日期」横幅，用户一眼能看出数据是哪天的。
+        out["note"] = f"当前为 {snap_date} 的全量快照（{date} 尚未生成），数值以快照日期为准"
+    with _TOP_TASK_LOCK:
+        out["scanning"] = bool(_TOP_TASK["scanning"])
+        out["scan_phase"] = _TOP_TASK["phase"]
+        if _TOP_TASK["error"]:
+            out["scan_error"] = _TOP_TASK["error"]
+    return out
+
+
+def _top_should_refresh(force=False):
+    """是否允许再起一次全市场扫描。冷却期内 / 正在扫描 / 非更新窗口一律不刷，
+    避免云端每次请求都空转出一个几十秒的网络黑洞线程。"""
+    with _TOP_TASK_LOCK:
+        if _TOP_TASK["scanning"]:
+            return False
+        last = max(_TOP_TASK["started"] or 0.0, _TOP_TASK["finished"] or 0.0)
+    if force:
+        return True
+    if time.time() - last < _TOP_SCAN_COOLDOWN:
+        return False
+    bj = bj_now()
+    return _is_trading_day(bj) and _in_update_window(bj)
+
+
+def _top_kick(date, threshold, dgate, top_n=20, force=False):
+    """后台起一次全市场扫描并回写快照；已在进行/冷却中则跳过。返回是否真的启动了。
+
+    背景：onrender 位于美西，访问 push2.eastmoney.com 会被 GFW 黑洞（连接挂起、
+    既不成功也不失败）。旧实现在「快照日期不匹配」时同步调用 compute_top_arbitrage，
+    实测 /api/top 60s 超时、TOP 页直接打不开。现全部改为后台线程：请求路径恒定
+    毫秒级返回，扫描结果落地后下一次请求自动生效。
+    """
+    if not _top_should_refresh(force=force):
+        return False
+    with _TOP_TASK_LOCK:
+        if _TOP_TASK["scanning"]:
+            return False
+        _TOP_TASK.update(scanning=True, phase="启动全市场扫描", error="",
+                         started=time.time(), finished=0.0, date=date)
+
+    def _run():
+        try:
+            compute_top_arbitrage(date, threshold, dgate, top_n)
+            with _TOP_TASK_LOCK:
+                _TOP_TASK.update(scanning=False, phase="完成", error="", finished=time.time())
+        except Exception as _e:
+            with _TOP_TASK_LOCK:
+                _TOP_TASK.update(scanning=False, phase="失败", error=str(_e)[:200],
+                                 finished=time.time())
+            print(f"    [TOP榜] 后台扫描失败: {_e}")
+
+    _threading.Thread(target=_run, daemon=True).start()
+    return True
 
 
 def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GATE, top_n=20):
@@ -3434,7 +3528,7 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     筛选后【不】按筛选条件排序，而是用默认排序：① 申购状态（限大额申购 > 开放申购）② 估算溢价由高到低 ③ 成交额由大到小，取前 top_n 名；估算算法与排行表 compute_one_rank 完全一致。
     """
     if not target_date:
-        target_date = bj_now().strftime("%Y-%m-%d")
+        target_date = _last_trading_day()   # 同 compute_ranking：标签必须与数值同源
     lof = fetch_all_lof_codes()                      # 缓存 12h，几乎瞬时
     codes = [c for c, _, _ in lof]
     # 前置取数：流通市值串行优先（push2 分页请求对并发敏感，与行情/场内表并行时容易超时失败），
@@ -3677,7 +3771,7 @@ try:
     bj_now
 except NameError:
     def bj_now():
-        return datetime.utcnow() + timedelta(hours=8)
+        return datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
 
 try:
     _is_trading_day
@@ -3997,7 +4091,7 @@ def cb_api_payload(force=False):
     out["progress"] = prog
     out["error"] = err
     out["stale"] = stale
-    _ok, _warn = _date_integrity(res.get("trade_date"))
+    _ok, _warn = _date_integrity(res.get("trade_date"), res.get("kline_last_date"))
     out["date_ok"] = _ok
     out["date_warning"] = _warn
     return out
@@ -4189,13 +4283,22 @@ class Handler(BaseHTTPRequestHandler):
         import random
         secids = ",".join("90." + b for b in self.SECTOR_BK.values())
         fields = "f3,f12,f14,f62"
-        # 多 host 轮询：随机镜像节点 + 主域名 + delay 域名，规避单点 502/限流
-        hosts = ["%d.push2.eastmoney.com" % random.randint(1, 99) for _ in range(8)]
+        # 多 host 轮询：随机镜像节点 + 主域名 + delay 域名，规避单点 502/限流。
+        # 【耗时预算】旧版 8 个随机镜像 + 主域 + delay 域共 10 个，单 host 超时 8s，
+        # 最坏要 80s——云端访问东财被 GFW 黑洞时，每个 host 都是「挂到超时才失败」，
+        # 整个接口拖到几十秒甚至让上层网关直接断连。现压到 4 个 host × 4s，并加
+        # 全局 12s 预算：预算耗尽立即放弃并返回 live=false，由前端走静态快照兜底。
+        hosts = ["%d.push2.eastmoney.com" % random.randint(1, 99) for _ in range(2)]
         hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
         UA_B = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+        _BUDGET, _HOST_TO = 12.0, 4.0
+        _t_begin = time.time()
         last_err = None
         for host in hosts:
+            if time.time() - _t_begin > _BUDGET:
+                last_err = last_err or "耗时预算 %.0fs 耗尽，放弃轮询" % _BUDGET
+                break
             try:
                 url = ("https://%s/api/qt/ulist.np/get?fields=%s&secids=%s"
                        "&ut=fa5fd1943c7b386f172d6893dbfba10b&_=%d" % (
@@ -4205,7 +4308,8 @@ class Handler(BaseHTTPRequestHandler):
                     "Referer": "https://quote.eastmoney.com/",
                     "Accept": "application/json, text/plain, */*",
                 })
-                with urllib.request.urlopen(req, timeout=8) as r:
+                _remain = _BUDGET - (time.time() - _t_begin)
+                with urllib.request.urlopen(req, timeout=max(1.5, min(_HOST_TO, _remain))) as r:
                     j = json.loads(r.read().decode("utf-8", "replace"))
                 diff = ((j or {}).get("data") or {}).get("diff") or []
                 ind = {}
@@ -4222,7 +4326,7 @@ class Handler(BaseHTTPRequestHandler):
                 if ind:
                     # 非交易日（周末/节假日）东方财富仍返回上一交易日收盘，
                     # 不能把日期误标为今天，否则前端会把非交易日插进 days 污染近5日统计
-                    now_bj = datetime.now()
+                    now_bj = bj_now()
                     live_date = now_bj.strftime("%Y-%m-%d") if _is_trading_day(now_bj) else None
                     return {"live": True, "date": live_date,
                             "count": len(ind), "industries": ind,
@@ -4303,6 +4407,10 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send(404, "{}", "application/json; charset=utf-8")
             return
+        if parsed.path == "/favicon.ico":
+            # 浏览器/微信内置浏览器会自动请求，缺失会在控制台与访问日志里刷 404
+            self._send(200, ICON_PNG_192, "image/x-icon")
+            return
         if parsed.path == "/icon.svg":
             self._send(200, ICON_SVG, "image/svg+xml")
             return
@@ -4328,7 +4436,9 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
-        if parsed.path in ("/watch", "/watch.html", "/watchlist.html"):
+        # /watchlist 别名：仓库文件名与导航里叫 watchlist，旧版只注册了 /watch，
+        # 直接访问 /watchlist 会 404，加别名避免踩空。
+        if parsed.path in ("/watch", "/watch.html", "/watchlist", "/watchlist.html"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.html")
             try:
                 with open(_fp, encoding="utf-8") as _f:
@@ -4404,39 +4514,20 @@ class Handler(BaseHTTPRequestHandler):
                 dgate = TOP_DISCOUNT_GATE
             dgate = max(-10.0, min(-0.1, dgate))
             force = qs.get("force", ["0"])[0] in ("1", "true", "True")
-            cache_key = f"top|{date}|{threshold}|{dgate}"
-            bj = bj_now()
-            today_str = bj.strftime("%Y-%m-%d")
-            if force:
-                # 手动刷新：若在交易日更新窗口内则刷新「今天」，否则刷新最近交易日快照。
-                _date = today_str if (_is_trading_day(bj) and _in_update_window(bj)) else date
-                try:
-                    out = compute_top_arbitrage(_date, threshold, dgate, 20)
-                    out = dict(out); out["stale"] = False; out["forced"] = True
-                    with self._API_CACHE_LOCK:
-                        self._API_CACHE[f"top|{_date}|{threshold}|{dgate}"] = (
-                            time.time() + Handler._API_CACHE_TTL_TOP, out)
-                    self._send(200, json.dumps(out, ensure_ascii=False))
-                except Exception as e:
-                    self._send(200, json.dumps({"error": str(e), "date": _date}, ensure_ascii=False))
-                return
-            # 非手动：仅当 date==今天 且处于更新窗口时才允许后台静默刷新；
-            # 其余（周末/夜间/盘中早段/历史日期）直接复用快照，不触发抓取，秒回静态结果。
-            if date == today_str and _in_update_window(bj):
-                try:
-                    data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL_TOP,
-                                                        lambda: serve_top_from_snapshot(date, threshold, dgate))
-                    out = dict(data); out["stale"] = stale
-                    self._send(200, json.dumps(out, ensure_ascii=False))
-                except Exception as e:
-                    self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
-            else:
-                try:
-                    data = serve_top_from_snapshot(date, threshold, dgate)
-                    out = dict(data); out["stale"] = False
-                    self._send(200, json.dumps(out, ensure_ascii=False))
-                except Exception as e:
-                    self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
+            # 全市场冷算一律后台化：本请求只读内存快照、毫秒级返回，绝不阻塞。
+            # force 仅表示「允许跳过冷却再起一次后台扫描」，不再同步等待结果——
+            # 旧实现在 force/日期不匹配时同步调 compute_top_arbitrage，云端实测 60s 超时。
+            try:
+                _top_kick(date, threshold, dgate, 20, force=force)
+            except Exception:
+                pass
+            try:
+                out = dict(serve_top_from_snapshot(date, threshold, dgate))
+                out["forced"] = force
+                self._send(200, json.dumps(out, ensure_ascii=False))
+            except Exception as e:
+                self._send(200, json.dumps({"error": str(e), "date": date,
+                                            "scanning": False, "rows": []}, ensure_ascii=False))
             return
         if parsed.path == "/api/data":
             qs = parse_qs(parsed.query)
@@ -4517,7 +4608,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, json.dumps({"error": "日期格式非法，应为 YYYY-MM-DD"}))
                 return
             if not date:
-                date = datetime.now().strftime("%Y-%m-%d")
+                # 与 /api/top 口径一致：默认取最近交易日，避免非交易日把上一交易日
+                # 的收盘数据误标成「今天」。
+                date = _last_trading_day()
             codes_raw = qs.get("codes", [""])[0]
             codes = [c.strip() for c in _RE_SEP.split(codes_raw or "") if _valid_code(c.strip())]
             codes = codes[:100]
@@ -4595,7 +4688,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, json.dumps({"error": "日期格式非法，应为 YYYY-MM-DD"}))
                 return
             if not date:
-                date = datetime.now().strftime("%Y-%m-%d")
+                date = bj_now().strftime("%Y-%m-%d")
             tok = os.environ.get("PUSH_LOCK_TOKEN")
             if tok and qs.get("token", [""])[0] != tok:
                 self._send(403, json.dumps({"error": "token 校验失败"}))
@@ -4660,15 +4753,65 @@ class Handler(BaseHTTPRequestHandler):
 # 需在环境变量配置：FEISHU_WEBHOOK_URL（必填）；可选 FEISHU_WEBHOOK_SECRET（签名）、
 # FEISHU_PUSH_THRESHOLD(默认2.0)、FEISHU_PUSH_MAX(默认5)、FEISHU_PUSH_HOUR/MINUTE。
 # ---------------------------------------------------------------------------
+# ===== A股交易日历（2026年官方放假安排，国务院办公厅 2025-11-04 发布）=====
+# 只列「本应是工作日但休市」的日期；周六周日由 weekday() 统一排除。
+# 调休上班日 2/14(六)、2/28(六)、5/9(六)、9/20(日)、10/10(六) 本就不是交易日，无需处理。
+# ⚠️ 每年 11 月国务院发布次年安排后必须更新本表，否则长假期间会退化成
+#    「标签=假日当天、数值=节前最后收盘」的错位（用户三令五申的数据日期铁律）。
+_A_SHARE_HOLIDAYS = frozenset({
+    # 元旦：1/1(四)-1/3(六)
+    "2026-01-01", "2026-01-02",
+    # 春节：2/15(日)-2/23(一)，共 9 天
+    "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-23",
+    # 清明：4/4(六)-4/6(一)
+    "2026-04-06",
+    # 劳动节：5/1(五)-5/5(二)
+    "2026-05-01", "2026-05-04", "2026-05-05",
+    # 端午：6/19(五)-6/21(日)
+    "2026-06-19",
+    # 中秋：9/25(五)-9/27(日)
+    "2026-09-25",
+    # 国庆：10/1(四)-10/7(三)
+    "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07",
+    # 2027 元旦（次年安排尚未发布，元旦为固定假日，先按 1/1 处理）
+    "2027-01-01",
+})
+# 日历表覆盖到的最后一天；超出后仅按周末判断，并打警告提示补表
+_A_SHARE_CAL_END = "2027-01-01"
+
+
 def _is_trading_day(d):
-    """简易交易日判断：周一至周五（节假日未穷举，可按需扩展 HOLIDAYS 集合）。"""
-    return d.weekday() < 5
+    """A股交易日：周一至周五 且 非法定节假日。
+
+    排除法定节假日这一步不可省：国庆/春节长假期间若只按周末判断，
+    _last_trading_day() 会把假日当天（如 10/1 周四）当作「最近交易日」，
+    而东财当时返回的仍是节前最后一个交易日的收盘数据，
+    于是出现「标签 10/1、数值 9/30」的错位——正是数据日期铁律要根治的情形。
+    """
+    if d.weekday() >= 5:
+        return False
+    if d.strftime("%Y-%m-%d") in _A_SHARE_HOLIDAYS:
+        return False
+    return True
+
+
+def _calendar_expired(d=None):
+    """交易日历是否已过期（查询日期超出已录入范围）。过期仅发警告，不阻断。"""
+    if d is None:
+        d = bj_now()
+    return d.strftime("%Y-%m-%d") > _A_SHARE_CAL_END
 
 
 def _last_trading_day(now=None):
-    """回溯到最近一个交易日（含当天）。周末/假日返回上一周五。"""
+    """回溯到最近一个交易日（含当天）。周末/法定假日返回其之前最近的交易日。"""
     if now is None:
         now = bj_now()
+    if _calendar_expired(now):
+        try:
+            print("[WARN] A股交易日历仅覆盖到 %s，之后仅按周末判断，请补充 _A_SHARE_HOLIDAYS"
+                  % _A_SHARE_CAL_END)
+        except Exception:
+            pass
     d = now
     while not _is_trading_day(d):
         d = d - timedelta(days=1)
@@ -4724,10 +4867,17 @@ def _auto_refresh_due(res, trade_date_field="trade_date"):
     return False
 
 
-def _date_integrity(trade_date):
+def _date_integrity(trade_date, kline_last_date=None):
     """校验快照 trade_date 的可信度，返回 (ok, warn_msg)。
     - 必须为交易日（周一~周五），周末数据必是上一交易日收盘被误标，属异常；
-    - 距今天数超过 7 天（>1 周无更新）提示数据过旧。
+    - 距今天数超过 7 天（>1 周无更新）提示数据过旧；
+    - 【关键】传入 kline_last_date 时，校验「标签日期」与「数值实际日期」是否自洽。
+
+    用户三次强调的铁律：绝不允许「标签 8/21、数值 8/20」的错位。旧版只校验
+    trade_date 本身，对 trade_date=2026-08-26 而 kline_last_date=2026-08-27 这类
+    两者打架的脏快照完全不设防（线上 cb 页曾实际出现）。现补上交叉校验，
+    不一致时以 kline_last_date（数据实际所属日）为准并给出强提示。
+
     线上/离线兜底场景：返回 ok=False 时前端应明确标注，绝不可伪装成「实时/今日」。"""
     if not trade_date:
         return False, "无数据日期"
@@ -4736,6 +4886,11 @@ def _date_integrity(trade_date):
     except Exception:
         return False, "日期格式异常:" + str(trade_date)
     warn = ""
+    # 标签日期 vs 数值日期：错位是最严重的一类数据事故，优先于其余检查
+    if kline_last_date and str(kline_last_date)[:10] != trade_date[:10]:
+        return False, ("数据错位：标签日期 %s 与数值日期 %s 不一致，"
+                       "以数值日期 %s 为准（请重新生成快照）"
+                       % (trade_date[:10], str(kline_last_date)[:10], str(kline_last_date)[:10]))
     if not _is_trading_day(td):
         warn = "数据日期 %s 非交易日（周末），疑似误标，请核查数据源" % trade_date[:10]
         return False, warn
@@ -5418,7 +5573,7 @@ def pivot_api_payload(force=False):
     out["progress"] = prog
     out["error"] = err
     out["stale"] = stale
-    _ok, _warn = _date_integrity(res.get("trade_date"))
+    _ok, _warn = _date_integrity(res.get("trade_date"), res.get("kline_last_date"))
     out["date_ok"] = _ok
     out["date_warning"] = _warn
     return out
@@ -5725,7 +5880,7 @@ def main():
             if not _prewarm_running["rank"]:
                 _prewarm_running["rank"] = True
                 try:
-                    _d = datetime.now().strftime("%Y-%m-%d")
+                    _d = _last_trading_day()   # 与 /api/ranking 的 cache key 口径保持一致
                     Handler._API_CACHE[f"rank|{_d}|1.5|{','.join(RANKING_WATCHLIST)}"] = (
                         time.time() + Handler._API_CACHE_TTL_RANK, compute_ranking(RANKING_WATCHLIST))
                     _persist_api()
@@ -5733,20 +5888,19 @@ def main():
                     pass
                 finally:
                     _prewarm_running["rank"] = False
-            # TOP 套利榜（最重：全市场扫描）— 每 600s（隔次），带重叠保护；
-            # 磁盘持久化(#2)保证即便本次扫描被上游限频/超时，历史结果仍可秒回。
-            if _prewarm_iter["n"] % 2 == 0 and not _prewarm_running["top"]:
-                _prewarm_running["top"] = True
+            # TOP 套利榜（最重：全市场扫描）— 统一交 _top_kick 调度，不再同步冷算。
+            # 旧实现在这里直接同步 compute_top_arbitrage 并写入 _API_CACHE：
+            #  · 云端（onrender 美西节点）取不到东财行情，每 10 分钟就是一次几分钟的
+            #    空转，还会把「缩水/全回退官方净值」的劣质结果写进缓存与磁盘，
+            #    污染本可用的历史快照（用户曾反馈「TOP 估算跟前一天一模一样」）；
+            #  · /api/top 现已改为「只读快照 + 后台扫描」，这里的 cache key 不再被读取。
+            # _top_kick 内部有 scanning 去重 + 600s 冷却 + 仅交易日更新窗口内触发。
+            if _prewarm_iter["n"] % 2 == 0:
                 try:
-                    _d = datetime.now().strftime("%Y-%m-%d")
-                    Handler._API_CACHE[f"top|{_d}|1.5|-2.0"] = (
-                        time.time() + Handler._API_CACHE_TTL_TOP,
-                        compute_top_arbitrage(_d, 1.5, -2.0))
-                    _persist_api()
+                    _d = _last_trading_day()   # 与 /api/top 口径一致
+                    _top_kick(_d, 1.5, -2.0, 20)
                 except Exception:
                     pass
-                finally:
-                    _prewarm_running["top"] = False
             _prewarm_iter["n"] += 1
             # 本地每 60s 刷新（UI 追求实时）；云平台放宽到 300s，避免从单一出口 IP 高频打外部行情源被限流
             time.sleep(60 if host == '127.0.0.1' else 300)

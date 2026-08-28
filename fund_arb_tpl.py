@@ -897,6 +897,7 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 </div>
 
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
+<div id="dateWarn" class="tzline" style="display:none;color:#ff4d4f;border-color:#ff4d4f55;background:#2a1416"></div>
 
 <div class="tablebox rank-scroll" id="tablebox" style="display:none"><table id="tbl"></table></div>
 <div class="rank-bar" id="rankbar" style="display:none"></div>
@@ -1069,6 +1070,16 @@ function sortRows(key){
 
 function render(meta){
   document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
+  // 快照日期 != 查询日期时显著提示：宁可展示旧快照并标明是哪天的，
+  // 也不要让用户误以为是当日实时结果（云端取不到行情时冷算会挂死，故后端改为只读快照）
+  var _dw=document.getElementById('dateWarn');
+  if(_dw){
+    if(meta&&meta.date_mismatch){
+      _dw.style.display='block';
+      _dw.innerHTML='日期提示：'+esc(meta.note||('当前展示 '+meta.snapshot_date+' 的快照'))
+        +(meta.scanning?'（后台正在重算，请稍候自动刷新）':'');
+    }else{ _dw.style.display='none'; _dw.innerHTML=''; }
+  }
   currentMeta=meta;
   // 同步查询阈值到全局，供点击筛选卡片时 applyFilter 使用（否则会沿用默认值 1.5/-2，与卡片标签不一致）
   currentThreshold=meta.threshold; currentDgate=meta.dgate;
@@ -1207,6 +1218,7 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
 </div>
   <div id="tbl" class="tablebox"></div>
   <div id="statusbar" class="statusbar"></div>
+  <div id="dateWarn" class="tzline" style="display:none;color:#ff4d4f;border-color:#ff4d4f55;background:#2a1416"></div>
   <div id="summary" class="summary"></div>
   <div class="ops">
     <button class="btn" id="rescanBtn" onclick="rescan()">立即重扫</button>
@@ -1317,9 +1329,16 @@ function render(d){
   var modeTxt = {"strict":"严格折价","mixed":"折价+临界补足","fallback":"无折价(临界参考)"}[d.mode] || d.mode || "-";
   var sb = document.getElementById("statusbar");
   sb.innerHTML = '<span class="sitem">更新：'+(d.updated||"-")+'</span>'
+    + '<span class="sitem">数据日期：'+(d.trade_date||'-')+'</span>'
     + '<span class="sitem">模式：'+modeTxt+'</span>'
     + (scanning ? '<span class="sitem stale-badge">扫描中…</span>' : '<span class="sitem">就绪</span>');
   document.getElementById("scanState").textContent = scanning ? ("扫描中 "+((d.progress&&d.progress.done)||0)+"/"+((d.progress&&d.progress.total)||0)) : "";
+  // 数据日期异常（标签与数值错位 / 过期 / 非交易日）必须显式标注，绝不可伪装成实时
+  var _dw=document.getElementById("dateWarn");
+  if(_dw){
+    if(d.date_warning){ _dw.style.display="block"; _dw.textContent="⚠ "+d.date_warning; }
+    else { _dw.style.display="none"; _dw.textContent=""; }
+  }
   document.getElementById("rescanBtn").disabled = scanning;
   cbRenderSummary();
   cbRenderTable();
