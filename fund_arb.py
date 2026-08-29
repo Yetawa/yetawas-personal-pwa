@@ -3369,6 +3369,7 @@ _TOP_SNAP_LOCK = _threading.Lock()
 _TOP_TASK = dict(scanning=False, phase="", error="", started=0.0, finished=0.0, date="")
 _TOP_TASK_LOCK = _threading.Lock()
 _TOP_SCAN_COOLDOWN = 600   # 两次后台扫描的最小间隔（秒），避免刷不出数据时空转
+_TOP_SCAN_HARD_TIMEOUT = 300  # 单次扫描硬超时：超过则判失败，避免页面永久「扫描中」（onrender 免费层会掐掉/休眠后台线程）
 
 
 # ---- 近5日入选历史（口袋支点 / TOP / 可转债 三页统计表数据源）----
@@ -3618,11 +3619,28 @@ def _top_finalize(base_rows, threshold, dgate, top_n):
     out.sort(key=lambda r: (_rank(r), -_est(r), -(r.get("turnover") or 0)))
     return out[:top_n]
 
+def _top_watchdog():
+    """扫描看门狗：若后台线程卡死（平台掐线程/网络永久挂起），超过硬超时就把状态翻成明确失败，
+    避免前端永久卡在「扫描中…」。仅修改状态，不杀线程（Python 线程不可强杀，随进程退出即可）。"""
+    with _TOP_TASK_LOCK:
+        if _TOP_TASK["scanning"]:
+            started = _TOP_TASK.get("started") or 0.0
+            if time.time() - started > _TOP_SCAN_HARD_TIMEOUT:
+                _TOP_TASK.update(
+                    scanning=False, phase="扫描超时",
+                    error="后台扫描超过 %d 秒未完成（运行环境可能掐掉了后台线程或网络挂起），"
+                          "本次实时扫描未产出结果。线上最稳的更新方式：在本机运行 "
+                          "regen_top_snapshot.py 生成快照并推送 GitHub，或部署到国内节点。"
+                          % int(_TOP_SCAN_HARD_TIMEOUT),
+                    finished=time.time())
+
+
 def serve_top_from_snapshot(date, threshold, dgate, top_n=20):
     """优先从全量快照秒回；快照缺失/过期才走完整冷算（并填充快照）。
     快照判据：日期匹配 + 有行即用（不卡 TTL）——onrender 美西节点取不到东财行情，
     冷算只会产出缩水+全部回退官方净值的劣质榜单；磁盘快照是本机/自动化在国内
     定时算好的完整结果，日期一致时直接秒回，保证线上 TOP 与排行口径一致。"""
+    _top_watchdog()   # 先清理可能卡死的扫描状态
     # 【只读快照，永不冷算】—— 云端同步冷算必然挂死，见下方 _top_kick 说明。
     with _TOP_SNAP_LOCK:
         snap_date = _TOP_SNAPSHOT.get("date")
