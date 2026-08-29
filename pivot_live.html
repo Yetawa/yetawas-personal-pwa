@@ -253,7 +253,7 @@ function renderPivotHist(){
   const box=document.getElementById('pivotHistBody'); if(!box) return;
   const rows=(window._histRows||[]).slice();
   const pm=(window._latestPivot&&window._latestPivot.pickMap)||{};
-  rows.forEach(function(r){ r._cur=(pm[r.code]&&pm[r.code].close)||null; r._chg=(r._cur!=null&&r.price)?(r._cur-r.price)/r.price*100:null; });
+  rows.forEach(function(r){ r._cur=(r.cur!=null?r.cur:((pm[r.code]&&pm[r.code].close)||null)); r._chg=(r._cur!=null&&r.price)?(r._cur-r.price)/r.price*100:null; });
   const numKeys=['price','_cur','_chg'];
   rows.sort(function(a,b){ var av=a[histSortKey],bv=b[histSortKey]; if(av==null&&bv==null)return 0; if(av==null)return 1; if(bv==null)return -1; if(numKeys.indexOf(histSortKey)>=0) return histSortDesc?(bv-av):(av-bv); return histSortDesc?String(bv).localeCompare(String(av),'zh'):String(av).localeCompare(String(bv),'zh'); });
   if(!rows.length){ box.innerHTML='<div class="hist-empty">暂无近 5 日 A 级及以上入选记录</div>'; return; }

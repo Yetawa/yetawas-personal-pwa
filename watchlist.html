@@ -443,12 +443,14 @@ function renderChart(){
   var box=document.getElementById('chart'); if(!box) return;
   var shWin=lastShRaw.slice(-chartDays), wlWin=lastWlRaw.slice(-chartDays), poolWin=lastPool.slice(-chartDays);
   if(!shWin.length && !wlWin.length && !poolWin.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
-  // 指数归一（窗口起点=0%）
-  var shBase = shWin.length? shWin[0].close : null;
+  // 自选池：绝对累计（从各自加入日起），末值 == 表格「平均涨跌幅」，方向一致。
+  // 修复旧版 bug：旧版按窗口起点 rebase（末值=窗口内涨跌），近期回撤时图表朝下而表格为涨，明显矛盾。
+  var wl = wlWin.map(function(p){ return {date:p.date, v:p.cum}; });
+  // 上证：以自选池数据最早日期为同一起点 rebase，便于横向对比（绝对累计涨跌，非窗口内相对）
+  var refDate = (lastWlRaw.length? lastWlRaw[0].date : (shWin.length? shWin[0].date : null));
+  var shFull={}; lastShRaw.forEach(function(p){ shFull[p.date]=p.close; });
+  var shBase = (refDate && shFull[refDate]!=null)? shFull[refDate] : (shWin.length? shWin[0].close : null);
   var sh = (shBase>0) ? shWin.map(function(p){ return {date:p.date, v:(p.close/shBase-1)*100}; }) : [];
-  // 自选归一（窗口起点=0%，与指数同基准便于对比）
-  var wlBase = wlWin.length? wlWin[0].cum : null;
-  var wl = (wlBase!=null) ? wlWin.map(function(p){ return {date:p.date, v:p.cum - wlBase}; }) : [];
   // 回测：全历史等权指数近 N 日滚动涨跌幅。用完整 lastPool 计算（不受 chartDays 截断影响），
   // 再按显示窗口的日期对齐，避免短周期（如5/10日）下因窗口不足 btN 而整条缺失。
   var bt=[];
@@ -477,9 +479,25 @@ function renderChart(){
     return out.trim();
   }
   var isLight=document.documentElement.getAttribute('data-theme')==='light';
-  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选累计：青色实线
+  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选累计（仅图例占位）
   var shCol=isLight?'#b8a988':'#9fb0c8';   // 上证：灰色实线
   var btCol=isLight?'#e11d48':'#fb7185';   // 回测滚动：红色虚线（涨红）
+  // 自选池线按涨跌分段着色（A股约定：涨红 / 跌绿）
+  var upCol=isLight?'#dc2626':'#ef4444', downCol=isLight?'#16a34a':'#22c55e';
+  // 分段着色折线：每段按自身方向取色（v 较上一段上升=红，下降=绿）
+  function coloredPath(map, upC, downC){
+    var out='';
+    for(var i=1;i<dates.length;i++){
+      var v0=map[dates[i-1]], v1=map[dates[i]];
+      if(v0==null||v1==null) continue;
+      var x0=padL+(dates.length<=1?0:(W-padL-padR)*(i-1)/(dates.length-1));
+      var x1=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
+      var c=(v1>=v0)?upC:downC;
+      out+='<path d="M'+x0.toFixed(1)+' '+px(v0).toFixed(1)+' L'+x1.toFixed(1)+' '+px(v1).toFixed(1)
+          +'" fill="none" stroke="'+c+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+    return out;
+  }
   var grid='<line x1="'+padL+'" y1="'+y0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y0.toFixed(1)+'" stroke="var(--txt3)" stroke-width="0.8"/>';
   [0.5,1,2,3].forEach(function(g){
     if(max<g) return;
@@ -496,13 +514,13 @@ function renderChart(){
   var lastBt = bt.length? bt[bt.length-1].v : null;
   // 图例（仅显示存在的序列）
   var legParts=[];
-  if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均累计涨跌幅</span>');
+  if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:linear-gradient(90deg,'+upCol+','+downCol+');vertical-align:middle;margin-right:4px"></span>自选池累计涨跌幅（涨红/跌绿）</span>');
   if(sh.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span>');
   if(bt.length) legParts.push('<span><span style="display:inline-block;width:16px;height:0;border-top:2px dashed '+btCol+';vertical-align:middle;margin-right:4px"></span>近'+btN+'日滚动涨跌幅</span>');
   var legend='<div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-bottom:4px;flex-wrap:wrap">'+legParts.join('')+'</div>';
   var svg=grid
     + (sh.length? '<path d="'+path(shMap)+'" fill="none" stroke="'+shCol+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>':'')
-    + (wl.length? '<path d="'+path(wlMap)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>':'')
+    + (wl.length? coloredPath(wlMap, upCol, downCol):'')
     + (bt.length? '<path d="'+path(btMap)+'" fill="none" stroke="'+btCol+'" stroke-width="1.6" stroke-dasharray="5,4" stroke-linejoin="round" stroke-linecap="round"/>':'');
   var caption = (lastBt!=null) ? '<div style="text-align:center;font-size:12px;color:'+(lastBt>=0?'var(--up)':'var(--down)')+';font-weight:700;margin-top:4px">当前近'+btN+'日滚动涨跌幅：'+(lastBt>=0?'+':'')+lastBt.toFixed(2)+'%</div>' : '';
   // 诊断：上证有数据但自选/回测缺失——通常是自选池各标的行情序列（/api/kline）未能取到

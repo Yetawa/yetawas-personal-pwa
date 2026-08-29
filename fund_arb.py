@@ -603,8 +603,7 @@ def _idx_push2_changes(idx_meta):
     # 【耗时预算】旧版内层 10 个 host × 8s = 80s，且外层还按 20 个代码分块循环，
     # 多块时总耗时 = 块数 × 80s。云端访问东财被黑洞时，这会让估值接口整体挂死。
     # 现压到 3 host × 4s，并给整个函数 15s 全局预算，超时直接放弃、返回已取到的部分。
-    hosts = ["%d.push2.eastmoney.com" % _random.randint(1, 99) for _ in range(2)]
-    hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
+    hosts = _em_push_hosts()          # push2delay 优先：境外网络下 push2 不可达
     UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
           "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
     _BUDGET, _HOST_TO = 15.0, 4.0
@@ -1446,9 +1445,60 @@ def fetch_xop(und, n=25):
             print(f"    [兜底] 新浪港股指数标的失败：{e}")
     if not results:
         return [], "无数据"
-    best = max(results, key=lambda x: len(x[0]))
-    print(f"    标的候选 {[(len(r), s) for r, s in results]} -> 采用 {best[1]}")
+    best = max(results, key=_und_score)
+    print(f"    标的候选 {[(_und_score(x)[0].isoformat(), len(r), s, _und_score(x)[1]) for r, s in [(x[0], x[1]) for x in results]]}"
+          f" -> 采用 {best[1]}（最新={best[0][-1][0] if best[0] else '-'}）")
     return best
+
+
+# 标的（指数/商品）数据源优先级：指数本身 优先于 ETF 代理。
+# 血泪教训：164705 汇添富恒生用 EWH（美股 ETF）代理，成分与恒生指数错配，
+# MAE 高达 1.05%；改用恒生指数本身（HSI）后 MAE 降到 0.044%。
+# 而 stockanalysis.com 多为 ETF/海外口径，仅在其他源都拿不到最新数据时才用。
+_UND_SRC_PRIO = (
+    ("东财", 100), ("新浪港股指数", 90), ("腾讯财经", 80),
+    ("新浪财经期货", 70), ("stockanalysis.com", 30),
+)
+
+
+def _und_score(item):
+    """标的候选评分：**先比最新日期，再比源可靠性，最后才比点数**。
+
+    旧实现是 max(len(rows)) —— 只看谁返回的点多。问题：
+    1) 会选到滞后的数据（点数多但最后一天是几天前）；
+    2) 会选到 ETF 代理而非指数本身，成分错配直接拉大估算误差。
+    故改为三级排序：日期新 > 指数本身 > 点数多。
+    """
+    rows, name = item
+    if not rows:
+        return (_date_cls.min, -1, -1)
+    try:
+        d = _str_to_date(rows[-1][0])
+    except Exception:
+        d = _date_cls.min
+    prio = 0
+    for key, val in _UND_SRC_PRIO:
+        if key in (name or ""):
+            prio = val
+            break
+    n = len(rows)
+    # 可用性分三档，且必须**排在日期之前**比较：
+    #   0  = 点数足够(>=2，能算涨跌幅) 且 数据新鲜
+    #   -1 = 新鲜但不足 2 点（算不出涨跌幅）
+    #   -2 = 数据已过期（距今 >5 个自然日，覆盖周末/短假）
+    # 为什么过期最差：拿 N 天前的涨跌幅去估今天的净值，就是「标签今天、数值 N 天前」
+    # 的错位，正是数据日期铁律要根治的情形 —— 宁可这项不估算，也不能给错的。
+    try:
+        stale_days = (bj_now().date() - d).days
+    except Exception:
+        stale_days = 0
+    if stale_days > 5:
+        usable = -2
+    elif n >= 2:
+        usable = 0
+    else:
+        usable = -1
+    return (usable, d, prio, n)
 
 
 FX_CACHE = {}              # 汇率缓存（USD/CNY），1 小时刷新
@@ -2015,10 +2065,16 @@ def is_oil_gas(name, underlying_label=""):
 # ---------------------------------------------------------------------------
 def deduce_exchange(code):
     """根据 6 位代码判断交易所，返回 (东财secid, 腾讯前缀)
-    深交所：15/16/18/0/2/3 开头；上交所：50/51/60/68 等开头
+    深交所：15/16/18/0/2/3 开头；上交所：50/51/60/68 等开头。
+    可转债：11xxxx 属沪市（如 113658）、12xxxx 属深市（如 123456）——
+    必须放在通用规则之前，否则 12 开头会被误判成上交所，导致行情/净值取不到。
     """
     c = code.strip()
     two = c[:2]
+    if two == "11":
+        return "1." + c, "sh" + c          # 沪市可转债
+    if two == "12":
+        return "0." + c, "sz" + c          # 深市可转债
     if two in ("15", "16", "18") or c[0] in ("0", "2", "3"):
         return "0." + c, "sz" + c          # 深交所
     return "1." + c, "sh" + c              # 上交所
@@ -3166,6 +3222,61 @@ def fetch_fund_scale(code):
 _FLOAT_CAP_CACHE = {"ts": 0.0, "data": {}}      # push2 场内流通市值（10min 有效）
 _FLOAT_CAP_BACKOFF = {"until": 0.0}              # 限频退避：失败后背刺期内复用旧值、不重试
 
+# ---------------------------------------------------------------------------
+# 东财行情域名选择（境外网络能否扫出数据的关键）
+# ---------------------------------------------------------------------------
+_EM_HOST_OK = {"host": None, "ts": 0.0}
+_EM_HOST_PREF = ("push2delay.eastmoney.com", "push2.eastmoney.com")
+
+
+def _em_push_hosts():
+    """东财行情域名候选顺序（**push2delay 必须排最前**）。
+
+    实测（沙箱 / onrender 美西，属同类境外网络）：
+      - push2.eastmoney.com、NN.push2.eastmoney.com：HTTP 层被断连
+        （RemoteDisconnected，TCP 握手能成功但一发请求就被断）
+      - push2delay.eastmoney.com：**完全可用**，clist/ulist 均正常（0.1~0.3s）
+    旧实现把 push2delay 排在候选末位，前面 3 个域名逐个超时后才轮到它，
+    在 15s 耗时预算下常常来不及 → 线上表现为「扫不出数据 / 榜单为空」。
+    另加「上次成功 host 优先」（30 分钟有效），避免每次请求都重新试错一遍。
+    """
+    ok = _EM_HOST_OK.get("host")
+    if ok and time.time() - _EM_HOST_OK.get("ts", 0.0) < 1800:
+        return [ok] + [h for h in _EM_HOST_PREF if h != ok]
+    import random as _r
+    return list(_EM_HOST_PREF) + ["%d.push2.eastmoney.com" % _r.randint(1, 99)]
+
+
+def _em_mark_host_ok(host):
+    if host:
+        _EM_HOST_OK["host"] = host
+        _EM_HOST_OK["ts"] = time.time()
+
+
+def _em_get_json(query, timeout=8.0, budget=None, referer="https://quote.eastmoney.com/"):
+    """带域名轮换地取一次东财行情 JSON。query 为「/api/...?a=b」形式。
+    依次尝试 _em_push_hosts()，任一成功即返回 (json, host)；全失败返回 (None, None)。
+    budget 为总耗时上限（秒），超时立即放弃。"""
+    import urllib.request as _u
+    UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    t0 = time.time()
+    for host in _em_push_hosts():
+        if budget is not None and time.time() - t0 > budget:
+            break
+        try:
+            url = "https://%s%s" % (host, query)
+            req = _u.Request(url, headers={"User-Agent": UA, "Referer": referer,
+                                           "Accept": "application/json, text/plain, */*"})
+            to = timeout if budget is None else max(1.5, min(timeout, budget - (time.time() - t0)))
+            with _u.urlopen(req, timeout=to) as r:
+                j = json.loads(r.read().decode("utf-8", "replace"))
+            _em_mark_host_ok(host)
+            return j, host
+        except Exception:
+            continue
+    return None, None
+
 def fetch_float_market_cap():
     """全市场 LOF 二级市场可交易规模（场内流通市值，亿元）。
     来源东财 push2 场内基金板 clist（f21=流通市值，元→亿元）；内存缓存 10 分钟。
@@ -3183,11 +3294,13 @@ def fetch_float_market_cap():
     for mk in ("MK0025", "MK0026", "MK0027", "MK0028"):
         try:
             for pn in range(1, 10):
-                url = (f"https://push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1"
-                       f"&fltt=2&invt=2&fid=f3&fs=b:{mk}"
-                       f"&fields=f12,f21&ut=7eea3edcaed734bea9cbfc24409ed989")
-                txt = http_get_text(url, referer="https://quote.eastmoney.com/", timeout=20, retries=2)
-                j = json.loads(txt)
+                # 走域名轮换：境外网络下 push2 不可达、push2delay 可用（见 _em_push_hosts）
+                q = (f"/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1"
+                     f"&fltt=2&invt=2&fid=f3&fs=b:{mk}"
+                     f"&fields=f12,f21&ut=7eea3edcaed734bea9cbfc24409ed989")
+                j, _h = _em_get_json(q, timeout=10.0, budget=30.0)
+                if not j:
+                    break
                 items = (j.get("data") or {}).get("diff") or []
                 if not items:
                     break
@@ -3302,6 +3415,61 @@ def history_append(kind, date, entries):
             bucket.pop(old, None)
         _history_save(data)
 
+def fetch_batch_quotes(codes, timeout=10, budget=15.0):
+    """批量取实时现价（腾讯 qt.gtimg，每批 60 只）。返回 {code: price}。
+
+    腾讯行情在境外网络（onrender/沙箱）实测可用，而东财 push2 不可达，
+    故这里用腾讯而非东财，保证线上也能补齐价格。
+    """
+    out = {}
+    codes = [str(c).strip() for c in (codes or []) if c]
+    if not codes:
+        return out
+    t0 = time.time()
+    for i in range(0, len(codes), 60):
+        if time.time() - t0 > budget:
+            break
+        chunk = codes[i:i + 60]
+        q = ",".join(deduce_exchange(c)[1] for c in chunk)
+        try:
+            txt = http_get_text("https://qt.gtimg.cn/q=" + q, timeout=timeout,
+                                retries=1, encoding="gbk")
+        except Exception:
+            continue
+        for seg in txt.split(";"):
+            if "~" not in seg:
+                continue
+            f = seg.split("~")
+            if len(f) < 4:
+                continue
+            code = (f[2] or "").strip()
+            try:
+                px = float(f[3])
+            except (IndexError, ValueError):
+                continue
+            if code and px > 0:
+                out[code] = px
+    return out
+
+
+def _history_attach_cur(rows):
+    """给「近 N 日入选」每行补上最新价 cur。
+
+    为什么必须由后端补：前端原先只用「当日 picks」去匹配历史 code，
+    于是昨天入选、今天已不在榜的标的（如 08-26 入选的 600971）
+    就拿不到最新价 → 「最新价」「入选至今涨跌幅」两列空白。
+    后端统一按 code 批量补价，三张统计表（口袋支点/TOP/可转债）都能填满。
+    """
+    try:
+        codes = {str(r.get("code")).strip() for r in rows if r.get("code")}
+        qs = fetch_batch_quotes(codes)
+        for r in rows:
+            r["cur"] = qs.get(str(r.get("code")).strip())
+    except Exception:
+        pass
+    return rows
+
+
 def history_payload(kind, days=5):
     """返回近 N 个交易日的入选记录（按日期升序拼接，附 date 字段）。
     线上节点（onrender 美国节点）无法连通东财/腾讯行情，扫描恒失败，
@@ -3333,11 +3501,11 @@ def history_payload(kind, days=5):
                     for e in snap_rows:
                         if e.get("code") not in existing:
                             out.append(e)
-            return out[-days:]
+            return _history_attach_cur(out[-days:])
     # 回退：实时历史为空 → 用快照派生（仅当没有真实历史时）
     snap_rows = _history_from_snapshot(kind)
     if snap_rows:
-        return snap_rows[-days:]
+        return _history_attach_cur(snap_rows[-days:])
     return []
 
 
@@ -3525,14 +3693,11 @@ def _em_reachable(timeout=4.0, cache_sec=60.0):
         return _TOP_NET_PROBE["ok"]
     ok = False
     try:
-        req = Request(
-            "https://push2.eastmoney.com/api/qt/ulist.np/get"
-            "?fltt=2&invt=2&fields=f2,f3&secids=1.000001",
-            headers={"User-Agent": "Mozilla/5.0",
-                     "Referer": "https://quote.eastmoney.com/"})
-        with urlopen(req, timeout=timeout) as _r:
-            _r.read(128)
-            ok = True
+        # 走域名轮换：只探测 push2 会误判「境外不可达」，实际 push2delay 是可用的
+        _j, _h = _em_get_json("/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3"
+                              "&secids=1.000001&ut=fa5fd1943c7b386f172d6893bfba10b",
+                              timeout=timeout, budget=timeout * 3)
+        ok = bool(_h)
     except Exception:
         ok = False
     _TOP_NET_PROBE["ok"] = ok
@@ -3556,8 +3721,8 @@ def _top_kick(date, threshold, dgate, top_n=20, force=False):
             if not _TOP_TASK["scanning"]:
                 _TOP_TASK.update(
                     scanning=False, phase="行情源不可达",
-                    error="当前运行环境无法访问 push2.eastmoney.com（HTTP 层被断连，"
-                          "常见于境外服务器或受限网络），无法重算 TOP 榜。"
+                    error="当前运行环境无法访问东方财富行情源（push2 / push2delay 均不可达，"
+                          "HTTP 层被断连，常见于境外服务器或受限网络），无法重算 TOP 榜。"
                           "请在可访问东财的网络环境（如本机）生成快照后提交，"
                           "或将服务部署在国内节点。",
                     finished=time.time())
@@ -4354,8 +4519,7 @@ class Handler(BaseHTTPRequestHandler):
         # 最坏要 80s——云端访问东财被 GFW 黑洞时，每个 host 都是「挂到超时才失败」，
         # 整个接口拖到几十秒甚至让上层网关直接断连。现压到 4 个 host × 4s，并加
         # 全局 12s 预算：预算耗尽立即放弃并返回 live=false，由前端走静态快照兜底。
-        hosts = ["%d.push2.eastmoney.com" % random.randint(1, 99) for _ in range(2)]
-        hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
+        hosts = _em_push_hosts()      # push2delay 优先：境外网络下 push2 不可达
         UA_B = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
         _BUDGET, _HOST_TO = 12.0, 4.0
