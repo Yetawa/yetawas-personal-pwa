@@ -5391,8 +5391,19 @@ def pivot_scan(progress=None):
 
     picks.sort(key=lambda x: (-x["score"], -x["rs"]))
     grade_cnt = {g: sum(1 for p in picks if p["grade"] == g) for g in ("S", "A", "B", "C")}
-    # trade_date 取全市场 K 线末根的最晚交易日（而非运行时刻），防止标签与数值错位
-    real_td = max(kdates) if kdates else bj_now().strftime("%Y-%m-%d")
+    # trade_date 取全市场 K 线末根的最晚交易日（而非运行时刻），防止标签与数值错位。
+    # 两道防线：
+    # ① 剔除晚于「最近已收盘交易日」的脏日期（个别数据源的占位/未来 bar 会把 max 顶到今天）；
+    # ② 全部无效时**必须报错**，不能兜底成 bj_now()——旧实现那样会在取数失败时
+    #    生成「trade_date=今天、picks=0」的假成功快照（线上实测：K 线全挂时
+    #    返回 trade_date=2026-08-31 / picks=0，前端还以为是"今日无信号"）。
+    _lctd = _last_closed_trading_day()
+    _valid_kdates = [d for d in kdates if isinstance(d, str) and d <= _lctd]
+    if not _valid_kdates:
+        raise RuntimeError(
+            f"全市场 K 线取数失败：未获得任何有效末根日期（共 {len(syms)} 只，"
+            f"最近已收盘交易日 {_lctd}）。保留上次结果，未写入快照。")
+    real_td = max(_valid_kdates)
     return dict(
         version=PIVOT_VERSION,
         updated=bj_now().strftime("%Y-%m-%d %H:%M:%S"),
