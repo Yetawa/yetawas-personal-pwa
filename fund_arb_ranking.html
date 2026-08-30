@@ -334,8 +334,11 @@ function toast(msg){
 
 function today(){ const s=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return s.replace(/\//g,'-'); }
 function initDate(){
+  // 不预填 today()：留空即由服务端取「最近已收盘交易日」。
+  // 旧版预填今天会把「今天」传回服务端，开盘前/盘中就会拿到
+  // 「标签是今天、数值回退到上一交易日收盘价」的错位结果；load() 成功后会回填真实日期。
   const d=document.getElementById('rdate');
-  d.value = today();
+  d.value = '';
 }
 
 document.getElementById('addCode').addEventListener('keydown',e=>{ if(e.key==='Enter') addCode(); });
@@ -359,6 +362,9 @@ async function load(){
     const url=BASE+'/api/ranking?date='+encodeURIComponent(date)+'&codes='+encodeURIComponent(codes.join(','))+'&threshold='+encodeURIComponent(threshold);
     const r=await fetch(url); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
+    // 日期框留空时由服务端决定「最近已收盘交易日」，用返回值回填，
+    // 让用户看到数据实际对应的日期（避免开盘前标签写今天、数值却是上一交易日收盘价）。
+    const _rd=document.getElementById('rdate'); if(_rd && !_rd.value && d.date){ _rd.value=d.date; }
     currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d);
   }catch(e){
     document.getElementById('err').textContent='加载失败：'+e.message;

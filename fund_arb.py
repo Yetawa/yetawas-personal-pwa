@@ -2455,7 +2455,12 @@ def compute_one_rank(code, target_date, fx_map, threshold=THRESHOLD, index_chg_m
     # K线未含当日时，用盘中实时价补今日，使 TOP/排行与看板的估算溢价基于同一天价格，
     # 避免「看板显示今日盘中、TOP 停在上交易日收盘」造成的溢价口径差异。
     today = bj_now().strftime("%Y-%m-%d")
-    if und and today not in price_map:
+    # 仅在【已开盘的交易时段】补今日行。旧实现不判断时段，于是周末/夜间/开盘前也会拿
+    # 腾讯返回的「上一交易日收盘价」写进 price_map[today]，制造「今天已有数据」的假象——
+    # 排行表随即把日期标成今天、数值却是上一交易日收盘价（用户最在意的日期错位）。
+    _bj = bj_now()
+    _mkt_open = _is_trading_day(_bj) and (_bj.hour > 9 or (_bj.hour == 9 and _bj.minute >= 30))
+    if und and _mkt_open and today not in price_map:
         try:
             _q = _fetch_lof_quotes_tencent([code])
             if _q.get(code, {}).get("price"):
@@ -4582,7 +4587,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, json.dumps({"error": "日期格式非法，应为 YYYY-MM-DD"}))
                 return
             if not date:
-                date = datetime.now().strftime("%Y-%m-%d")
+                # 同 /api/top：默认取「最近已收盘交易日」。旧实现用 datetime.now()——
+                # 既取了服务器本地时区（线上为 UTC）偏 8 小时，又会在开盘前把标签写成
+                # 今天而数值回退到上一交易日（实测周一凌晨返回 date=08-31、价格却是 08-28 收盘价）。
+                date = _last_closed_trading_day()
             codes_raw = qs.get("codes", [""])[0]
             codes = [c.strip() for c in _RE_SEP.split(codes_raw or "") if _valid_code(c.strip())]
             codes = codes[:100]
