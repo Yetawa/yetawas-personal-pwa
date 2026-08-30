@@ -3878,16 +3878,12 @@ def cb_compute(items, progress=None):
     for i, p in enumerate(picks):
         p["rank"] = i + 1
     elapsed = round(time.time() - t0, 1)
-    # trade_date 取数据实际对应的交易日：非交易日回溯到最近一个交易日，
-    # 避免标签(如周日8/23)与可转债真实涨跌幅(周五8/21收盘)对不上。
+    # trade_date 取数据实际对应的交易日，避免标签与真实涨跌幅对不上。
+    # 旧实现「今天是交易日就用今天」——周一 01:12 扫描时今天尚未开盘，
+    # 于是把 08-28 收盘价标成 08-31（实测：127067 真实末根 08-28 收 189.031，
+    # 页面却显示 trade_date=08-31）。必须用「最近已收盘交易日」口径。
     _now_bj = bj_now()
-    if _is_trading_day(_now_bj):
-        _real_td = _now_bj.strftime("%Y-%m-%d")
-    else:
-        _d = _now_bj
-        while not _is_trading_day(_d):
-            _d = _d - timedelta(days=1)
-        _real_td = _d.strftime("%Y-%m-%d")
+    _real_td = _last_closed_trading_day(_now_bj)
     return dict(
         trade_date=_real_td,
         kline_last_date=_real_td,
@@ -4048,7 +4044,9 @@ def cb_api_payload(force=False):
         scanning = _CB["scanning"]
         prog = dict(_CB["progress"])
         err = _CB["error"]
-    today = bj_now().strftime("%Y-%m-%d")
+    # 用「最近已收盘交易日」比较：旧实现拿 bj_now() 当天比，于是周一 15:15 前
+    # 会把上周五的最新数据误判为 stale（与周末误判同款，只是换了个时段）。
+    today = _last_closed_trading_day()
     # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
     stale = (res is None) or (res.get("trade_date") != today)
     # 智能冻结：非更新窗口（周末/夜间/盘中早段）不自动重扫，直接复用缓存静态展示；
@@ -4834,6 +4832,14 @@ def _date_integrity(trade_date):
     if not _is_trading_day(td):
         warn = "数据日期 %s 非交易日（周末），疑似误标，请核查数据源" % trade_date[:10]
         return False, warn
+    # 未收盘保护：标签不能晚于「最近已收盘交易日」。旧实现缺这条，于是
+    # 「今天是交易日就用今天」的写法在开盘前把昨天收盘价标成今天，且能通过本校验
+    # （trade_date 与 kline_last_date 同源，等于自己验自己）。
+    _lctd = _last_closed_trading_day()
+    if trade_date[:10] > _lctd:
+        warn = ("数据日期 %s 晚于最近已收盘交易日 %s（当日尚未收盘、数据不可能产生），"
+                "疑似把上一交易日收盘价误标为今天" % (trade_date[:10], _lctd))
+        return False, warn
     days_old = (bj_now().date() - td.date()).days
     if days_old < 0:
         warn = "数据日期 %s 晚于当前日期，疑似时区/抓取异常" % trade_date[:10]
@@ -5493,7 +5499,8 @@ def pivot_api_payload(force=False):
         prog = dict(_PIVOT["progress"])
         err = _PIVOT["error"]
 
-    today = bj_now().strftime("%Y-%m-%d")
+    # 同 /api/cb：用「最近已收盘交易日」比较，避免周一 15:15 前把上周五数据误判为 stale。
+    today = _last_closed_trading_day()
     # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
     stale = (res is None) or (res.get("trade_date") != today)
 
