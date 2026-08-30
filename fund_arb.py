@@ -5203,9 +5203,16 @@ def pivot_snap_batch(symbols):
     return out
 
 
-def pivot_fetch_ohlcv(symbol, n=None):
-    """腾讯前复权日线 OHLCV（时间升序）。"""
-    n = n or PIVOT_CFG["kline_len"]
+# K 线源探活计数：腾讯 web.ifzq 在部分网络环境（含线上 onrender）会返回
+# 501 Not Implemented。旧实现无兜底，实测线上 3803 只一只都没取到，于是
+# pivot_scan 生成「trade_date=今天、picks=0」的假成功快照。
+# 策略：默认用腾讯（前复权，与回测口径一致）；连续 5 次失败且 0 成功 → 整批切新浪，
+# 避免 3803 只各打两遍请求把扫描时间翻倍。
+_PIVOT_OHLCV_SRC = {"tx_fail": 0, "tx_ok": 0}
+
+
+def _pivot_ohlcv_tencent(symbol, n):
+    """腾讯前复权日线（主源）。"""
     txt = http_get_text(
         f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,{n},qfq",
         timeout=12, retries=1)
@@ -5220,6 +5227,43 @@ def pivot_fetch_ohlcv(symbol, n=None):
         except (IndexError, ValueError, TypeError):
             pass
     return dict(date=d, open=o, high=h, low=l, close=c, volume=v)
+
+
+def _pivot_ohlcv_sina(symbol, n):
+    """新浪日线（兜底源）。返回与腾讯同构的 OHLCV 字典。
+
+    注意：新浪该接口不复权，腾讯用 qfq 前复权，除权日附近会有差异；
+    但兜底场景（主源 501 全挂）下"有数据"远胜"全失败"，且 MA/RS/VCP 主要看相对形态。
+    """
+    url = (f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php"
+           f"/CN_MarketData.getKLineData?symbol={symbol}&scale=240&ma=no&datalen={n}")
+    data = http_get_json(url, referer="https://finance.sina.com.cn/", timeout=12, retries=1)
+    if not isinstance(data, list) or not data:
+        return dict(date=[], open=[], high=[], low=[], close=[], volume=[])
+    o, h, l, c, v, d = [], [], [], [], [], []
+    for r in data:
+        try:
+            d.append(r["day"]); o.append(float(r["open"])); h.append(float(r["high"]))
+            l.append(float(r["low"])); c.append(float(r["close"])); v.append(float(r["volume"]))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return dict(date=d, open=o, high=h, low=l, close=c, volume=v)
+
+
+def pivot_fetch_ohlcv(symbol, n=None):
+    """日线 OHLCV（时间升序）：腾讯前复权主源 → 新浪兜底（含整批切换探活）。"""
+    n = n or PIVOT_CFG["kline_len"]
+    _min = max(30, int(n * 0.5))   # 少于半数量视为取数不完整，走兜底
+    if not (_PIVOT_OHLCV_SRC["tx_fail"] >= 5 and _PIVOT_OHLCV_SRC["tx_ok"] == 0):
+        try:
+            k = _pivot_ohlcv_tencent(symbol, n)
+            if len(k.get("close", [])) >= _min:
+                _PIVOT_OHLCV_SRC["tx_ok"] += 1
+                return k
+        except Exception:
+            pass
+        _PIVOT_OHLCV_SRC["tx_fail"] += 1
+    return _pivot_ohlcv_sina(symbol, n)
 
 
 def pivot_universe():
