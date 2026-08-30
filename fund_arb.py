@@ -2939,10 +2939,15 @@ _REFRESHING = set()          # 后台刷新去重：同一 key 只允许一个�
 _PERSIST_LAST = {"t": 0.0}  # API 持久化去抖时间戳
 
 
-def _persist_api():
-    """把 API 结果缓存落盘（去抖 30s，避免高频写）。"""
+def _persist_api(force=False):
+    """把 API 结果缓存落盘（去抖 30s，避免高频写）。
+
+    force=True 用于「刚做完一次昂贵计算」的场景（如排行表冷启动同步计算 50s+）：
+    必须立刻落盘，否则去抖窗口内若进程休眠/重启，这笔昂贵结果就丢了，
+    下次唤醒又得重新冷算一遍。
+    """
     now = time.time()
-    if now - _PERSIST_LAST["t"] < 30.0:
+    if not force and now - _PERSIST_LAST["t"] < 30.0:
         return
     _PERSIST_LAST["t"] = now
     try:
@@ -4039,7 +4044,24 @@ CB_CFG = dict(
 CB_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_cache.json")
 CB_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_snapshot.json")
 _CB_LOCK = threading.Lock()
-_CB = dict(result=None, scanning=False, error="", progress=dict(done=0, total=0, phase=""))
+_CB = dict(result=None, scanning=False, error="", started=0.0,
+           progress=dict(done=0, total=0, phase=""))
+
+# 可转债全市场扫描约 1~3 分钟；给 7 分钟再判死，避免误杀仍在跑的合法扫描。
+_CB_SCAN_HARD_TIMEOUT = 420
+
+
+def _cb_watchdog():
+    """扫描看门狗：与 _pivot_watchdog 同理 —— onrender 免费层掐掉后台线程会让
+    scanning 永久 True，进而 `not scanning` 条件再也无法触发新扫描，页面永久卡「扫描中」。"""
+    with _CB_LOCK:
+        if _CB["scanning"]:
+            started = _CB.get("started") or 0.0
+            if time.time() - started > _CB_SCAN_HARD_TIMEOUT:
+                _CB.update(
+                    scanning=False,
+                    error="上次扫描超过 %d 分钟未完成（运行环境掐掉了后台线程），已自动复位。"
+                          "可点「立即重扫」重试。" % int(_CB_SCAN_HARD_TIMEOUT / 60))
 
 _UT = "fa5fd1943c7b386f172d6893dbfba10b"
 _CB_FIELDS = "f12,f13,f14,f2,f5,f232,f234,f236,f237,f238,f240,f243"  # f5=成交量(手)，已停牌债成交量为0；f240=正股实时价
@@ -4289,6 +4311,7 @@ def cb_run_scan_bg():
         if _CB["scanning"]:
             return False
         _CB["scanning"] = True
+        _CB["started"] = time.time()
         _CB["error"] = ""
         _CB["progress"] = {"done": 0, "total": 0, "phase": "启动中"}
 
@@ -4301,6 +4324,7 @@ def cb_run_scan_bg():
             res = cb_scan(progress=_prog)
             with _CB_LOCK:
                 _CB["result"] = res
+                _CB["error"] = ""      # 成功即清掉看门狗/上次的残留提示
             _cb_save_disk(res)
             print("    [可转债] 扫描完成：%d 只 → 命中 %d 只，耗时 %ss，模式 %s"
                   % (res["stats"]["universe"], res["total_picks"], res["elapsed"], res["mode"]))
@@ -4318,14 +4342,16 @@ def cb_run_scan_bg():
 
 def cb_api_payload(force=False):
     """/api/cb 响应体：立即返回缓存+扫描状态；缓存过期或强制则后台重扫。"""
+    _cb_watchdog()   # 先清理可能卡死（被平台掐线程）的扫描状态
     with _CB_LOCK:
         res = _CB["result"]
         scanning = _CB["scanning"]
         prog = dict(_CB["progress"])
         err = _CB["error"]
-    today = bj_now().strftime("%Y-%m-%d")
     # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
-    stale = (res is None) or (res.get("trade_date") != today)
+    # ⚠️ 必须用「最近交易日」而非「今天」：周末/节假日任何数据都会 ≠ 今天，
+    #    于是周五收盘的最新数据在周六周日被误判成「已过期」。
+    stale = (res is None) or (res.get("trade_date") != _last_trading_day())
     # 智能冻结：非更新窗口（周末/夜间/盘中早段）不自动重扫，直接复用缓存静态展示；
     # 仅在交易日 14:45 后且当日尚未扫描时才自动刷。force=1 任何时候都可手动触发。
     if (force or _auto_refresh_due(res)) and not scanning:
@@ -4512,7 +4538,7 @@ class Handler(BaseHTTPRequestHandler):
         val = producer()                              # 真正冷启动：同步计算（不再后台刷新）
         with self._API_CACHE_LOCK:
             self._API_CACHE[key] = (now + ttl, val)
-        _persist_api()
+        _persist_api(force=True)   # 昂贵结果立即落盘，避免 30s 去抖窗口内丢结果
         return val, False
 
     # ---- 行业轮动：申万一级行业 BK 代码映射（与 sector_dashboard.html 的 D.bk 一致） ----
@@ -5716,10 +5742,29 @@ PIVOT_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pivo
 _PIVOT = {
     "result": None,      # 最近一次完整扫描结果
     "scanning": False,   # 是否正在扫描
+    "started": 0.0,      # 本次扫描开始时间（看门狗判定卡死用）
     "progress": {"done": 0, "total": 0, "phase": ""},
     "error": "",
 }
 _PIVOT_LOCK = threading.Lock()
+
+# 口袋支点全市场扫描 UI 提示 3~6 分钟；给足 15 分钟再判死，避免误杀仍在跑的合法扫描。
+_PIVOT_SCAN_HARD_TIMEOUT = 900
+
+
+def _pivot_watchdog():
+    """扫描看门狗：onrender 免费层会掐掉/休眠后台线程，导致 scanning 永久 True，
+    进而 `if (force or ...) and not scanning` 再也无法触发新扫描 —— 页面永久卡在「扫描中」。
+    超时后复位状态并给出明确提示（Python 线程不可强杀，仅改状态）。"""
+    with _PIVOT_LOCK:
+        if _PIVOT["scanning"]:
+            started = _PIVOT.get("started") or 0.0
+            if time.time() - started > _PIVOT_SCAN_HARD_TIMEOUT:
+                _PIVOT.update(
+                    scanning=False,
+                    error="上次扫描超过 %d 分钟未完成（运行环境掐掉了后台线程），已自动复位。"
+                          "可点「立即重扫」重试；线上最稳的更新方式仍是在本机生成快照后推送。"
+                          % int(_PIVOT_SCAN_HARD_TIMEOUT / 60))
 
 
 def _pivot_load_disk():
@@ -5766,6 +5811,7 @@ def pivot_run_scan_bg():
         if _PIVOT["scanning"]:
             return False
         _PIVOT["scanning"] = True
+        _PIVOT["started"] = time.time()
         _PIVOT["error"] = ""
         _PIVOT["progress"] = {"done": 0, "total": 0, "phase": "启动中"}
 
@@ -5778,6 +5824,7 @@ def pivot_run_scan_bg():
             res = pivot_scan(progress=_prog)
             with _PIVOT_LOCK:
                 _PIVOT["result"] = res
+                _PIVOT["error"] = ""   # 成功即清掉看门狗/上次的残留提示
             _pivot_save_disk(res)
             print(f"    [口袋支点] 扫描完成：{res['stats']['universe']} 只 → "
                   f"命中 {res['total_picks']} 只，耗时 {res['elapsed']}s")
@@ -5795,15 +5842,17 @@ def pivot_run_scan_bg():
 
 def pivot_api_payload(force=False):
     """/api/pivot 的响应体：立即返回缓存 + 扫描状态；缓存过期或强制则后台重扫。"""
+    _pivot_watchdog()   # 先清理可能卡死（被平台掐线程）的扫描状态
     with _PIVOT_LOCK:
         res = _PIVOT["result"]
         scanning = _PIVOT["scanning"]
         prog = dict(_PIVOT["progress"])
         err = _PIVOT["error"]
 
-    today = bj_now().strftime("%Y-%m-%d")
     # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
-    stale = (res is None) or (res.get("trade_date") != today)
+    # ⚠️ 必须用「最近交易日」而非「今天」：周末/节假日任何数据都会 ≠ 今天，
+    #    于是周五收盘的最新数据在周六周日被误判成「已过期」。
+    stale = (res is None) or (res.get("trade_date") != _last_trading_day())
 
     # 智能冻结：非更新窗口（周末/夜间/盘中早段）不自动重扫，直接复用缓存静态展示
     # 最近 1 个交易日的结果；仅在交易日 14:45 后且当日尚未扫描时才自动刷。
