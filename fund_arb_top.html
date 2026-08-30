@@ -172,7 +172,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   <div class="topnav">
     <a class="brand" href="sector_dashboard.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
-    <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
+    <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
     <a class="navlink" href="fund_arb.html">套利看板</a>
     <a class="navlink" href="fund_arb_ranking.html">排行表</a>
     <a class="navlink active" href="fund_arb_top.html">TOP套利</a>
@@ -183,7 +183,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 </div>
 
 <div class="tzline">本页所有行情/净值/汇率日期均按当前北京时间 <b id="clock">—</b></div>
-<div id="dateWarn" class="tzline" style="display:none;color:#ff4d4f;border-color:#ff4d4f55;background:#2a1416"></div>
 
 <div class="tablebox rank-scroll" id="tablebox" style="display:none"><table id="tbl"></table></div>
 <div class="rank-bar" id="rankbar" style="display:none"></div>
@@ -192,10 +191,10 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
 <div id="err"></div>
 
 <div class="panel">
-  <div class="field"><label>查询日期</label><input id="rdate" type="date"></div>
+  <div class="field"><label>查询日期（留空=最近收盘日）</label><input id="rdate" type="date"></div>
   <div class="field"><label>溢价阈值 %</label><input id="threshold" value="1.5" type="number" step="0.1" min="0.1" max="10"></div>
   <div class="field"><label>折价阈值 %</label><input id="dgate" value="-2" type="number" step="0.1" min="-10" max="-0.1"></div>
-  <button id="btn" onclick="load(true)">扫描全市场</button>
+  <button id="btn" onclick="load()">扫描全市场</button>
   <span class="sort-hint" style="color:var(--muted);font-size:12px">首次扫描约 30~90 秒（全市场取数），10 分钟内重复查询秒回。</span>
 </div>
 
@@ -239,7 +238,7 @@ function renderTopHist(){
   const latest={};
   (currentRows||[]).forEach(function(r){ latest[r.code]={price:r.price, nav:r.nav}; });
   rows.forEach(function(r){
-    r._cur=(r.cur!=null?r.cur:((latest[r.code]&&latest[r.code].price)||null));
+    r._cur=(latest[r.code]&&latest[r.code].price)||null;
     r._nav=(latest[r.code]&&latest[r.code].nav)||null;
     r._pchg=(r._cur!=null&&r.price)?(r._cur-r.price)/r.price*100:null;
     r._nchg=(r._nav!=null&&r.nav)?(r._nav-r.nav)/r.nav*100:null;
@@ -272,23 +271,8 @@ function fmtPct(v,plus=true){ if(v==null)return "—"; const s=(plus&&v>0)?"+":"
 function cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function today(){ const s=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return s.replace(/\//g,'-'); }
-// 最近交易日：今天若是周六/周日则回溯到上周五。
-// 法定节假日由服务端 _A_SHARE_HOLIDAYS 兜底，这里只处理周末——
-// 否则周末打开页面时 rdate 是周六，与任何快照都不匹配，永远显示"尚未生成"。
-function lastTradingDay(){
-  const now=new Date();
-  const bj=new Date(now.getTime() + (8*60 + now.getTimezoneOffset())*60000);
-  const w=bj.getDay();                       // 0=周日 .. 6=周六
-  const back = (w===0)?2 : (w===6)?1 : 0;
-  const d=new Date(bj.getTime() - back*86400000);
-  const p=function(n){ return String(n).padStart(2,'0'); };
-  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
-}
 
-let TOP_POLL=null;
-// force=true 表示用户点「扫描全市场」：允许服务端跳过冷却重扫一次。
-// 扫描在后台进行（云端行情源不可达时不会阻塞页面），故需轮询直到完成。
-async function load(force){
+async function load(){
   const date=document.getElementById('rdate').value;
   const threshold=document.getElementById('threshold').value;
   const dgate=document.getElementById('dgate').value;
@@ -297,21 +281,15 @@ async function load(force){
   document.getElementById('err').textContent=''; document.getElementById('tablebox').style.display='none';
   document.getElementById('rankbar').style.display='none'; document.getElementById('summary2').innerHTML='';
   try{
-    const url=BASE+'/api/top?date='+encodeURIComponent(date)+'&threshold='+encodeURIComponent(threshold)+'&dgate='+encodeURIComponent(dgate)+(force?'&force=1':'');
-    const r=await fetch(url, {cache:'no-store'}); const d=await r.json();
+    const url=BASE+'/api/top?date='+encodeURIComponent(date)+'&threshold='+encodeURIComponent(threshold)+'&dgate='+encodeURIComponent(dgate);
+    const r=await fetch(url); const d=await r.json();
     if(d.error){ throw new Error(d.error); }
+    // 日期框留空时由服务端决定「最近已收盘交易日」，此处用返回值回填，
+    // 让用户看到数据实际对应的日期（避免开盘前标签写今天、数值却是上一交易日）。
+    const _rd=document.getElementById('rdate'); if(_rd && !_rd.value && d.date){ _rd.value=d.date; }
     currentRows=d.rows||[]; sortKey='__default__'; sortDesc=true; render(d); loadTopHist();
-    if(d.scanning){
-      btn.textContent='扫描中…';
-      if(!TOP_POLL) TOP_POLL=setInterval(function(){ load(false); }, 5000);
-    }else{
-      btn.textContent='扫描全市场';
-      if(TOP_POLL){ clearInterval(TOP_POLL); TOP_POLL=null; }
-      if(d.scan_error){ document.getElementById('err').textContent='扫描失败：'+d.scan_error; }
-    }
   }catch(e){
     document.getElementById('err').textContent='加载失败：'+e.message;
-    btn.textContent='扫描全市场';
   }finally{
     document.getElementById('loading').style.display='none'; btn.disabled=false;
   }
@@ -381,16 +359,6 @@ function sortRows(key){
 
 function render(meta){
   document.getElementById('staleBadge').style.display=(meta&&meta.stale)?'inline-flex':'none';
-  // 快照日期 != 查询日期时显著提示：宁可展示旧快照并标明是哪天的，
-  // 也不要让用户误以为是当日实时结果（云端取不到行情时冷算会挂死，故后端改为只读快照）
-  var _dw=document.getElementById('dateWarn');
-  if(_dw){
-    if(meta&&meta.date_mismatch){
-      _dw.style.display='block';
-      _dw.innerHTML='日期提示：'+esc(meta.note||('当前展示 '+meta.snapshot_date+' 的快照'))
-        +(meta.scanning?'（后台正在重算，请稍候自动刷新）':'');
-    }else{ _dw.style.display='none'; _dw.innerHTML=''; }
-  }
   currentMeta=meta;
   // 同步查询阈值到全局，供点击筛选卡片时 applyFilter 使用（否则会沿用默认值 1.5/-2，与卡片标签不一致）
   currentThreshold=meta.threshold; currentDgate=meta.dgate;
@@ -459,7 +427,9 @@ function tickClock(){
   el.textContent = now.toLocaleString('zh-CN',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
 }
 setInterval(tickClock, 1000); tickClock();
-(function(){ const d=document.getElementById('rdate'); d.value=lastTradingDay(); })();
+// 日期框不预填今天：留空即由服务端取「最近已收盘交易日」。
+// 旧版预填 today() 会把「今天」作为参数传回服务端，开盘前/盘中就会拿到
+// 「标签是今天、数值是上一交易日」的错位结果；load() 成功后会回填真实数据日期。
 load();
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{ navigator.serviceWorker.register('/sw.js').catch(err=>console.log('SW 注册失败：',err)); });

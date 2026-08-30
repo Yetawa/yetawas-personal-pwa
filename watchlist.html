@@ -117,14 +117,14 @@ h1{font-size:19px;font-weight:800;margin:0}
 <body>
 <div class="topnav">
   <a class="brand" data-file="sector_dashboard.html" data-route="/sector" href="sector_dashboard.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
-  <a class="navlink" href="sector_dashboard.html" data-file="sector_dashboard.html" data-route="/sector">行业轮动</a>
-  <a class="navlink" href="fish_basin.html" data-file="fish_basin.html" data-route="/yupen">鱼盆模型</a>
-  <a class="navlink" href="fund_arb.html" data-file="fund_arb.html" data-route="/arb">套利看板</a>
-  <a class="navlink" href="fund_arb_ranking.html" data-file="fund_arb_ranking.html" data-route="/ranking">排行表</a>
-  <a class="navlink" href="fund_arb_top.html" data-file="fund_arb_top.html" data-route="/top">TOP套利</a>
-  <a class="navlink" href="pivot_live.html" data-file="pivot_live.html" data-route="/pivot">口袋支点</a>
-  <a class="navlink" href="cb.html" data-file="cb.html" data-route="/cb">可转债套利</a>
-  <a class="navlink active" href="watchlist.html" data-file="watchlist.html" data-route="/watch">自选池</a>
+  <a class="navlink" data-file="sector_dashboard.html" data-route="/sector">行业轮动</a>
+  <a class="navlink" data-file="fish_basin.html" data-route="/yupen">鱼盆模型</a>
+  <a class="navlink" data-file="fund_arb.html" data-route="/arb">套利看板</a>
+  <a class="navlink" data-file="fund_arb_ranking.html" data-route="/ranking">排行表</a>
+  <a class="navlink" data-file="fund_arb_top.html" data-route="/top">TOP套利</a>
+  <a class="navlink" data-file="pivot_live.html" data-route="/pivot">口袋支点</a>
+  <a class="navlink" data-file="cb.html" data-route="/cb">可转债套利</a>
+  <a class="navlink active" data-file="watchlist.html" data-route="/watch">自选池</a>
   <span class="navspacer"></span>
 </div>
 
@@ -308,7 +308,7 @@ function refresh(force){
   list=loadW();
   // 备份上一次保存的数据，便于旧 localStorage（无 wlprice 字段）数据兼容
   list.forEach(function(x){ x._prevPrice = (x.price!=null)?Number(x.price):(x.wlprice!=null?Number(x.wlprice):null); });
-  if(!list.length){ render(); lastWl=[]; lastSh=[]; renderChart(); return; }
+  if(!list.length){ render(); lastWlRaw=[]; lastShRaw=[]; lastItems=[]; lastDates=[]; renderChart(); return; }
   setBanner('正在拉取 '+list.length+' 只自选最新价…');
   // 错峰启动：每只间隔 120ms，避免渲染后端并发限制导致部分 fetch 失败
   var tasks = list.map(function(x, i){
@@ -375,7 +375,7 @@ function computeChg(list){
 }
 
 /* ===== 走势图：自选池平均涨跌幅 vs 上证指数（指数恒为基准，逐日对齐） ===== */
-var chartDays=30, chartCache={}, lastWlRaw=[], lastShRaw=[], lastPool=[];
+var chartDays=30, chartCache={}, lastWlRaw=[], lastShRaw=[], lastItems=[], lastDates=[];
 function klineFor(code, attempt){
   attempt = attempt||0;
   return new Promise(function(res){
@@ -411,26 +411,25 @@ function loadChart(force){
         }, i*120);
       });
     })).then(function(res){
-      var daySum={}, dayCnt={};   // 自选日基线累计（实线）
-      var poolSum={}, poolCnt={}; // 全历史等权指数（从各自最早交易日=100，用于回测滚动）
+      var daySum={}, dayCnt={};   // 自选日基线累计（实线，绝对累计）
+      var dset={};                // 全部标的的交易日并集（回测滚动用）
+      lastItems=[];
       res.forEach(function(o){
         var m=o.map, base=o.base; if(!base||base<=0) return;
         var dates=Object.keys(m).sort();
-        var firstBase=null;
+        if(!dates.length) return;
+        lastItems.push({map:m, join:o.x.date||''});
+        dates.forEach(function(d){ dset[d]=1; });
         dates.forEach(function(d){
-          if(firstBase===null) firstBase=m[d];
           if(o.x.date && d < o.x.date) return;          // 累计实线：仅自选日之后
           var v=(m[d]/base-1)*100;
           daySum[d]=(daySum[d]||0)+v; dayCnt[d]=(dayCnt[d]||0)+1;
-          var pv=(m[d]/firstBase-1)*100;                 // 回测滚动基准：各自最早日
-          poolSum[d]=(poolSum[d]||0)+pv; poolCnt[d]=(poolCnt[d]||0)+1;
         });
       });
+      lastDates=Object.keys(dset).sort();
       var keys=Object.keys(daySum).filter(function(d){ return dayCnt[d]>0; }).sort();
       lastWlRaw = keys.map(function(d){ return {date:d, cum:daySum[d]/dayCnt[d]}; });
-      var pkeys=Object.keys(poolSum).filter(function(d){ return poolCnt[d]>0; }).sort();
-      lastPool = pkeys.map(function(d){ return {date:d, idx:poolSum[d]/poolCnt[d]}; });
-    }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; lastPool=[]; });
+    }).catch(function(e){ console.warn('wl compute err', e); lastWlRaw=[]; lastItems=[]; lastDates=[]; });
   Promise.all([shPromise, wlPromise]).then(function(){ renderChart(); }).catch(function(e){
     console.error('loadChart err', e);
     var hint = (location.protocol==='file:')
@@ -441,33 +440,50 @@ function loadChart(force){
 }
 function renderChart(){
   var box=document.getElementById('chart'); if(!box) return;
-  var shWin=lastShRaw.slice(-chartDays), wlWin=lastWlRaw.slice(-chartDays), poolWin=lastPool.slice(-chartDays);
-  if(!shWin.length && !wlWin.length && !poolWin.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
-  // 自选池：绝对累计（从各自加入日起），末值 == 表格「平均涨跌幅」，方向一致。
-  // 修复旧版 bug：旧版按窗口起点 rebase（末值=窗口内涨跌），近期回撤时图表朝下而表格为涨，明显矛盾。
-  var wl = wlWin.map(function(p){ return {date:p.date, v:p.cum}; });
-  // 上证：以自选池数据最早日期为同一起点 rebase，便于横向对比（绝对累计涨跌，非窗口内相对）
-  var refDate = (lastWlRaw.length? lastWlRaw[0].date : (shWin.length? shWin[0].date : null));
-  var shFull={}; lastShRaw.forEach(function(p){ shFull[p.date]=p.close; });
-  var shBase = (refDate && shFull[refDate]!=null)? shFull[refDate] : (shWin.length? shWin[0].close : null);
-  var sh = (shBase>0) ? shWin.map(function(p){ return {date:p.date, v:(p.close/shBase-1)*100}; }) : [];
-  // 回测：全历史等权指数近 N 日滚动涨跌幅。用完整 lastPool 计算（不受 chartDays 截断影响），
-  // 再按显示窗口的日期对齐，避免短周期（如5/10日）下因窗口不足 btN 而整条缺失。
-  var bt=[];
-  for(var i=btN;i<lastPool.length;i++){
-    bt.push({date:lastPool[i].date, v:lastPool[i].idx-lastPool[i-btN].idx});
+  // 基准日 d0：自选池最早计入的交易日。两条曲线都从 d0 起算（d0 当天=0%），
+  // 这样「自选池累计」末值严格等于表格的平均累计涨跌幅，且与上证同期涨跌可比。
+  var d0 = lastWlRaw.length? lastWlRaw[0].date : null;
+  // 上证：以 d0 前最后一个交易日收盘为基准的绝对累计（与自选同一天起算）
+  var sh=[], shBase=null, i;
+  if(d0 && lastShRaw.length){
+    for(i=0;i<lastShRaw.length;i++){
+      var sp=lastShRaw[i];
+      if(sp.date<=d0){ shBase=sp.close; continue; }
+      if(shBase>0) sh.push({date:sp.date, v:(sp.close/shBase-1)*100});
+    }
   }
+  // 自选：绝对累计（不再按显示窗口起点 rebase——旧版那样会让曲线末值对不上表格，
+  // 出现「表格显示累计上涨、图里却是下跌」的错觉）
+  var wlWin=lastWlRaw.slice(-chartDays);
+  var wl=wlWin.map(function(p){ return {date:p.date, v:p.cum}; });
+  // 回测滚动：固定当前自选成分，最近 btN 个交易日的等权涨跌幅
+  // （不用「各自最早交易日」做基准，避免新标的加入把指数整体拉偏造成假跳变）
+  var bt=[];
+  for(i=btN;i<lastDates.length;i++){
+    var dd=lastDates[i], pd=lastDates[i-btN], s=0, c=0;
+    for(var k=0;k<lastItems.length;k++){
+      var mm=lastItems[k].map, a=mm[pd], b=mm[dd];
+      if(a!=null && b!=null && a>0){ s+=(b/a-1)*100; c++; }
+    }
+    if(c) bt.push({date:dd, v:s/c});
+  }
+  var shWin=sh.slice(-chartDays), btWin=bt.slice(-chartDays);
   // 合并日期轴（交易并集，缺失日跳过）
-  var dateSet={}; sh.forEach(function(p){ dateSet[p.date]=1; }); wl.forEach(function(p){ dateSet[p.date]=1; }); bt.forEach(function(p){ dateSet[p.date]=1; });
+  var dateSet={}; shWin.forEach(function(p){ dateSet[p.date]=1; }); wl.forEach(function(p){ dateSet[p.date]=1; }); btWin.forEach(function(p){ dateSet[p.date]=1; });
   var dates=Object.keys(dateSet).sort();
   var shMap={}, wlMap={}, btMap={};
-  sh.forEach(function(p){ shMap[p.date]=p.v; }); wl.forEach(function(p){ wlMap[p.date]=p.v; }); bt.forEach(function(p){ btMap[p.date]=p.v; });
+  shWin.forEach(function(p){ shMap[p.date]=p.v; }); wl.forEach(function(p){ wlMap[p.date]=p.v; }); btWin.forEach(function(p){ btMap[p.date]=p.v; });
   if(!dates.length){ box.innerHTML='<div class="empty">暂无可绘制日期</div>'; return; }
   var W=680,H=240,padL=46,padR=14,padT=14,padB=22;
-  var vals=dates.map(function(d){ return shMap[d]; }).concat(dates.map(function(d){ return wlMap[d]; })).concat(dates.map(function(d){ return btMap[d]; })).filter(function(v){ return v!=null; });
-  var max=0.5; vals.forEach(function(v){ if(Math.abs(v)>max) max=Math.abs(v); });
-  var innerH=H-padT-padB, y0=padT+innerH/2, yScale=innerH/2/max;
-  function px(v){ return y0-v*yScale; }
+  var vals=[];
+  dates.forEach(function(d){ if(shMap[d]!=null) vals.push(shMap[d]); if(wlMap[d]!=null) vals.push(wlMap[d]); if(btMap[d]!=null) vals.push(btMap[d]); });
+  if(!vals.length){ box.innerHTML='<div class="empty">暂无走势数据</div>'; return; }
+  // 纵轴按实际涨跌区间自适应（含 0 轴），不再固定以 0 为中心
+  var mn=0,mx=0; vals.forEach(function(v){ if(v<mn) mn=v; if(v>mx) mx=v; });
+  var span=Math.max(mx-mn, 0.8), pd2=span*0.12;
+  var yMin=mn-pd2, yMax=mx+pd2;
+  var innerH=H-padT-padB;
+  function px(v){ return padT+(yMax-v)/(yMax-yMin)*innerH; }
   function path(map){
     var started=false, out='';
     dates.forEach(function(d,i){
@@ -479,62 +495,67 @@ function renderChart(){
     return out.trim();
   }
   var isLight=document.documentElement.getAttribute('data-theme')==='light';
-  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选累计（仅图例占位）
+  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选累计：青色实线
   var shCol=isLight?'#b8a988':'#9fb0c8';   // 上证：灰色实线
   var btCol=isLight?'#e11d48':'#fb7185';   // 回测滚动：红色虚线（涨红）
-  // 自选池线按涨跌分段着色（A股约定：涨红 / 跌绿）
-  var upCol=isLight?'#dc2626':'#ef4444', downCol=isLight?'#16a34a':'#22c55e';
-  // 分段着色折线：每段按自身方向取色（v 较上一段上升=红，下降=绿）
-  function coloredPath(map, upC, downC){
-    var out='';
-    for(var i=1;i<dates.length;i++){
-      var v0=map[dates[i-1]], v1=map[dates[i]];
-      if(v0==null||v1==null) continue;
-      var x0=padL+(dates.length<=1?0:(W-padL-padR)*(i-1)/(dates.length-1));
-      var x1=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
-      var c=(v1>=v0)?upC:downC;
-      out+='<path d="M'+x0.toFixed(1)+' '+px(v0).toFixed(1)+' L'+x1.toFixed(1)+' '+px(v1).toFixed(1)
-          +'" fill="none" stroke="'+c+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
-    }
-    return out;
+  function niceStep(raw){
+    var e=Math.floor(Math.log(Math.max(raw,1e-6))/Math.LN10);
+    var p=Math.pow(10,e), n=raw/p;
+    return (n<=1?1:(n<=2?2:(n<=5?5:10)))*p;
   }
-  var grid='<line x1="'+padL+'" y1="'+y0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y0.toFixed(1)+'" stroke="var(--txt3)" stroke-width="0.8"/>';
-  [0.5,1,2,3].forEach(function(g){
-    if(max<g) return;
+  var step=niceStep(span/4), dec=step<1?1:0;
+  var grid='';
+  var g0=Math.ceil(yMin/step)*step;
+  for(var g=g0; g<=yMax+1e-9; g+=step){
+    if(Math.abs(g)<1e-9) continue;
     var y=px(g);
     grid+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>';
-    grid+='<text x="'+(padL-4)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">+'+g+'%</text>';
-    grid+='<text x="'+(padL-4)+'" y="'+(px(-g)+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">-'+g+'%</text>';
-  });
+    grid+='<text x="'+(padL-4)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--txt3)">'+(g>0?'+':'')+g.toFixed(dec)+'%</text>';
+  }
+  if(yMin<0 && yMax>0){
+    var y0=px(0);
+    grid+='<line x1="'+padL+'" y1="'+y0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y0.toFixed(1)+'" stroke="var(--txt3)" stroke-width="0.8"/>';
+  }
   var lblIdx=[0, Math.floor((dates.length-1)/2), dates.length-1];
-  lblIdx.forEach(function(i){
-    var x=padL+(dates.length<=1?0:(W-padL-padR)*i/(dates.length-1));
-    grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i].slice(5)+'</text>';
+  lblIdx.forEach(function(i2){
+    var x=padL+(dates.length<=1?0:(W-padL-padR)*i2/(dates.length-1));
+    grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i2].slice(5)+'</text>';
   });
-  var lastBt = bt.length? bt[bt.length-1].v : null;
+  var lastWl = wl.length? wl[wl.length-1].v : null;
+  var lastSh = shWin.length? shWin[shWin.length-1].v : null;
+  var lastBt = btWin.length? btWin[btWin.length-1].v : null;
   // 图例（仅显示存在的序列）
   var legParts=[];
-  if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:linear-gradient(90deg,'+upCol+','+downCol+');vertical-align:middle;margin-right:4px"></span>自选池累计涨跌幅（涨红/跌绿）</span>');
-  if(sh.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span>');
-  if(bt.length) legParts.push('<span><span style="display:inline-block;width:16px;height:0;border-top:2px dashed '+btCol+';vertical-align:middle;margin-right:4px"></span>近'+btN+'日滚动涨跌幅</span>');
+  if(wl.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+wlCol+';vertical-align:middle;margin-right:4px"></span>自选池平均累计涨跌幅</span>');
+  if(shWin.length) legParts.push('<span><span style="display:inline-block;width:16px;height:3px;background:'+shCol+';vertical-align:middle;margin-right:4px"></span>上证指数</span>');
+  if(btWin.length) legParts.push('<span><span style="display:inline-block;width:16px;height:0;border-top:2px dashed '+btCol+';vertical-align:middle;margin-right:4px"></span>近'+btN+'日滚动涨跌幅</span>');
   var legend='<div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-bottom:4px;flex-wrap:wrap">'+legParts.join('')+'</div>';
+  var note = d0? '<div style="text-align:center;font-size:11px;color:var(--txt3);margin-bottom:6px">以 '+d0+'（自选池首个交易日）为 0% 基准，末值＝表格平均累计涨跌幅</div>' : '';
   var svg=grid
-    + (sh.length? '<path d="'+path(shMap)+'" fill="none" stroke="'+shCol+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>':'')
-    + (wl.length? coloredPath(wlMap, upCol, downCol):'')
-    + (bt.length? '<path d="'+path(btMap)+'" fill="none" stroke="'+btCol+'" stroke-width="1.6" stroke-dasharray="5,4" stroke-linejoin="round" stroke-linecap="round"/>':'');
-  var caption = (lastBt!=null) ? '<div style="text-align:center;font-size:12px;color:'+(lastBt>=0?'var(--up)':'var(--down)')+';font-weight:700;margin-top:4px">当前近'+btN+'日滚动涨跌幅：'+(lastBt>=0?'+':'')+lastBt.toFixed(2)+'%</div>' : '';
+    + (shWin.length? '<path d="'+path(shMap)+'" fill="none" stroke="'+shCol+'" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>':'')
+    + (wl.length? '<path d="'+path(wlMap)+'" fill="none" stroke="'+wlCol+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>':'')
+    + (btWin.length? '<path d="'+path(btMap)+'" fill="none" stroke="'+btCol+'" stroke-width="1.6" stroke-dasharray="5,4" stroke-linejoin="round" stroke-linecap="round"/>':'');
+  function pctSpan(v, bold){
+    var col=(v>=0?'var(--up)':'var(--down)');
+    return '<span style="color:'+col+';'+(bold?'font-weight:700':'')+'">'+(v>=0?'+':'')+v.toFixed(2)+'%</span>';
+  }
+  var capParts=[];
+  if(lastWl!=null) capParts.push('自选池累计 '+pctSpan(lastWl,true));
+  if(lastSh!=null) capParts.push('上证同期 '+pctSpan(lastSh,false));
+  if(lastBt!=null) capParts.push('近'+btN+'日滚动 '+pctSpan(lastBt,true));
+  var caption = capParts.length? '<div style="text-align:center;font-size:12px;margin-top:4px;line-height:1.8">'+capParts.join(' ｜ ')+'</div>' : '';
   // 诊断：上证有数据但自选/回测缺失——通常是自选池各标的行情序列（/api/kline）未能取到
   var diag = '';
-  if(sh.length && !wl.length && !bt.length){
+  if(shWin.length && !wl.length && !btWin.length){
     var hint = (location.protocol==='file:')
       ? '（本地打开需先启动 fund_arb.py 本地服务：python fund_arb.py，且服务能连通行情源；否则自选池/回测序列无法绘制）'
       : '（线上环境受网络限制可能无法拉取个股/基金行情，请在本机或国内节点使用）';
     diag = '<div style="margin-top:6px;font-size:11.5px;color:var(--txt3);line-height:1.8">仅上证指数可绘制：自选池平均涨跌幅与滚动回测缺数据。'+hint+'</div>';
-  } else if(wl.length && !bt.length){
+  } else if(wl.length && !btWin.length){
     // 自选累计线有、回测线无：通常是历史交易日不足（需 ≥ btN+1 日）或 kline 取数不全
     diag = '<div style="margin-top:6px;font-size:11.5px;color:var(--txt3);line-height:1.8">回测滚动线暂未显示：需至少 '+(btN+1)+' 个交易日的个股/基金历史行情（当前历史不足或取数不完整）。加入自选并等待数日积累历史后即可显示。</div>';
   }
-  box.innerHTML=legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svg+'</svg>'+caption+diag;
+  box.innerHTML=note+legend+'<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+svg+'</svg>'+caption+diag;
 }
 
 document.querySelectorAll('.rng').forEach(function(b){

@@ -34,7 +34,7 @@ import urllib.request
 import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone, date as _date_cls
+from datetime import datetime, timedelta, date as _date_cls
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import os
@@ -138,19 +138,6 @@ UNDERLYING_MAP = {
     "161130": _u("QQQ"), "161127": _u("XBI"),
     # 161226 国投瑞银白银期货：投资上海期货交易所白银期货，用国内白银连续合约 AG0，无需 USD/CNY 换汇。
     "161226": {"sina_futures": "AG0", "sa": "AG0", "use_fx": False},
-    # 国内黄金 ETF（华安/华夏/国泰/易方达/博时/工银/富国/中银/嘉实上海金/广发上海金）：
-    # 持有上海黄金交易所 Au99.99 / 上海金基准，人民币计价，无需 USD/CNY 换汇；
-    # 与 161226 白银期货(AG0) 同机制，用国内黄金连续合约 AU0 估值，use_fx=False。
-    "518880": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 华安黄金ETF
-    "518850": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 华夏黄金ETF
-    "518800": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 国泰黄金ETF
-    "159934": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 易方达黄金ETF
-    "159937": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 博时黄金ETF
-    "518660": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 工银黄金ETF
-    "518680": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 富国黄金ETF
-    "518860": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 中银黄金ETF
-    "159831": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 嘉实上海金ETF
-    "518600": {"sina_futures": "AU0", "sa": "AU0", "use_fx": False},  # 广发上海金ETF
     "160644": _u("KWEB"),
     "501025": _u("FXI"), "162719": _u("IEO"), "161125": _u("SPY"), "161128": _u("XLK"),
     "501018": _u("USO"), "161129": _u("USO"), "501225": _u("SOXX"),
@@ -197,9 +184,6 @@ FUND_WEIGHT = {
     "160719": 0.884,   # 嘉实黄金（MAE 最小化校准值）
     "161116": 0.898,   # 易方达黄金
     "164701": 1.0,     # 汇添富黄金
-    # 国内黄金 ETF：实物黄金 1:1 跟踪，w 钉 1.0（与 QDII 黄金 GLD 路径不同，无汇率/换汇损耗）
-    "518880": 1.0, "518850": 1.0, "518800": 1.0, "159934": 1.0, "159937": 1.0,
-    "518660": 1.0, "518680": 1.0, "518860": 1.0, "159831": 1.0, "518600": 1.0,
     "164705": 0.95,    # 汇添富恒生：改用 HSI 恒生指数本身代理（EWH=MSCI香港错配，MAE 1.05%→0.044%）
     "160924": 0.95,    # 大成恒生：同上，HSI 恒生指数代理
 }
@@ -600,26 +584,18 @@ def _idx_push2_changes(idx_meta):
     if not idx_meta:
         return {}
     codes = list(idx_meta.keys())
-    # 【耗时预算】旧版内层 10 个 host × 8s = 80s，且外层还按 20 个代码分块循环，
-    # 多块时总耗时 = 块数 × 80s。云端访问东财被黑洞时，这会让估值接口整体挂死。
-    # 现压到 3 host × 4s，并给整个函数 15s 全局预算，超时直接放弃、返回已取到的部分。
-    hosts = _em_push_hosts()          # push2delay 优先：境外网络下 push2 不可达
+    hosts = ["%d.push2.eastmoney.com" % _random.randint(1, 99) for _ in range(8)]
+    hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
     UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
           "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-    _BUDGET, _HOST_TO = 15.0, 4.0
-    _t0 = time.time()
     out = {}
     for i in range(0, len(codes), 20):
-        if time.time() - _t0 > _BUDGET:
-            break
         chunk = codes[i:i + 20]
         secids = []
         for ic in chunk:
             secids.append("1." + ic)
             secids.append("0." + ic)
         for host in hosts:
-            if time.time() - _t0 > _BUDGET:
-                break
             try:
                 url = ("https://%s/api/qt/ulist.np/get?fields=%s&secids=%s"
                        "&ut=fa5fd1943c7b386f172d6893bfba10b&_=%d" % (
@@ -627,8 +603,7 @@ def _idx_push2_changes(idx_meta):
                 req = urllib.request.Request(url, headers={
                     "User-Agent": UA, "Referer": "https://quote.eastmoney.com/",
                     "Accept": "application/json, text/plain, */*"})
-                _remain = _BUDGET - (time.time() - _t0)
-                with urllib.request.urlopen(req, timeout=max(1.5, min(_HOST_TO, _remain))) as r:
+                with urllib.request.urlopen(req, timeout=8) as r:
                     j = json.loads(r.read().decode("utf-8", "replace"))
                 diff = ((j or {}).get("data") or {}).get("diff") or []
                 for x in diff:
@@ -930,13 +905,12 @@ def _cb_ok(cb):
 def bj_now():
     """北京时间（UTC+8，中国不实行夏令时）。返回 naive datetime 表示北京墙钟。
 
-    ⚠️ 必须用「带时区的 now」而不是 fromtimestamp(time.time() + 8h)：
-    fromtimestamp 会再按「进程本地时区」转换一次。onrender 服务器是 UTC，
-    结果恰好正确；但本机/任何 UTC+8 环境会**双加 8 小时**（11:35 应为 03:35），
-    导致 _in_update_window(>=15:15)、_auto_refresh_due 等时间判断全线错位，
-    且本地测试结论与线上行为不一致，极难排查。
+    注意：绝不可用 datetime.fromtimestamp(time.time() + 8 * 3600)——fromtimestamp
+    会按「进程本地时区」再转换一次，本机为 UTC+8 时会双加 8 小时（服务器为 UTC 时恰好
+    正确，于是本地与线上结论不一致，极难排查）。实测本机曾因此把 08-30 23:57 算成
+    08-31 07:57，使 _last_trading_day() 返回「未来」的 08-31。统一用 UTC 基准加 8 小时。
     """
-    return datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
+    return (datetime.utcnow() + timedelta(hours=8))
 
 
 def http_get_json(url, referer=None, timeout=10, retries=2, sleep_base=0.5):
@@ -1207,97 +1181,41 @@ def fetch_hk_index_sina(symbol="HSSI", n=5):
         return []
     if price <= 0 or prev <= 0:
         return []
-    # bj_now() 已改为与时区无关的实现（见其文档字符串），这里直接复用即可
-    bj = bj_now()
+    # 日期键用「UTC 安全」的北京时间（bj_now 依赖进程时区，本地 UTC+8 会双加 8h）
+    bj = datetime.utcnow() + timedelta(hours=8)
     today = bj.strftime("%Y-%m-%d")
     yday = (bj - timedelta(days=1)).strftime("%Y-%m-%d")
     return [(yday, prev), (today, price)]
 
 
-# ---- 新浪期货 last-good 磁盘缓存（美西节点不可达时的兜底）----
-# 仓库内置 sina_futures_cache.json（随源码提交），存放 AU0/AG0 等连续合约的历史日K
-# 收盘；在线抓取失败时退回该缓存，保证国内商品标的（黄金/白银ETF）仍返回完整历史序列
-# （≥display_days 行），而非退化为 1 行。在线成功且新鲜时自写缓存自愈。
-_SINA_FUTURES_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sina_futures_cache.json")
-_SINA_FUTURES_CACHE = None
-
-def _load_sina_futures_disk_cache():
-    global _SINA_FUTURES_CACHE
-    if _SINA_FUTURES_CACHE is not None:
-        return _SINA_FUTURES_CACHE
-    _SINA_FUTURES_CACHE = {}
-    try:
-        with open(_SINA_FUTURES_CACHE_FILE, "r", encoding="utf-8") as f:
-            _SINA_FUTURES_CACHE = json.load(f) or {}
-    except Exception:
-        _SINA_FUTURES_CACHE = {}
-    return _SINA_FUTURES_CACHE
-
-def _save_sina_futures_disk_cache(sym, series):
-    try:
-        cache = _load_sina_futures_disk_cache()
-        cache[sym] = [[d, c] for d, c in series]
-        with open(_SINA_FUTURES_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False)
-    except Exception:
-        pass
-
 def fetch_kline_sina_futures(symbol, n=120):
     """新浪财经期货连续合约 K 线（日线）。symbol 如 AG0、AU0、RB0、SC0 等。
-    返回 [(date, close), ...] 按日期升序。
-    多源容错：jsonp 主源 → stock2 JSON 备源 → 仓库内置 last-good 磁盘缓存。
-    任一在线源成功且新鲜即写入磁盘缓存自愈；在线全失败/不新鲜则退回磁盘缓存，
-    确保 AU0/AG0 等国内商品标的在美西节点不可达时仍返回完整历史序列。"""
-    series = []
-    # 主源：jsonp 包裹
+    返回 [(date, close), ...] 按日期升序。"""
     url = (f"https://stock.finance.sina.com.cn/futures/api/jsonp.php"
            f"/var=/InnerFuturesNewService.getDailyKLine?symbol={symbol}&_=1")
     try:
         txt = http_get_text(url, timeout=15, retries=3)
-        m = re.search(r'var=\((.*)\);', txt, re.DOTALL)
-        if m:
-            arr = json.loads(m.group(1))
-            if isinstance(arr, list):
-                for r in arr[-n:]:
-                    d, c = r.get("d"), r.get("c")
-                    if d and c:
-                        try:
-                            series.append((d, float(c)))
-                        except (ValueError, TypeError):
-                            pass
     except Exception:
-        pass
-    # 备源：stock2 直出 JSON
-    if len(series) < 2:
-        try:
-            url2 = (f"https://stock2.finance.sina.com.cn/futures/api/json.php"
-                    f"/InnerFuturesNewService.getDailyKLine?symbol={symbol}")
-            txt2 = http_get_text(url2, timeout=15, retries=2)
-            arr2 = json.loads(txt2)
-            if isinstance(arr2, list):
-                s2 = []
-                for r in arr2[-n:]:
-                    d, c = r.get("d"), r.get("c")
-                    if d and c:
-                        try:
-                            s2.append((d, float(c)))
-                        except (ValueError, TypeError):
-                            pass
-                if len(s2) > len(series):
-                    series = s2
-        except Exception:
-            pass
-    series = sorted(set(series)) if series else series
-    # 在线成功且新鲜 → 写磁盘缓存自愈
-    if series and _series_is_fresh(series):
-        _save_sina_futures_disk_cache(symbol, series)
-        return series[-n:]
-    # 在线失败/不新鲜 → 退回 last-good 磁盘缓存
-    disk = _load_sina_futures_disk_cache().get(symbol) or []
-    if disk:
-        dseries = sorted((d, float(c)) for d, c in disk)
-        return dseries[-n:]
-    return series[-n:] if series else []
+        return []
+    m = re.search(r'var=\((.*)\);', txt, re.DOTALL)
+    if not m:
+        return []
+    try:
+        arr = json.loads(m.group(1))
+    except Exception:
+        return []
+    if not isinstance(arr, list):
+        return []
+    out = []
+    for r in arr[-n:]:
+        d, c = r.get("d"), r.get("c")
+        if d and c:
+            try:
+                out.append((d, float(c)))
+            except (ValueError, TypeError):
+                pass
+    out.sort()
+    return out
 
 
 def _str_to_date(s):
@@ -1445,60 +1363,9 @@ def fetch_xop(und, n=25):
             print(f"    [兜底] 新浪港股指数标的失败：{e}")
     if not results:
         return [], "无数据"
-    best = max(results, key=_und_score)
-    print(f"    标的候选 {[(_und_score(x)[0].isoformat(), len(r), s, _und_score(x)[1]) for r, s in [(x[0], x[1]) for x in results]]}"
-          f" -> 采用 {best[1]}（最新={best[0][-1][0] if best[0] else '-'}）")
+    best = max(results, key=lambda x: len(x[0]))
+    print(f"    标的候选 {[(len(r), s) for r, s in results]} -> 采用 {best[1]}")
     return best
-
-
-# 标的（指数/商品）数据源优先级：指数本身 优先于 ETF 代理。
-# 血泪教训：164705 汇添富恒生用 EWH（美股 ETF）代理，成分与恒生指数错配，
-# MAE 高达 1.05%；改用恒生指数本身（HSI）后 MAE 降到 0.044%。
-# 而 stockanalysis.com 多为 ETF/海外口径，仅在其他源都拿不到最新数据时才用。
-_UND_SRC_PRIO = (
-    ("东财", 100), ("新浪港股指数", 90), ("腾讯财经", 80),
-    ("新浪财经期货", 70), ("stockanalysis.com", 30),
-)
-
-
-def _und_score(item):
-    """标的候选评分：**先比最新日期，再比源可靠性，最后才比点数**。
-
-    旧实现是 max(len(rows)) —— 只看谁返回的点多。问题：
-    1) 会选到滞后的数据（点数多但最后一天是几天前）；
-    2) 会选到 ETF 代理而非指数本身，成分错配直接拉大估算误差。
-    故改为三级排序：日期新 > 指数本身 > 点数多。
-    """
-    rows, name = item
-    if not rows:
-        return (_date_cls.min, -1, -1)
-    try:
-        d = _str_to_date(rows[-1][0])
-    except Exception:
-        d = _date_cls.min
-    prio = 0
-    for key, val in _UND_SRC_PRIO:
-        if key in (name or ""):
-            prio = val
-            break
-    n = len(rows)
-    # 可用性分三档，且必须**排在日期之前**比较：
-    #   0  = 点数足够(>=2，能算涨跌幅) 且 数据新鲜
-    #   -1 = 新鲜但不足 2 点（算不出涨跌幅）
-    #   -2 = 数据已过期（距今 >5 个自然日，覆盖周末/短假）
-    # 为什么过期最差：拿 N 天前的涨跌幅去估今天的净值，就是「标签今天、数值 N 天前」
-    # 的错位，正是数据日期铁律要根治的情形 —— 宁可这项不估算，也不能给错的。
-    try:
-        stale_days = (bj_now().date() - d).days
-    except Exception:
-        stale_days = 0
-    if stale_days > 5:
-        usable = -2
-    elif n >= 2:
-        usable = 0
-    else:
-        usable = -1
-    return (usable, d, prio, n)
 
 
 FX_CACHE = {}              # 汇率缓存（USD/CNY），1 小时刷新
@@ -1574,8 +1441,8 @@ def fetch_fx(days=400):
     with FX_FETCH_LOCK:
         if FX_CACHE and (time.time() - FX_CACHE_TS) < 3600:
             return FX_CACHE
-        today = bj_now().strftime("%Y-%m-%d")
-    start = (bj_now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        today = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     out = {}
     # 主源：CFETS 人民币中间价（央行口径，招募书规定）
     try:
@@ -2065,16 +1932,10 @@ def is_oil_gas(name, underlying_label=""):
 # ---------------------------------------------------------------------------
 def deduce_exchange(code):
     """根据 6 位代码判断交易所，返回 (东财secid, 腾讯前缀)
-    深交所：15/16/18/0/2/3 开头；上交所：50/51/60/68 等开头。
-    可转债：11xxxx 属沪市（如 113658）、12xxxx 属深市（如 123456）——
-    必须放在通用规则之前，否则 12 开头会被误判成上交所，导致行情/净值取不到。
+    深交所：15/16/18/0/2/3 开头；上交所：50/51/60/68 等开头
     """
     c = code.strip()
     two = c[:2]
-    if two == "11":
-        return "1." + c, "sh" + c          # 沪市可转债
-    if two == "12":
-        return "0." + c, "sz" + c          # 深市可转债
     if two in ("15", "16", "18") or c[0] in ("0", "2", "3"):
         return "0." + c, "sz" + c          # 深交所
     return "1." + c, "sh" + c              # 上交所
@@ -2863,9 +2724,9 @@ def compute_ranking(codes, target_date=None, threshold=THRESHOLD):
     """并行计算多基金某日快照，按官方溢价降序排列。"""
     codes = [c.strip() for c in codes if c.strip()]
     if not target_date:
-        # 用「最近交易日」而非今天：非交易日东财返回的是上一交易日收盘，
-        # 若把标签写成今天就会出现「标签 8/29(周六)、数值 8/28」的错位（用户三令五申）。
-        target_date = _last_trading_day()
+        # 必须用北京时区口径：datetime.now() 取的是服务器本地时区（线上为 UTC），
+        # 会整体偏 8 小时使日期标签错位。排行表支持盘中补价，故这里仍取「今天」。
+        target_date = bj_now().strftime("%Y-%m-%d")
     fx_map = fetch_fx()
     # 预取去重后的显式标的（注册表 / UNDERLYING_MAP），写入缓存，避免 worker 内重复抓取触发限流
     explicit = set()
@@ -2939,15 +2800,10 @@ _REFRESHING = set()          # 后台刷新去重：同一 key 只允许一个�
 _PERSIST_LAST = {"t": 0.0}  # API 持久化去抖时间戳
 
 
-def _persist_api(force=False):
-    """把 API 结果缓存落盘（去抖 30s，避免高频写）。
-
-    force=True 用于「刚做完一次昂贵计算」的场景（如排行表冷启动同步计算 50s+）：
-    必须立刻落盘，否则去抖窗口内若进程休眠/重启，这笔昂贵结果就丢了，
-    下次唤醒又得重新冷算一遍。
-    """
+def _persist_api():
+    """把 API 结果缓存落盘（去抖 30s，避免高频写）。"""
     now = time.time()
-    if not force and now - _PERSIST_LAST["t"] < 30.0:
+    if now - _PERSIST_LAST["t"] < 30.0:
         return
     _PERSIST_LAST["t"] = now
     try:
@@ -2962,7 +2818,10 @@ def _persist_data():
     """把重数据源缓存（场内表/LOF清单/流通市值）落盘；调用点均为低频更新，无需去抖。"""
     try:
         store = {"lof_list": _LOF_LIST_CACHE, "market_table": _MARKET_TABLE_CACHE,
-                 "float_caps": _FLOAT_CAP_CACHE}
+                 "float_caps": _FLOAT_CAP_CACHE,
+                 # F10 总规模（24h 有效）落盘：线上实例休眠/重部署后无需逐只重抓
+                 # （东财对该页面有 514 限频，全量重抓会耗时数十秒且全部失败）
+                 "scale": {c: v for c, v in _SCALE_CACHE.items() if v and v[1] is not None}}
         with open(CACHE_DATA_FILE + ".tmp", "w", encoding="utf-8") as f:
             json.dump(store, f, ensure_ascii=False)
         os.replace(CACHE_DATA_FILE + ".tmp", CACHE_DATA_FILE)
@@ -2992,41 +2851,30 @@ def _hydrate_from_disk():
             fc = store.get("float_caps")
             if isinstance(fc, dict) and fc.get("data"):
                 _FLOAT_CAP_CACHE["ts"], _FLOAT_CAP_CACHE["data"] = fc.get("ts", 0.0), fc["data"]
+            sc = store.get("scale")
+            if isinstance(sc, dict):
+                # 过期的条目是安全的：fetch_fund_scale 有 24h 校验，过期会重新抓取
+                for c, v in sc.items():
+                    if c not in _SCALE_CACHE and isinstance(v, list) and len(v) == 2:
+                        _SCALE_CACHE[c] = tuple(v)
         # TOP 套利榜全量快照回填（冷启动秒回历史候选，无需等全市场重算）
         # 历史教训：曾因规模过滤修复暂跳过回填（if False），导致 onrender 冷启动
         # 快照为空 → 全市场冷算在美西节点取不到东财行情 → 榜单缩水且估算全部回退
         # 官方净值（用户反馈"TOP 估算跟前一天一模一样"）。现恢复回填。
-        # 两个来源都读，取 date 更新的那个 —— 不能简单「磁盘缓存优先」：
-        # 磁盘缓存 fund_arb_cache_top.json 是运行时随手写的，线上 redeploy 后
-        # 又会从仓库恢复成很久以前的版本；而 top_snapshot.json 由
-        # regen_top_snapshot.py 在国内环境受控生成，通常才是最新的。
-        # 若固定优先级，新生成的快照会被旧缓存永久压制。
-        _cands = []
-        for _snap_path, _label in ((TOP_SNAP_FILE, "磁盘缓存"),
-                                   (TOP_BUILTIN_SNAP, "内置快照")):
-            if not os.path.exists(_snap_path):
-                continue
+        if os.path.exists(TOP_SNAP_FILE):
             try:
-                with open(_snap_path, encoding="utf-8") as _tf:
+                with open(TOP_SNAP_FILE, encoding="utf-8") as _tf:
                     _s = json.load(_tf)
                 if _s.get("rows"):
-                    _cands.append((str(_s.get("date") or ""), _s, _label))
+                    with _TOP_SNAP_LOCK:
+                        _TOP_SNAPSHOT.update(ts=_s.get("ts", 0.0), date=_s.get("date"),
+                                             universe=_s.get("universe", 0),
+                                             tradable=_s.get("tradable", 0),
+                                             candidates=_s.get("candidates", 0),
+                                             rows=_s.get("rows", []))
+                    print(f"    [缓存] 已从磁盘回填 TOP 全量快照（{len(_s.get('rows', []))} 候选行）")
             except Exception as _e:
-                print(f"    [缓存] TOP快照读取失败({_label}): {_e}")
-        if _cands:
-            _cands.sort(key=lambda x: x[0])          # 日期升序，取最后=最新
-            _date, _s, _label = _cands[-1]
-            with _TOP_SNAP_LOCK:
-                _TOP_SNAPSHOT.update(ts=_s.get("ts", 0.0), date=_s.get("date"),
-                                     universe=_s.get("universe", 0),
-                                     tradable=_s.get("tradable", 0),
-                                     candidates=_s.get("candidates", 0),
-                                     rows=_s.get("rows", []))
-            print(f"    [缓存] 已从{_label}回填 TOP 全量快照"
-                  f"（{_date}，{len(_s.get('rows', []))} 候选行）"
-                  + (f"，另一来源更新的有 {len(_cands) - 1} 个" if len(_cands) > 1 else ""))
-        else:
-            print("    [缓存] TOP 无可用快照（磁盘缓存与内置快照均缺失）")
+                print(f"    [缓存] TOP快照回填失败: {_e}")
         print(f"    [缓存] 已从磁盘回填 {len(Handler._API_CACHE)} 条 API 结果（含可能过期的旧数据）")
     except Exception as e:
         print(f"    [缓存] 磁盘回填失败: {e}")
@@ -3052,11 +2900,31 @@ def fetch_all_lof_codes():
     return data
 
 
+_LOF_QUOTE_MEM = {}          # {code: (expire_ts, quote)} 进程内短缓存，见下方说明
+_LOF_QUOTE_MEM_TTL = 90.0    # 秒：盘中价更新快，缓存只用于削峰（TOP 扫描内的重复请求）
+
+
 def _fetch_lof_quotes_tencent(codes):
-    """腾讯批量实时行情（主源）。返回 {code: {price, volume(手), amount(万元), trade_date, trade_time}}。"""
+    """腾讯批量实时行情（主源）。返回 {code: {price, volume(手), amount(万元), trade_date, trade_time}}。
+
+    进程内短缓存（90s）：TOP 全市场扫描会先批量取一次全市场行情，随后精算循环里
+    每只基金又单独调一次本函数补盘中价——旧实现因此产生 200+ 次重复 HTTP 请求。
+    缓存后这些调用全部命中内存、零网络开销（盘中价新鲜度由调用方决定是否强取）。
+    """
     out = {}
-    for i in range(0, len(codes), 60):
-        chunk = codes[i:i + 60]
+    now = time.time()
+    miss = []
+    for c in codes:
+        hit = _LOF_QUOTE_MEM.get(c)
+        if hit and hit[0] > now:
+            out[c] = hit[1]
+        else:
+            miss.append(c)
+    if not miss:
+        return out
+    fresh = {}
+    for i in range(0, len(miss), 60):
+        chunk = miss[i:i + 60]
         q = ",".join(deduce_exchange(c)[1] for c in chunk)
         try:
             txt = http_get_text("https://qt.gtimg.cn/q=" + q, timeout=10, retries=2, encoding="gbk")
@@ -3079,9 +2947,12 @@ def _fetch_lof_quotes_tencent(codes):
                 continue
             if price > 0:
                 ts = f[30]
-                out[code] = {"price": price, "volume": vol, "amount": amount,
-                             "trade_date": ts[:8] if len(ts) >= 8 else "",
-                             "trade_time": ts}
+                fresh[code] = {"price": price, "volume": vol, "amount": amount,
+                               "trade_date": ts[:8] if len(ts) >= 8 else "",
+                               "trade_time": ts}
+    for c, v in fresh.items():
+        _LOF_QUOTE_MEM[c] = (now + _LOF_QUOTE_MEM_TTL, v)
+        out[c] = v
     return out
 
 
@@ -3220,114 +3091,126 @@ def fetch_fund_scale(code):
 
 # ---------------------------------------------------------------------------
 # 二级市场可交易规模（场内流通市值，亿元）：网页3 TOP 榜「条件2」筛选用。
-# 来源东财 push2 场内基金板 clist：f21 = 流通市值（元），全市场一次拉取；
+# 主来源东财 push2delay ulist.np 的 f21（见 _fetch_float_cap_batch）；
 # 与「总规模(资产规模)」不同——LOF 大量份额在场外，场内可交易规模远小于总规模，
-# 套利必须看场内可交易规模。缓存 10 分钟。失败返回空字典（调用方回落单只 F10 总规模）。
+# 套利必须看场内可交易规模。缓存 10 分钟。失败时回落板块 clist / 单只 F10 总规模。
 # ---------------------------------------------------------------------------
 _FLOAT_CAP_CACHE = {"ts": 0.0, "data": {}}      # push2 场内流通市值（10min 有效）
 _FLOAT_CAP_BACKOFF = {"until": 0.0}              # 限频退避：失败后背刺期内复用旧值、不重试
 
-# ---------------------------------------------------------------------------
-# 东财行情域名选择（境外网络能否扫出数据的关键）
-# ---------------------------------------------------------------------------
-_EM_HOST_OK = {"host": None, "ts": 0.0}
-_EM_HOST_PREF = ("push2delay.eastmoney.com", "push2.eastmoney.com")
+def _em_quote_hosts():
+    """东财行情域名轮换顺序：push2delay 排最前。
 
-
-def _em_push_hosts():
-    """东财行情域名候选顺序（**push2delay 必须排最前**）。
-
-    实测（沙箱 / onrender 美西，属同类境外网络）：
-      - push2.eastmoney.com、NN.push2.eastmoney.com：HTTP 层被断连
-        （RemoteDisconnected，TCP 握手能成功但一发请求就被断）
-      - push2delay.eastmoney.com：**完全可用**，clist/ulist 均正常（0.1~0.3s）
-    旧实现把 push2delay 排在候选末位，前面 3 个域名逐个超时后才轮到它，
-    在 15s 耗时预算下常常来不及 → 线上表现为「扫不出数据 / 榜单为空」。
-    另加「上次成功 host 优先」（30 分钟有效），避免每次请求都重新试错一遍。
+    实测（含线上 onrender 与本机）：push2.eastmoney.com 及其数字镜像
+    (1.push2 / 23.push2 …) 常直接 RemoteDisconnected，而 push2delay 稳定可达
+    （0.1~0.5s）。旧实现把 push2 硬编码为唯一域名，导致线上场内流通市值恒为空、
+    退化成逐只 F10 兜底（59s 且被 514 限频）——这是 TOP 榜线上跑不完的根因之一。
     """
-    ok = _EM_HOST_OK.get("host")
-    if ok and time.time() - _EM_HOST_OK.get("ts", 0.0) < 1800:
-        return [ok] + [h for h in _EM_HOST_PREF if h != ok]
     import random as _r
-    return list(_EM_HOST_PREF) + ["%d.push2.eastmoney.com" % _r.randint(1, 99)]
+    hosts = ["push2delay.eastmoney.com"]
+    hosts += ["%d.push2.eastmoney.com" % _r.randint(1, 99) for _ in range(4)]
+    hosts += ["push2.eastmoney.com"]
+    return hosts
 
 
-def _em_mark_host_ok(host):
-    if host:
-        _EM_HOST_OK["host"] = host
-        _EM_HOST_OK["ts"] = time.time()
+def _fetch_float_cap_batch(codes, batch=60):
+    """批量取任意代码的场内流通市值：push2 ulist.np 的 f21 字段（元→亿元）。
 
-
-def _em_get_json(query, timeout=8.0, budget=None, referer="https://quote.eastmoney.com/"):
-    """带域名轮换地取一次东财行情 JSON。query 为「/api/...?a=b」形式。
-    依次尝试 _em_push_hosts()，任一成功即返回 (json, host)；全失败返回 (None, None)。
-    budget 为总耗时上限（秒），超时立即放弃。"""
-    import urllib.request as _u
-    UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-    t0 = time.time()
-    for host in _em_push_hosts():
-        if budget is not None and time.time() - t0 > budget:
-            break
+    与板块 clist 的区别：ulist.np 支持显式 secids，不受东财板块收录限制。
+    实测全市场 610 只 LOF 分 11 批、2.2s 完成，覆盖 463 只（板块 clist 仅 137 只）。
+    """
+    out, sec = {}, []
+    for c in codes:
         try:
-            url = "https://%s%s" % (host, query)
-            req = _u.Request(url, headers={"User-Agent": UA, "Referer": referer,
-                                           "Accept": "application/json, text/plain, */*"})
-            to = timeout if budget is None else max(1.5, min(timeout, budget - (time.time() - t0)))
-            with _u.urlopen(req, timeout=to) as r:
-                j = json.loads(r.read().decode("utf-8", "replace"))
-            _em_mark_host_ok(host)
-            return j, host
+            sec.append((c, deduce_exchange(c)[0]))
         except Exception:
-            continue
-    return None, None
+            pass
+    hosts = _em_quote_hosts()
+    for i in range(0, len(sec), batch):
+        ids = ",".join(s for _, s in sec[i:i + batch])
+        got = None
+        for host in hosts:
+            try:
+                url = (f"https://{host}/api/qt/ulist.np/get?fields=f12,f21&secids={ids}"
+                       f"&ut=fa5fd1943c7b386f172d6893dbfba10b")
+                j = json.loads(http_get_text(url, referer="https://quote.eastmoney.com/",
+                                             timeout=12, retries=1))
+                got = (j.get("data") or {}).get("diff") or []
+                if got:
+                    break
+            except Exception:
+                continue
+        for it in (got or []):
+            code, v = it.get("f12"), it.get("f21")
+            if code and isinstance(v, (int, float)) and v > 0:
+                out[code] = v / 1e8
+    return out
 
-def fetch_float_market_cap():
-    """全市场 LOF 二级市场可交易规模（场内流通市值，亿元）。
-    来源东财 push2 场内基金板 clist（f21=流通市值，元→亿元）；内存缓存 10 分钟。
-    鲁棒性：① 失败时进入 30 分钟退避，期间复用上一次成功值（可能为磁盘回填的旧值），
-    避免对东财连续高频重试而拉长限频窗口；② 规模数据变化慢，旧值对候选门/终筛足够。
-    仅当从未成功获取过（首跑且无磁盘回填）才返回空字典，由调用方回落 fetch_fund_scale。"""
+
+def _fetch_float_cap_by_board():
+    """兜底：东财 LOF 场内基金板块 clist（MK0025-0028）分页拉取。仅覆盖 ~137 只，
+    作为 ulist.np 不可用时的降级路径（保持 push2delay 优先的域名轮换）。"""
+    out = {}
+    hosts = _em_quote_hosts()
+    for mk in ("MK0025", "MK0026", "MK0027", "MK0028"):
+        for pn in range(1, 10):
+            got, items = None, []
+            for host in hosts:
+                try:
+                    url = (f"https://{host}/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1"
+                           f"&fltt=2&invt=2&fid=f3&fs=b:{mk}"
+                           f"&fields=f12,f21&ut=7eea3edcaed734bea9cbfc24409ed989")
+                    j = json.loads(http_get_text(url, referer="https://quote.eastmoney.com/",
+                                                 timeout=12, retries=1))
+                    items = (j.get("data") or {}).get("diff") or []
+                    got = True
+                    break
+                except Exception:
+                    continue
+            if not got:
+                break
+            if not items:
+                break
+            for it in items:
+                code, v = it.get("f12"), it.get("f21")
+                if code and v not in (None, "", "-"):
+                    try:
+                        out[code] = float(v) / 1e8
+                    except (ValueError, TypeError):
+                        pass
+            if len(items) < 100:
+                break
+    return out
+
+
+def fetch_float_market_cap(codes=None):
+    """全市场 LOF 二级市场可交易规模（场内流通市值，亿元）；内存缓存 10 分钟。
+
+    主路径：push2delay ulist.np 批量取 f21（见 _fetch_float_cap_batch）；
+    兜底路径：板块 clist。规模数据变化慢，旧值对粗筛/终筛足够。
+    鲁棒性：失败时进入 30 分钟退避，期间复用上一次成功值（可能为磁盘回填的旧值），
+    避免对东财连续高频重试而拉长限频窗口。
+    """
     now = time.time()
     if _FLOAT_CAP_CACHE["data"] and now - _FLOAT_CAP_CACHE["ts"] < 600:
         return _FLOAT_CAP_CACHE["data"]          # 新鲜数据，直接返回
     if now < _FLOAT_CAP_BACKOFF["until"]:
         return _FLOAT_CAP_CACHE["data"] or {}     # 退避期内：复用旧值，不重试
-    out = {}
-    # 东财 LOF 场内基金板块：MK0025-0028（非 ETF 的 MK0021-0024）。
-    # 每个板块独立 try-except（一个板块失败不影响其他），分页拉取。
-    for mk in ("MK0025", "MK0026", "MK0027", "MK0028"):
+    if codes is None:
         try:
-            for pn in range(1, 10):
-                # 走域名轮换：境外网络下 push2 不可达、push2delay 可用（见 _em_push_hosts）
-                q = (f"/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1"
-                     f"&fltt=2&invt=2&fid=f3&fs=b:{mk}"
-                     f"&fields=f12,f21&ut=7eea3edcaed734bea9cbfc24409ed989")
-                j, _h = _em_get_json(q, timeout=10.0, budget=30.0)
-                if not j:
-                    break
-                items = (j.get("data") or {}).get("diff") or []
-                if not items:
-                    break
-                for it in items:
-                    code = it.get("f12")
-                    v = it.get("f21")
-                    if code and v not in (None, "", "-"):
-                        try:
-                            out[code] = float(v) / 1e8   # 元 → 亿元
-                        except (ValueError, TypeError):
-                            pass
-                if len(items) < 100:
-                    break   # 最后一页
-        except Exception as e:
-            print(f"    [TOP榜] 场内流通市值 {mk} 获取失败（跳过此板块）: {e}")
+            codes = [c for c, _, _ in fetch_all_lof_codes()]
+        except Exception:
+            codes = []
+    out = _fetch_float_cap_batch(codes) if codes else {}
+    if not out:
+        out = _fetch_float_cap_by_board()
     if out:
         _FLOAT_CAP_CACHE.update(ts=now, data=out)
         _FLOAT_CAP_BACKOFF["until"] = 0.0
         _persist_data()                           # 落盘，使重启/限频窗口后仍可用旧值
         return out
     # 失败或空响应：进入退避，复用上一次好数据（可能为磁盘回填）
-    print(f"    [TOP榜] 场内流通市值全部板块失败（退避30min，复用旧值）")
+    print("    [TOP榜] 场内流通市值全部路径失败（退避30min，复用旧值）")
     _FLOAT_CAP_BACKOFF["until"] = now + 1800
     return _FLOAT_CAP_CACHE["data"] or {}
 
@@ -3361,20 +3244,9 @@ def fetch_turnover(codes):
 # ---- TOP 套利榜「全量快照」：重计算只后台跑一次，参数化视图内存秒回 ----
 # 对齐 haoetf/palmmicro：用户请求只做 filter+sort，不再触发全市场网络扫描。
 TOP_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_arb_cache_top.json")
-# 仓库内置快照：随源码提交，onrender 重新部署清空磁盘后仍能秒回。
-# 由 regen_top_snapshot.py 在「可访问东财的环境（国内）」生成并推送——
-# 云端自身取不到行情，没有它线上 TOP 榜会永远停在很久以前的数据。
-TOP_BUILTIN_SNAP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "top_snapshot.json")
 _TOP_SNAPSHOT = {"ts": 0.0, "date": None, "universe": 0, "tradable": 0,
                 "candidates": 0, "filter_trace": {}, "rows": []}
 _TOP_SNAP_LOCK = _threading.Lock()
-# TOP 全市场扫描任务状态（对齐 pocket pivot / 可转债的后台扫描模式）：
-# 云端（onrender 美西节点）取不到东财行情，同步冷算会让 /api/top 挂死数十秒乃至超时。
-# 改为：请求永远只读内存快照秒回，冷算一律丢到后台线程，前端用 scanning 标志轮询。
-_TOP_TASK = dict(scanning=False, phase="", error="", started=0.0, finished=0.0, date="")
-_TOP_TASK_LOCK = _threading.Lock()
-_TOP_SCAN_COOLDOWN = 600   # 两次后台扫描的最小间隔（秒），避免刷不出数据时空转
-_TOP_SCAN_HARD_TIMEOUT = 300  # 单次扫描硬超时：超过则判失败，避免页面永久「扫描中」（onrender 免费层会掐掉/休眠后台线程）
 
 
 # ---- 近5日入选历史（口袋支点 / TOP / 可转债 三页统计表数据源）----
@@ -3421,61 +3293,6 @@ def history_append(kind, date, entries):
             bucket.pop(old, None)
         _history_save(data)
 
-def fetch_batch_quotes(codes, timeout=10, budget=15.0):
-    """批量取实时现价（腾讯 qt.gtimg，每批 60 只）。返回 {code: price}。
-
-    腾讯行情在境外网络（onrender/沙箱）实测可用，而东财 push2 不可达，
-    故这里用腾讯而非东财，保证线上也能补齐价格。
-    """
-    out = {}
-    codes = [str(c).strip() for c in (codes or []) if c]
-    if not codes:
-        return out
-    t0 = time.time()
-    for i in range(0, len(codes), 60):
-        if time.time() - t0 > budget:
-            break
-        chunk = codes[i:i + 60]
-        q = ",".join(deduce_exchange(c)[1] for c in chunk)
-        try:
-            txt = http_get_text("https://qt.gtimg.cn/q=" + q, timeout=timeout,
-                                retries=1, encoding="gbk")
-        except Exception:
-            continue
-        for seg in txt.split(";"):
-            if "~" not in seg:
-                continue
-            f = seg.split("~")
-            if len(f) < 4:
-                continue
-            code = (f[2] or "").strip()
-            try:
-                px = float(f[3])
-            except (IndexError, ValueError):
-                continue
-            if code and px > 0:
-                out[code] = px
-    return out
-
-
-def _history_attach_cur(rows):
-    """给「近 N 日入选」每行补上最新价 cur。
-
-    为什么必须由后端补：前端原先只用「当日 picks」去匹配历史 code，
-    于是昨天入选、今天已不在榜的标的（如 08-26 入选的 600971）
-    就拿不到最新价 → 「最新价」「入选至今涨跌幅」两列空白。
-    后端统一按 code 批量补价，三张统计表（口袋支点/TOP/可转债）都能填满。
-    """
-    try:
-        codes = {str(r.get("code")).strip() for r in rows if r.get("code")}
-        qs = fetch_batch_quotes(codes)
-        for r in rows:
-            r["cur"] = qs.get(str(r.get("code")).strip())
-    except Exception:
-        pass
-    return rows
-
-
 def history_payload(kind, days=5):
     """返回近 N 个交易日的入选记录（按日期升序拼接，附 date 字段）。
     线上节点（onrender 美国节点）无法连通东财/腾讯行情，扫描恒失败，
@@ -3507,11 +3324,11 @@ def history_payload(kind, days=5):
                     for e in snap_rows:
                         if e.get("code") not in existing:
                             out.append(e)
-            return _history_attach_cur(out[-days:])
+            return out[-days:]
     # 回退：实时历史为空 → 用快照派生（仅当没有真实历史时）
     snap_rows = _history_from_snapshot(kind)
     if snap_rows:
-        return _history_attach_cur(snap_rows[-days:])
+        return snap_rows[-days:]
     return []
 
 
@@ -3624,151 +3441,23 @@ def _top_finalize(base_rows, threshold, dgate, top_n):
     out.sort(key=lambda r: (_rank(r), -_est(r), -(r.get("turnover") or 0)))
     return out[:top_n]
 
-def _top_watchdog():
-    """扫描看门狗：若后台线程卡死（平台掐线程/网络永久挂起），超过硬超时就把状态翻成明确失败，
-    避免前端永久卡在「扫描中…」。仅修改状态，不杀线程（Python 线程不可强杀，随进程退出即可）。"""
-    with _TOP_TASK_LOCK:
-        if _TOP_TASK["scanning"]:
-            started = _TOP_TASK.get("started") or 0.0
-            if time.time() - started > _TOP_SCAN_HARD_TIMEOUT:
-                _TOP_TASK.update(
-                    scanning=False, phase="扫描超时",
-                    error="后台扫描超过 %d 秒未完成（运行环境可能掐掉了后台线程或网络挂起），"
-                          "本次实时扫描未产出结果。线上最稳的更新方式：在本机运行 "
-                          "regen_top_snapshot.py 生成快照并推送 GitHub，或部署到国内节点。"
-                          % int(_TOP_SCAN_HARD_TIMEOUT),
-                    finished=time.time())
-
-
 def serve_top_from_snapshot(date, threshold, dgate, top_n=20):
     """优先从全量快照秒回；快照缺失/过期才走完整冷算（并填充快照）。
     快照判据：日期匹配 + 有行即用（不卡 TTL）——onrender 美西节点取不到东财行情，
     冷算只会产出缩水+全部回退官方净值的劣质榜单；磁盘快照是本机/自动化在国内
     定时算好的完整结果，日期一致时直接秒回，保证线上 TOP 与排行口径一致。"""
-    _top_watchdog()   # 先清理可能卡死的扫描状态
-    # 【只读快照，永不冷算】—— 云端同步冷算必然挂死，见下方 _top_kick 说明。
     with _TOP_SNAP_LOCK:
-        snap_date = _TOP_SNAPSHOT.get("date")
-        rows_all = list(_TOP_SNAPSHOT.get("rows") or [])
-        snap = dict(_TOP_SNAPSHOT)
-    if not rows_all:
-        with _TOP_TASK_LOCK:
-            scanning = bool(_TOP_TASK["scanning"]); phase = _TOP_TASK["phase"]
+        snap = (dict(_TOP_SNAPSHOT) if (_TOP_SNAPSHOT["date"] == date
+                and _TOP_SNAPSHOT["rows"]) else None)
+    if snap:
+        rows = _top_finalize(snap["rows"], threshold, dgate, top_n)
         return {"date": date, "threshold": threshold, "dgate": dgate,
-                "universe": 0, "tradable": 0, "candidates": 0, "count": 0, "rows": [],
-                "filter_trace": {}, "tz": "北京时间 (UTC+8)",
-                "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
-                "server_ts": int(time.time()), "snapshot": False, "stale": True,
-                "snapshot_date": None, "date_mismatch": True,
-                "scanning": scanning, "scan_phase": phase,
-                "note": "尚无全市场快照，后台扫描中（云端获取行情可能失败，建议本机生成快照后提交）"}
-    rows = _top_finalize(rows_all, threshold, dgate, top_n)
-    match = (snap_date == date)
-    out = {"date": date, "threshold": threshold, "dgate": dgate,
-           "universe": snap.get("universe", 0), "tradable": snap.get("tradable", 0),
-           "candidates": snap.get("candidates", 0), "count": len(rows), "rows": rows,
-           "filter_trace": snap.get("filter_trace", {}),
-           "tz": "北京时间 (UTC+8)", "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
-           "server_ts": int(time.time()), "snapshot": True, "stale": not match,
-           "snapshot_date": snap_date, "date_mismatch": not match}
-    if not match:
-        # 关键：宁可展示旧快照并如实标注日期，也不要冷算挂死或产出缩水的劣质榜单。
-        # 前端据此显示「快照日期 ≠ 请求日期」横幅，用户一眼能看出数据是哪天的。
-        out["note"] = f"当前为 {snap_date} 的全量快照（{date} 尚未生成），数值以快照日期为准"
-    with _TOP_TASK_LOCK:
-        out["scanning"] = bool(_TOP_TASK["scanning"])
-        out["scan_phase"] = _TOP_TASK["phase"]
-        if _TOP_TASK["error"]:
-            out["scan_error"] = _TOP_TASK["error"]
-    return out
-
-
-def _top_should_refresh(force=False):
-    """是否允许再起一次全市场扫描。冷却期内 / 正在扫描 / 非更新窗口一律不刷，
-    避免云端每次请求都空转出一个几十秒的网络黑洞线程。"""
-    with _TOP_TASK_LOCK:
-        if _TOP_TASK["scanning"]:
-            return False
-        last = max(_TOP_TASK["started"] or 0.0, _TOP_TASK["finished"] or 0.0)
-    if force:
-        return True
-    if time.time() - last < _TOP_SCAN_COOLDOWN:
-        return False
-    bj = bj_now()
-    return _is_trading_day(bj) and _in_update_window(bj)
-
-
-_TOP_NET_PROBE = {"ok": None, "ts": 0.0}
-
-
-def _em_reachable(timeout=4.0, cache_sec=60.0):
-    """行情源 push2.eastmoney.com 是否**真能取到数据**（结果缓存 60 秒）。
-
-    ⚠️ 必须用 HTTP 层探测，不能用 TCP 建连：实测在受限网络（沙箱/onrender 美西）
-    TCP 三次握手能成功（0.09s），但一发 HTTP 请求就被对端断连
-    （RemoteDisconnected: Remote end closed connection without response）。
-    若只探测 TCP 会误判为「可达」，后台线程照样空转几十秒。
-
-    不可达时直接给出明确原因，避免用户点「扫描全市场」后页面一直转。
-    """
-    now = time.time()
-    if _TOP_NET_PROBE["ok"] is not None and now - _TOP_NET_PROBE["ts"] < cache_sec:
-        return _TOP_NET_PROBE["ok"]
-    ok = False
-    try:
-        # 走域名轮换：只探测 push2 会误判「境外不可达」，实际 push2delay 是可用的
-        _j, _h = _em_get_json("/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3"
-                              "&secids=1.000001&ut=fa5fd1943c7b386f172d6893bfba10b",
-                              timeout=timeout, budget=timeout * 3)
-        ok = bool(_h)
-    except Exception:
-        ok = False
-    _TOP_NET_PROBE["ok"] = ok
-    _TOP_NET_PROBE["ts"] = now
-    return ok
-
-
-def _top_kick(date, threshold, dgate, top_n=20, force=False):
-    """后台起一次全市场扫描并回写快照；已在进行/冷却中则跳过。返回是否真的启动了。
-
-    背景：onrender 位于美西，访问 push2.eastmoney.com 会被 GFW 黑洞（连接挂起、
-    既不成功也不失败）。旧实现在「快照日期不匹配」时同步调用 compute_top_arbitrage，
-    实测 /api/top 60s 超时、TOP 页直接打不开。现全部改为后台线程：请求路径恒定
-    毫秒级返回，扫描结果落地后下一次请求自动生效（前端需轮询 scanning 才能看到结果）。
-    """
-    if not _top_should_refresh(force=force):
-        return False
-    # 先探测行情源：云端不可达时明确报错，避免后台线程空转几十秒
-    if not _em_reachable():
-        with _TOP_TASK_LOCK:
-            if not _TOP_TASK["scanning"]:
-                _TOP_TASK.update(
-                    scanning=False, phase="行情源不可达",
-                    error="当前运行环境无法访问东方财富行情源（push2 / push2delay 均不可达，"
-                          "HTTP 层被断连，常见于境外服务器或受限网络），无法重算 TOP 榜。"
-                          "请在可访问东财的网络环境（如本机）生成快照后提交，"
-                          "或将服务部署在国内节点。",
-                    finished=time.time())
-        return False
-    with _TOP_TASK_LOCK:
-        if _TOP_TASK["scanning"]:
-            return False
-        _TOP_TASK.update(scanning=True, phase="启动全市场扫描", error="",
-                         started=time.time(), finished=0.0, date=date)
-
-    def _run():
-        try:
-            compute_top_arbitrage(date, threshold, dgate, top_n)
-            with _TOP_TASK_LOCK:
-                _TOP_TASK.update(scanning=False, phase="完成", error="", finished=time.time())
-        except Exception as _e:
-            with _TOP_TASK_LOCK:
-                _TOP_TASK.update(scanning=False, phase="失败", error=str(_e)[:200],
-                                 finished=time.time())
-            print(f"    [TOP榜] 后台扫描失败: {_e}")
-
-    _threading.Thread(target=_run, daemon=True).start()
-    return True
+                "universe": snap["universe"], "tradable": snap["tradable"],
+                "candidates": snap["candidates"], "count": len(rows), "rows": rows,
+                "filter_trace": snap.get("filter_trace", {}),
+                "tz": "北京时间 (UTC+8)", "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "server_ts": int(time.time()), "snapshot": True}
+    return compute_top_arbitrage(date, threshold, dgate, top_n)
 
 
 def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GATE, top_n=20):
@@ -3782,12 +3471,19 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     筛选后【不】按筛选条件排序，而是用默认排序：① 申购状态（限大额申购 > 开放申购）② 估算溢价由高到低 ③ 成交额由大到小，取前 top_n 名；估算算法与排行表 compute_one_rank 完全一致。
     """
     if not target_date:
-        target_date = _last_trading_day()   # 同 compute_ranking：标签必须与数值同源
+        # 默认取【已收盘】的最近交易日，而非今天：避免开盘前/盘中把标签写成当天、
+        # 数值却仍是上一交易日的错位（见 _last_closed_trading_day 说明）。
+        target_date = _last_closed_trading_day()
+    _t0 = time.time()
+    def _lap(tag):
+        print(f"    [TOP榜·耗时] {tag}: {time.time() - _t0:.1f}s", flush=True)
     lof = fetch_all_lof_codes()                      # 缓存 12h，几乎瞬时
     codes = [c for c, _, _ in lof]
+    _lap(f"LOF清单 {len(lof)}只")
     # 前置取数：流通市值串行优先（push2 分页请求对并发敏感，与行情/场内表并行时容易超时失败），
     # 其余三项（行情/场内表/汇率）并行发起。
-    float_caps = fetch_float_market_cap()
+    float_caps = fetch_float_market_cap(codes)   # push2delay 批量取 f21（场内流通市值）
+    _lap(f"场内流通市值 {len(float_caps)}只")
     with ThreadPoolExecutor(max_workers=3) as _fe:
         f_q = _fe.submit(fetch_lof_quotes, codes)
         f_m = _fe.submit(fetch_market_fund_table)    # 已降超时至 25s
@@ -3795,6 +3491,7 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         quotes = f_q.result()
         market = f_m.result()
         fx_map = f_fx.result()
+    _lap("行情/场内表/汇率")
 
     # -- 粗筛：可交易 + 非纯债 + 有净值 + 二级市场流通规模 ≥ 1 亿元 即进入精算候选 --
     # 注意：此处【不再】用官方净值溢价门槛预筛候选。原因：限大额/QDII 基金的
@@ -3812,23 +3509,17 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     # 粗筛前并发预取 push2 未覆盖基金的 F10 总规模：东财 LOF 板块(MK0025-0028)覆盖不全，
     # 大量二级规模≥1亿 的 LOF 不在其中；若直接剔除会漏候选。用 F10 总规模兜底预取，
     # 使粗筛规模判断更准确，同时避免这些基金进入精算拖慢（终筛亦可复用此结果）。
+    # 注意：F10 规模【不再】对全部未覆盖基金预取。旧实现会对 610 只逐个打 fundf10
+    # 页面，实测全量触发东财 514 限频、耗时 54s 且结果全部为 None（等于白跑），还把候选
+    # 从 233 只误杀到 122 只。改为：先用 ulist.np 的场内流通市值过筛，仅对通过
+    # 「可交易+非债基+有净值」但 ulist 未覆盖的少数候选再补 F10 总规模（见 _ensure_scale）。
     f10_scale = {}
-    pending = [c for c, _, _ in lof if c not in float_caps]
-    if pending:
-        print(f"    [TOP榜] 并发预取 {len(pending)} 只 push2 未覆盖基金的 F10 规模...", flush=True)
-        with ThreadPoolExecutor(max_workers=8) as _fe2:
-            _futs = {_fe2.submit(fetch_fund_scale, c): c for c in pending}
-            for _f in as_completed(_futs):
-                _c = _futs[_f]
-                try:
-                    f10_scale[_c] = _f.result()
-                except Exception:
-                    f10_scale[_c] = None
     tradable = 0
     n_after_bond = 0
     n_after_nav = 0
     n_after_scale = 0
     cands = []
+    need_scale = []          # ulist 未覆盖、待 F10 兜底的候选
     for code, name, ftype in lof:
         q = quotes.get(code)
         if not q or q["volume"] <= 0:
@@ -3841,24 +3532,46 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         if not mk or not mk["nav"]:
             continue        # 条件：有最新净值
         n_after_nav += 1
-        sc = float_caps.get(code) if code in float_caps else f10_scale.get(code)
+        sc = float_caps.get(code)
         if sc is None:
-            continue        # push2 与 F10 均无规模数据，无法判断，剔除
+            need_scale.append(code)     # 场内流通市值缺失 → 稍后用 F10 总规模兜底判定
+            continue
         if sc < 1.0:
-            continue        # 二级/总规模 < 1 亿：剔除
-        # 注：push2 未覆盖的基金已用 F10 总规模兜底，不再一刀切剔除（覆盖不全会漏候选）
+            continue        # 场内可交易规模 < 1 亿：剔除
         n_after_scale += 1
         cands.append(code)
+
+    # F10 兜底：只对上面「场内规模缺失」的候选补取总规模（数量通常 < 60，且结果落盘复用）
+    if need_scale:
+        print(f"    [TOP榜] F10 总规模兜底 {len(need_scale)} 只（ulist 未覆盖）...", flush=True)
+        with ThreadPoolExecutor(max_workers=6) as _fe2:
+            _futs = {_fe2.submit(fetch_fund_scale, c): c for c in need_scale}
+            for _f in as_completed(_futs):
+                _c = _futs[_f]
+                try:
+                    f10_scale[_c] = _f.result()
+                except Exception:
+                    f10_scale[_c] = None
+        for code in need_scale:
+            sc = f10_scale.get(code)
+            if sc is not None and sc >= 1.0:
+                n_after_scale += 1
+                cands.append(code)
+        _persist_data()      # 规模缓存落盘，避免下次冷启动重复抓取
+        _lap(f"F10总规模兜底 {len(need_scale)}只")
     # 粗筛漏斗：逐阶段剔除数量，便于网页透明展示「为什么候选这么多/这么少」并核对规模过滤是否生效
     filter_trace = {
         "universe": len(lof),
         "tradable": tradable,
         "excluded_bond": tradable - n_after_bond,      # 非债基剔除
         "excluded_no_nav": n_after_bond - n_after_nav,  # 无净值剔除
-        "excluded_scale": n_after_nav - n_after_scale,  # 二级规模<1亿/不明 剔除
+        "excluded_scale": n_after_nav - n_after_scale,  # 场内规模<1亿/不明 剔除
+        "covered_by_float_cap": len(float_caps),        # ulist.np 取到场内流通市值的只数
+        "f10_fallback": len(need_scale),                # 走 F10 总规模兜底的只数
         "candidates": len(cands),                       # 进入精算的候选（非债基 + 规模≥1亿 + 有净值）
     }
 
+    _lap(f"粗筛完成：候选 {len(cands)} 只")
     # -- 国内指数 LOF：一次性批量取跟踪指数日内涨跌，供 compute_one_rank 估算当日净值 --
     _idx_meta = {}
     for c in cands:
@@ -3879,6 +3592,7 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
     # 方案B冷启动优化：先并发预热所有候选的前十大重仓与持仓股实时快照，
     # 使下方精算循环内 fetch_holdings/快照均命中缓存、零额外请求，避免逐只打行情拖过 onrender 超时。
     _prefetch_top_holdings(cands)
+    _lap("持仓预热")
     rows = []
     with ThreadPoolExecutor(max_workers=RANKING_MAX_WORKERS) as exe:
         rk_futs = {exe.submit(compute_one_rank, c, target_date, fx_map, threshold,
@@ -3928,6 +3642,7 @@ def compute_top_arbitrage(target_date=None, threshold=1.5, dgate=TOP_DISCOUNT_GA
         if limit is not None and limit <= 1:
             continue
         base_rows.append(r)
+    _lap(f"精算+终筛完成：入榜候选 {len(base_rows)} 只")
     # 填充全量快照（阈值前），使 /api/top 对任意 threshold/dgate 秒回；并落盘
     with _TOP_SNAP_LOCK:
         _TOP_SNAPSHOT.update(ts=time.time(), date=target_date, universe=len(lof),
@@ -4025,7 +3740,7 @@ try:
     bj_now
 except NameError:
     def bj_now():
-        return datetime.now(timezone(timedelta(hours=8))).replace(tzinfo=None)
+        return datetime.utcnow() + timedelta(hours=8)
 
 try:
     _is_trading_day
@@ -4044,24 +3759,7 @@ CB_CFG = dict(
 CB_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_cache.json")
 CB_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_snapshot.json")
 _CB_LOCK = threading.Lock()
-_CB = dict(result=None, scanning=False, error="", started=0.0,
-           progress=dict(done=0, total=0, phase=""))
-
-# 可转债全市场扫描约 1~3 分钟；给 7 分钟再判死，避免误杀仍在跑的合法扫描。
-_CB_SCAN_HARD_TIMEOUT = 420
-
-
-def _cb_watchdog():
-    """扫描看门狗：与 _pivot_watchdog 同理 —— onrender 免费层掐掉后台线程会让
-    scanning 永久 True，进而 `not scanning` 条件再也无法触发新扫描，页面永久卡「扫描中」。"""
-    with _CB_LOCK:
-        if _CB["scanning"]:
-            started = _CB.get("started") or 0.0
-            if time.time() - started > _CB_SCAN_HARD_TIMEOUT:
-                _CB.update(
-                    scanning=False,
-                    error="上次扫描超过 %d 分钟未完成（运行环境掐掉了后台线程），已自动复位。"
-                          "可点「立即重扫」重试。" % int(_CB_SCAN_HARD_TIMEOUT / 60))
+_CB = dict(result=None, scanning=False, error="", progress=dict(done=0, total=0, phase=""))
 
 _UT = "fa5fd1943c7b386f172d6893dbfba10b"
 _CB_FIELDS = "f12,f13,f14,f2,f5,f232,f234,f236,f237,f238,f240,f243"  # f5=成交量(手)，已停牌债成交量为0；f240=正股实时价
@@ -4311,7 +4009,6 @@ def cb_run_scan_bg():
         if _CB["scanning"]:
             return False
         _CB["scanning"] = True
-        _CB["started"] = time.time()
         _CB["error"] = ""
         _CB["progress"] = {"done": 0, "total": 0, "phase": "启动中"}
 
@@ -4324,7 +4021,6 @@ def cb_run_scan_bg():
             res = cb_scan(progress=_prog)
             with _CB_LOCK:
                 _CB["result"] = res
-                _CB["error"] = ""      # 成功即清掉看门狗/上次的残留提示
             _cb_save_disk(res)
             print("    [可转债] 扫描完成：%d 只 → 命中 %d 只，耗时 %ss，模式 %s"
                   % (res["stats"]["universe"], res["total_picks"], res["elapsed"], res["mode"]))
@@ -4342,16 +4038,14 @@ def cb_run_scan_bg():
 
 def cb_api_payload(force=False):
     """/api/cb 响应体：立即返回缓存+扫描状态；缓存过期或强制则后台重扫。"""
-    _cb_watchdog()   # 先清理可能卡死（被平台掐线程）的扫描状态
     with _CB_LOCK:
         res = _CB["result"]
         scanning = _CB["scanning"]
         prog = dict(_CB["progress"])
         err = _CB["error"]
+    today = bj_now().strftime("%Y-%m-%d")
     # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
-    # ⚠️ 必须用「最近交易日」而非「今天」：周末/节假日任何数据都会 ≠ 今天，
-    #    于是周五收盘的最新数据在周六周日被误判成「已过期」。
-    stale = (res is None) or (res.get("trade_date") != _last_trading_day())
+    stale = (res is None) or (res.get("trade_date") != today)
     # 智能冻结：非更新窗口（周末/夜间/盘中早段）不自动重扫，直接复用缓存静态展示；
     # 仅在交易日 14:45 后且当日尚未扫描时才自动刷。force=1 任何时候都可手动触发。
     if (force or _auto_refresh_due(res)) and not scanning:
@@ -4366,7 +4060,7 @@ def cb_api_payload(force=False):
     out["progress"] = prog
     out["error"] = err
     out["stale"] = stale
-    _ok, _warn = _date_integrity(res.get("trade_date"), res.get("kline_last_date"))
+    _ok, _warn = _date_integrity(res.get("trade_date"))
     out["date_ok"] = _ok
     out["date_warning"] = _warn
     return out
@@ -4538,7 +4232,7 @@ class Handler(BaseHTTPRequestHandler):
         val = producer()                              # 真正冷启动：同步计算（不再后台刷新）
         with self._API_CACHE_LOCK:
             self._API_CACHE[key] = (now + ttl, val)
-        _persist_api(force=True)   # 昂贵结果立即落盘，避免 30s 去抖窗口内丢结果
+        _persist_api()
         return val, False
 
     # ---- 行业轮动：申万一级行业 BK 代码映射（与 sector_dashboard.html 的 D.bk 一致） ----
@@ -4558,21 +4252,13 @@ class Handler(BaseHTTPRequestHandler):
         import random
         secids = ",".join("90." + b for b in self.SECTOR_BK.values())
         fields = "f3,f12,f14,f62"
-        # 多 host 轮询：随机镜像节点 + 主域名 + delay 域名，规避单点 502/限流。
-        # 【耗时预算】旧版 8 个随机镜像 + 主域 + delay 域共 10 个，单 host 超时 8s，
-        # 最坏要 80s——云端访问东财被 GFW 黑洞时，每个 host 都是「挂到超时才失败」，
-        # 整个接口拖到几十秒甚至让上层网关直接断连。现压到 4 个 host × 4s，并加
-        # 全局 12s 预算：预算耗尽立即放弃并返回 live=false，由前端走静态快照兜底。
-        hosts = _em_push_hosts()      # push2delay 优先：境外网络下 push2 不可达
+        # 多 host 轮询：随机镜像节点 + 主域名 + delay 域名，规避单点 502/限流
+        hosts = ["%d.push2.eastmoney.com" % random.randint(1, 99) for _ in range(8)]
+        hosts += ["push2.eastmoney.com", "push2delay.eastmoney.com"]
         UA_B = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-        _BUDGET, _HOST_TO = 12.0, 4.0
-        _t_begin = time.time()
         last_err = None
         for host in hosts:
-            if time.time() - _t_begin > _BUDGET:
-                last_err = last_err or "耗时预算 %.0fs 耗尽，放弃轮询" % _BUDGET
-                break
             try:
                 url = ("https://%s/api/qt/ulist.np/get?fields=%s&secids=%s"
                        "&ut=fa5fd1943c7b386f172d6893dbfba10b&_=%d" % (
@@ -4582,8 +4268,7 @@ class Handler(BaseHTTPRequestHandler):
                     "Referer": "https://quote.eastmoney.com/",
                     "Accept": "application/json, text/plain, */*",
                 })
-                _remain = _BUDGET - (time.time() - _t_begin)
-                with urllib.request.urlopen(req, timeout=max(1.5, min(_HOST_TO, _remain))) as r:
+                with urllib.request.urlopen(req, timeout=8) as r:
                     j = json.loads(r.read().decode("utf-8", "replace"))
                 diff = ((j or {}).get("data") or {}).get("diff") or []
                 ind = {}
@@ -4600,7 +4285,7 @@ class Handler(BaseHTTPRequestHandler):
                 if ind:
                     # 非交易日（周末/节假日）东方财富仍返回上一交易日收盘，
                     # 不能把日期误标为今天，否则前端会把非交易日插进 days 污染近5日统计
-                    now_bj = bj_now()
+                    now_bj = datetime.now()
                     live_date = now_bj.strftime("%Y-%m-%d") if _is_trading_day(now_bj) else None
                     return {"live": True, "date": live_date,
                             "count": len(ind), "industries": ind,
@@ -4681,10 +4366,6 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send(404, "{}", "application/json; charset=utf-8")
             return
-        if parsed.path == "/favicon.ico":
-            # 浏览器/微信内置浏览器会自动请求，缺失会在控制台与访问日志里刷 404
-            self._send(200, ICON_PNG_192, "image/x-icon")
-            return
         if parsed.path == "/icon.svg":
             self._send(200, ICON_SVG, "image/svg+xml")
             return
@@ -4694,7 +4375,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/icon-512.png":
             self._send(200, ICON_PNG_512, "image/png")
             return
-        if parsed.path in ("/pivot_snapshot.json", "/cb_snapshot.json", "/top_snapshot.json"):
+        if parsed.path in ("/pivot_snapshot.json", "/cb_snapshot.json"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), parsed.path.lstrip("/"))
             try:
                 with open(_fp, encoding="utf-8") as _f:
@@ -4710,9 +4391,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
-        # /watchlist 别名：仓库文件名与导航里叫 watchlist，旧版只注册了 /watch，
-        # 直接访问 /watchlist 会 404，加别名避免踩空。
-        if parsed.path in ("/watch", "/watch.html", "/watchlist", "/watchlist.html"):
+        if parsed.path in ("/watch", "/watch.html", "/watchlist.html"):
             _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.html")
             try:
                 with open(_fp, encoding="utf-8") as _f:
@@ -4775,8 +4454,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, json.dumps({"error": "日期格式非法，应为 YYYY-MM-DD"}))
                 return
             if not date:
-                # 默认展示「最近 1 个交易日」的结果（静态），避免周末/非交易时段每次打开都触发实时抓取。
-                date = _last_trading_day()
+                # 默认展示「最近 1 个已收盘交易日」的结果（静态），避免周末/非交易时段
+                # 每次打开都触发实时抓取。用 _last_closed_trading_day 而非
+                # _last_trading_day：后者在交易日开盘前会返回当天，导致标签与数值错位。
+                date = _last_closed_trading_day()
             try:
                 threshold = float(qs.get("threshold", ["1.5"])[0])
             except ValueError:
@@ -4788,20 +4469,39 @@ class Handler(BaseHTTPRequestHandler):
                 dgate = TOP_DISCOUNT_GATE
             dgate = max(-10.0, min(-0.1, dgate))
             force = qs.get("force", ["0"])[0] in ("1", "true", "True")
-            # 全市场冷算一律后台化：本请求只读内存快照、毫秒级返回，绝不阻塞。
-            # force 仅表示「允许跳过冷却再起一次后台扫描」，不再同步等待结果——
-            # 旧实现在 force/日期不匹配时同步调 compute_top_arbitrage，云端实测 60s 超时。
-            try:
-                _top_kick(date, threshold, dgate, 20, force=force)
-            except Exception:
-                pass
-            try:
-                out = dict(serve_top_from_snapshot(date, threshold, dgate))
-                out["forced"] = force
-                self._send(200, json.dumps(out, ensure_ascii=False))
-            except Exception as e:
-                self._send(200, json.dumps({"error": str(e), "date": date,
-                                            "scanning": False, "rows": []}, ensure_ascii=False))
+            cache_key = f"top|{date}|{threshold}|{dgate}"
+            bj = bj_now()
+            today_str = bj.strftime("%Y-%m-%d")
+            if force:
+                # 手动刷新：若在交易日更新窗口内则刷新「今天」，否则刷新最近交易日快照。
+                _date = today_str if (_is_trading_day(bj) and _in_update_window(bj)) else date
+                try:
+                    out = compute_top_arbitrage(_date, threshold, dgate, 20)
+                    out = dict(out); out["stale"] = False; out["forced"] = True
+                    with self._API_CACHE_LOCK:
+                        self._API_CACHE[f"top|{_date}|{threshold}|{dgate}"] = (
+                            time.time() + Handler._API_CACHE_TTL_TOP, out)
+                    self._send(200, json.dumps(out, ensure_ascii=False))
+                except Exception as e:
+                    self._send(200, json.dumps({"error": str(e), "date": _date}, ensure_ascii=False))
+                return
+            # 非手动：仅当 date==今天 且处于更新窗口时才允许后台静默刷新；
+            # 其余（周末/夜间/盘中早段/历史日期）直接复用快照，不触发抓取，秒回静态结果。
+            if date == today_str and _in_update_window(bj):
+                try:
+                    data, stale = self._cached_or_stale(cache_key, Handler._API_CACHE_TTL_TOP,
+                                                        lambda: serve_top_from_snapshot(date, threshold, dgate))
+                    out = dict(data); out["stale"] = stale
+                    self._send(200, json.dumps(out, ensure_ascii=False))
+                except Exception as e:
+                    self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
+            else:
+                try:
+                    data = serve_top_from_snapshot(date, threshold, dgate)
+                    out = dict(data); out["stale"] = False
+                    self._send(200, json.dumps(out, ensure_ascii=False))
+                except Exception as e:
+                    self._send(200, json.dumps({"error": str(e), "date": date}, ensure_ascii=False))
             return
         if parsed.path == "/api/data":
             qs = parse_qs(parsed.query)
@@ -4882,9 +4582,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, json.dumps({"error": "日期格式非法，应为 YYYY-MM-DD"}))
                 return
             if not date:
-                # 与 /api/top 口径一致：默认取最近交易日，避免非交易日把上一交易日
-                # 的收盘数据误标成「今天」。
-                date = _last_trading_day()
+                date = datetime.now().strftime("%Y-%m-%d")
             codes_raw = qs.get("codes", [""])[0]
             codes = [c.strip() for c in _RE_SEP.split(codes_raw or "") if _valid_code(c.strip())]
             codes = codes[:100]
@@ -4962,7 +4660,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(400, json.dumps({"error": "日期格式非法，应为 YYYY-MM-DD"}))
                 return
             if not date:
-                date = bj_now().strftime("%Y-%m-%d")
+                date = datetime.now().strftime("%Y-%m-%d")
             tok = os.environ.get("PUSH_LOCK_TOKEN")
             if tok and qs.get("token", [""])[0] != tok:
                 self._send(403, json.dumps({"error": "token 校验失败"}))
@@ -5027,66 +4725,38 @@ class Handler(BaseHTTPRequestHandler):
 # 需在环境变量配置：FEISHU_WEBHOOK_URL（必填）；可选 FEISHU_WEBHOOK_SECRET（签名）、
 # FEISHU_PUSH_THRESHOLD(默认2.0)、FEISHU_PUSH_MAX(默认5)、FEISHU_PUSH_HOUR/MINUTE。
 # ---------------------------------------------------------------------------
-# ===== A股交易日历（2026年官方放假安排，国务院办公厅 2025-11-04 发布）=====
-# 只列「本应是工作日但休市」的日期；周六周日由 weekday() 统一排除。
-# 调休上班日 2/14(六)、2/28(六)、5/9(六)、9/20(日)、10/10(六) 本就不是交易日，无需处理。
-# ⚠️ 每年 11 月国务院发布次年安排后必须更新本表，否则长假期间会退化成
-#    「标签=假日当天、数值=节前最后收盘」的错位（用户三令五申的数据日期铁律）。
-_A_SHARE_HOLIDAYS = frozenset({
-    # 元旦：1/1(四)-1/3(六)
-    "2026-01-01", "2026-01-02",
-    # 春节：2/15(日)-2/23(一)，共 9 天
-    "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-23",
-    # 清明：4/4(六)-4/6(一)
-    "2026-04-06",
-    # 劳动节：5/1(五)-5/5(二)
-    "2026-05-01", "2026-05-04", "2026-05-05",
-    # 端午：6/19(五)-6/21(日)
-    "2026-06-19",
-    # 中秋：9/25(五)-9/27(日)
-    "2026-09-25",
-    # 国庆：10/1(四)-10/7(三)
-    "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07",
-    # 2027 元旦（次年安排尚未发布，元旦为固定假日，先按 1/1 处理）
-    "2027-01-01",
-})
-# 日历表覆盖到的最后一天；超出后仅按周末判断，并打警告提示补表
-_A_SHARE_CAL_END = "2027-01-01"
-
-
 def _is_trading_day(d):
-    """A股交易日：周一至周五 且 非法定节假日。
-
-    排除法定节假日这一步不可省：国庆/春节长假期间若只按周末判断，
-    _last_trading_day() 会把假日当天（如 10/1 周四）当作「最近交易日」，
-    而东财当时返回的仍是节前最后一个交易日的收盘数据，
-    于是出现「标签 10/1、数值 9/30」的错位——正是数据日期铁律要根治的情形。
-    """
-    if d.weekday() >= 5:
-        return False
-    if d.strftime("%Y-%m-%d") in _A_SHARE_HOLIDAYS:
-        return False
-    return True
-
-
-def _calendar_expired(d=None):
-    """交易日历是否已过期（查询日期超出已录入范围）。过期仅发警告，不阻断。"""
-    if d is None:
-        d = bj_now()
-    return d.strftime("%Y-%m-%d") > _A_SHARE_CAL_END
+    """简易交易日判断：周一至周五（节假日未穷举，可按需扩展 HOLIDAYS 集合）。"""
+    return d.weekday() < 5
 
 
 def _last_trading_day(now=None):
-    """回溯到最近一个交易日（含当天）。周末/法定假日返回其之前最近的交易日。"""
+    """回溯到最近一个交易日（含当天）。周末/假日返回上一周五。
+
+    注意：本函数会把「今天」也算作已产生的交易日，因此只适合做『数据是否过期』的
+    比较基准。若要给榜单/快照选一个「数值真实存在」的日期标签，请用
+    _last_closed_trading_day()——否则周一 09:00 会把标签写成当天，而数值仍是上周五的。
+    """
     if now is None:
         now = bj_now()
-    if _calendar_expired(now):
-        try:
-            print("[WARN] A股交易日历仅覆盖到 %s，之后仅按周末判断，请补充 _A_SHARE_HOLIDAYS"
-                  % _A_SHARE_CAL_END)
-        except Exception:
-            pass
     d = now
+    while not _is_trading_day(d):
+        d = d - timedelta(days=1)
+    return d.strftime("%Y-%m-%d")
+
+
+def _last_closed_trading_day(now=None):
+    """最近一个【已收盘】的交易日：当天行情数据确实已经产生才返回当天。
+
+    判定：今天必须是交易日且已过 15:15（_in_update_window，东财入库延迟已过）。
+    否则回溯到上一交易日。用于 TOP 榜/快照的默认日期标签，杜绝「标签写今天、
+    数值是上一交易日」的错位（用户最在意的日期口径问题）。
+    """
+    if now is None:
+        now = bj_now()
+    d = now
+    if not (_is_trading_day(d) and _in_update_window(d)):
+        d = d - timedelta(days=1)
     while not _is_trading_day(d):
         d = d - timedelta(days=1)
     return d.strftime("%Y-%m-%d")
@@ -5141,17 +4811,10 @@ def _auto_refresh_due(res, trade_date_field="trade_date"):
     return False
 
 
-def _date_integrity(trade_date, kline_last_date=None):
+def _date_integrity(trade_date):
     """校验快照 trade_date 的可信度，返回 (ok, warn_msg)。
     - 必须为交易日（周一~周五），周末数据必是上一交易日收盘被误标，属异常；
-    - 距今天数超过 7 天（>1 周无更新）提示数据过旧；
-    - 【关键】传入 kline_last_date 时，校验「标签日期」与「数值实际日期」是否自洽。
-
-    用户三次强调的铁律：绝不允许「标签 8/21、数值 8/20」的错位。旧版只校验
-    trade_date 本身，对 trade_date=2026-08-26 而 kline_last_date=2026-08-27 这类
-    两者打架的脏快照完全不设防（线上 cb 页曾实际出现）。现补上交叉校验，
-    不一致时以 kline_last_date（数据实际所属日）为准并给出强提示。
-
+    - 距今天数超过 7 天（>1 周无更新）提示数据过旧。
     线上/离线兜底场景：返回 ok=False 时前端应明确标注，绝不可伪装成「实时/今日」。"""
     if not trade_date:
         return False, "无数据日期"
@@ -5160,11 +4823,6 @@ def _date_integrity(trade_date, kline_last_date=None):
     except Exception:
         return False, "日期格式异常:" + str(trade_date)
     warn = ""
-    # 标签日期 vs 数值日期：错位是最严重的一类数据事故，优先于其余检查
-    if kline_last_date and str(kline_last_date)[:10] != trade_date[:10]:
-        return False, ("数据错位：标签日期 %s 与数值日期 %s 不一致，"
-                       "以数值日期 %s 为准（请重新生成快照）"
-                       % (trade_date[:10], str(kline_last_date)[:10], str(kline_last_date)[:10]))
     if not _is_trading_day(td):
         warn = "数据日期 %s 非交易日（周末），疑似误标，请核查数据源" % trade_date[:10]
         return False, warn
@@ -5742,29 +5400,10 @@ PIVOT_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pivo
 _PIVOT = {
     "result": None,      # 最近一次完整扫描结果
     "scanning": False,   # 是否正在扫描
-    "started": 0.0,      # 本次扫描开始时间（看门狗判定卡死用）
     "progress": {"done": 0, "total": 0, "phase": ""},
     "error": "",
 }
 _PIVOT_LOCK = threading.Lock()
-
-# 口袋支点全市场扫描 UI 提示 3~6 分钟；给足 15 分钟再判死，避免误杀仍在跑的合法扫描。
-_PIVOT_SCAN_HARD_TIMEOUT = 900
-
-
-def _pivot_watchdog():
-    """扫描看门狗：onrender 免费层会掐掉/休眠后台线程，导致 scanning 永久 True，
-    进而 `if (force or ...) and not scanning` 再也无法触发新扫描 —— 页面永久卡在「扫描中」。
-    超时后复位状态并给出明确提示（Python 线程不可强杀，仅改状态）。"""
-    with _PIVOT_LOCK:
-        if _PIVOT["scanning"]:
-            started = _PIVOT.get("started") or 0.0
-            if time.time() - started > _PIVOT_SCAN_HARD_TIMEOUT:
-                _PIVOT.update(
-                    scanning=False,
-                    error="上次扫描超过 %d 分钟未完成（运行环境掐掉了后台线程），已自动复位。"
-                          "可点「立即重扫」重试；线上最稳的更新方式仍是在本机生成快照后推送。"
-                          % int(_PIVOT_SCAN_HARD_TIMEOUT / 60))
 
 
 def _pivot_load_disk():
@@ -5811,7 +5450,6 @@ def pivot_run_scan_bg():
         if _PIVOT["scanning"]:
             return False
         _PIVOT["scanning"] = True
-        _PIVOT["started"] = time.time()
         _PIVOT["error"] = ""
         _PIVOT["progress"] = {"done": 0, "total": 0, "phase": "启动中"}
 
@@ -5824,7 +5462,6 @@ def pivot_run_scan_bg():
             res = pivot_scan(progress=_prog)
             with _PIVOT_LOCK:
                 _PIVOT["result"] = res
-                _PIVOT["error"] = ""   # 成功即清掉看门狗/上次的残留提示
             _pivot_save_disk(res)
             print(f"    [口袋支点] 扫描完成：{res['stats']['universe']} 只 → "
                   f"命中 {res['total_picks']} 只，耗时 {res['elapsed']}s")
@@ -5842,17 +5479,15 @@ def pivot_run_scan_bg():
 
 def pivot_api_payload(force=False):
     """/api/pivot 的响应体：立即返回缓存 + 扫描状态；缓存过期或强制则后台重扫。"""
-    _pivot_watchdog()   # 先清理可能卡死（被平台掐线程）的扫描状态
     with _PIVOT_LOCK:
         res = _PIVOT["result"]
         scanning = _PIVOT["scanning"]
         prog = dict(_PIVOT["progress"])
         err = _PIVOT["error"]
 
+    today = bj_now().strftime("%Y-%m-%d")
     # stale 仅用于前端展示提示（数据是否为最近交易日），不再作为自动重扫触发条件。
-    # ⚠️ 必须用「最近交易日」而非「今天」：周末/节假日任何数据都会 ≠ 今天，
-    #    于是周五收盘的最新数据在周六周日被误判成「已过期」。
-    stale = (res is None) or (res.get("trade_date") != _last_trading_day())
+    stale = (res is None) or (res.get("trade_date") != today)
 
     # 智能冻结：非更新窗口（周末/夜间/盘中早段）不自动重扫，直接复用缓存静态展示
     # 最近 1 个交易日的结果；仅在交易日 14:45 后且当日尚未扫描时才自动刷。
@@ -5870,7 +5505,7 @@ def pivot_api_payload(force=False):
     out["progress"] = prog
     out["error"] = err
     out["stale"] = stale
-    _ok, _warn = _date_integrity(res.get("trade_date"), res.get("kline_last_date"))
+    _ok, _warn = _date_integrity(res.get("trade_date"))
     out["date_ok"] = _ok
     out["date_warning"] = _warn
     return out
@@ -6177,7 +5812,7 @@ def main():
             if not _prewarm_running["rank"]:
                 _prewarm_running["rank"] = True
                 try:
-                    _d = _last_trading_day()   # 与 /api/ranking 的 cache key 口径保持一致
+                    _d = datetime.now().strftime("%Y-%m-%d")
                     Handler._API_CACHE[f"rank|{_d}|1.5|{','.join(RANKING_WATCHLIST)}"] = (
                         time.time() + Handler._API_CACHE_TTL_RANK, compute_ranking(RANKING_WATCHLIST))
                     _persist_api()
@@ -6185,19 +5820,24 @@ def main():
                     pass
                 finally:
                     _prewarm_running["rank"] = False
-            # TOP 套利榜（最重：全市场扫描）— 统一交 _top_kick 调度，不再同步冷算。
-            # 旧实现在这里直接同步 compute_top_arbitrage 并写入 _API_CACHE：
-            #  · 云端（onrender 美西节点）取不到东财行情，每 10 分钟就是一次几分钟的
-            #    空转，还会把「缩水/全回退官方净值」的劣质结果写进缓存与磁盘，
-            #    污染本可用的历史快照（用户曾反馈「TOP 估算跟前一天一模一样」）；
-            #  · /api/top 现已改为「只读快照 + 后台扫描」，这里的 cache key 不再被读取。
-            # _top_kick 内部有 scanning 去重 + 600s 冷却 + 仅交易日更新窗口内触发。
-            if _prewarm_iter["n"] % 2 == 0:
+            # TOP 套利榜（最重：全市场扫描）— 每 600s（隔次），带重叠保护；
+            # 磁盘持久化(#2)保证即便本次扫描被上游限频/超时，历史结果仍可秒回。
+            if _prewarm_iter["n"] % 2 == 0 and not _prewarm_running["top"]:
+                _prewarm_running["top"] = True
                 try:
-                    _d = _last_trading_day()   # 与 /api/top 口径一致
-                    _top_kick(_d, 1.5, -2.0, 20)
+                    # 必须用 bj_now 口径的「最近已收盘交易日」：
+                    # ① datetime.now() 取的是服务器本地时区（线上为 UTC），会整体偏 8 小时；
+                    # ② 用「今天」会在开盘前/盘中把标签写成当天而数值仍是上一交易日
+                    #    （实测周一 00:35 生成了 date=08-31、数值却是 08-28 的快照）。
+                    _d = _last_closed_trading_day()
+                    Handler._API_CACHE[f"top|{_d}|1.5|-2.0"] = (
+                        time.time() + Handler._API_CACHE_TTL_TOP,
+                        compute_top_arbitrage(_d, 1.5, -2.0))
+                    _persist_api()
                 except Exception:
                     pass
+                finally:
+                    _prewarm_running["top"] = False
             _prewarm_iter["n"] += 1
             # 本地每 60s 刷新（UI 追求实时）；云平台放宽到 300s，避免从单一出口 IP 高频打外部行情源被限流
             time.sleep(60 if host == '127.0.0.1' else 300)
