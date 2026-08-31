@@ -495,7 +495,7 @@ function renderChart(){
     return out.trim();
   }
   var isLight=document.documentElement.getAttribute('data-theme')==='light';
-  var wlCol=isLight?'#0d9488':'#2dd4bf';   // 自选累计：青色实线
+  // 自选累计线颜色：红涨绿跌（按期末累计涨跌定色，定义见 lastWl 之后）
   var shCol=isLight?'#b8a988':'#9fb0c8';   // 上证：灰色实线
   var btCol=isLight?'#e11d48':'#fb7185';   // 回测滚动：红色虚线（涨红）
   function niceStep(raw){
@@ -522,6 +522,10 @@ function renderChart(){
     grid+='<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--txt3)">'+dates[i2].slice(5)+'</text>';
   });
   var lastWl = wl.length? wl[wl.length-1].v : null;
+  // 红涨绿跌：自选池累计线整体按期末值定色（涨红 / 跌绿），与 caption 的 pctSpan 一致
+  var wlUpCol = isLight ? '#e11d48' : '#ef4444';
+  var wlDnCol = isLight ? '#16a34a' : '#22c55e';
+  var wlCol = (lastWl != null && lastWl >= 0) ? wlUpCol : wlDnCol;
   var lastSh = shWin.length? shWin[shWin.length-1].v : null;
   var lastBt = btWin.length? btWin[btWin.length-1].v : null;
   // 图例（仅显示存在的序列）
