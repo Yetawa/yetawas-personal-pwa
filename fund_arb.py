@@ -5877,6 +5877,14 @@ def main():
     _prewarm_running = {"rank": False, "top": False}
     _prewarm_iter = {"n": 0}
     def _prewarm_loop():
+        # 云平台(非回环地址)跳过主动预热：美西节点取不到东财/腾讯行情，
+        # compute_top_arbitrage/compute_ranking 只会产出「回退官方净值」的垃圾榜单，
+        # 并覆盖启动期从磁盘回填的优质快照(_TOP_SNAPSHOT / _API_CACHE)，导致线上
+        # TOP/排行被污染成上一交易日数据或空榜。云端以「本地定时生成并推送的磁盘快照」
+        # 为唯一可信源(serve_top_from_snapshot 与 _hydrate_from_disk 已据此秒回)，
+        # 不主动重算；新交易日数据由本地生成后推送、触发部署即可生效。
+        if host != '127.0.0.1':
+            return
         while True:
             # 排行（重，带重叠保护）— 每 300s
             if not _prewarm_running["rank"]:
