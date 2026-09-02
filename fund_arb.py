@@ -3461,7 +3461,8 @@ def serve_top_from_snapshot(date, threshold, dgate, top_n=20):
                 "candidates": snap["candidates"], "count": len(rows), "rows": rows,
                 "filter_trace": snap.get("filter_trace", {}),
                 "tz": "北京时间 (UTC+8)", "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
-                "server_ts": int(time.time()), "snapshot": True}
+                "server_ts": int(time.time()), "snapshot": True,
+                "deploy_tag": "v9583fb1-prewarm-guarded"}
     return compute_top_arbitrage(date, threshold, dgate, top_n)
 
 
