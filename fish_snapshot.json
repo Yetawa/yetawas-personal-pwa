@@ -1,206 +1,206 @@
 {
- "date": "2026-09-02",
- "ts": "2026-09-02 15:31",
+ "date": "2026-09-03",
+ "ts": "2026-09-03 21:53",
  "items": {
   "sh512290": {
-   "price": 1.028,
-   "change": -0.68
+   "price": 1.038,
+   "change": 0.97
   },
   "sh512170": {
-   "price": 0.338,
-   "change": -0.88
+   "price": 0.339,
+   "change": 0.3
   },
   "sh513500": {
-   "price": 2.644,
-   "change": -2.65
+   "price": 2.66,
+   "change": 0.61
   },
   "sh516010": {
-   "price": 1.075,
-   "change": -1.56
+   "price": 1.09,
+   "change": 1.4
   },
   "sh515650": {
-   "price": 1.074,
-   "change": -0.65
+   "price": 1.075,
+   "change": 0.09
   },
   "sh515220": {
-   "price": 1.303,
-   "change": -2.91
+   "price": 1.3,
+   "change": -0.23
   },
   "sh513100": {
-   "price": 2.195,
-   "change": -1.7
+   "price": 2.196,
+   "change": 0.05
   },
   "sh513580": {
-   "price": 0.565,
-   "change": -1.4
+   "price": 0.561,
+   "change": -0.71
   },
   "sh516510": {
-   "price": 1.685,
-   "change": -1.86
+   "price": 1.682,
+   "change": -0.18
   },
   "sh512980": {
-   "price": 0.83,
-   "change": -2.47
+   "price": 0.826,
+   "change": -0.48
   },
   "sh512690": {
-   "price": 0.423,
-   "change": -1.4
+   "price": 0.421,
+   "change": -0.47
   },
   "sh518880": {
-   "price": 8.902,
-   "change": -2.37
+   "price": 9.105,
+   "change": 2.28
   },
   "sh588190": {
-   "price": 1.728,
-   "change": -1.59
+   "price": 1.732,
+   "change": 0.23
   },
   "sz159647": {
    "price": 0.885,
-   "change": -1.23
+   "change": 0.0
   },
   "sh515170": {
    "price": 0.464,
-   "change": -1.07
+   "change": 0.0
   },
   "sh512400": {
-   "price": 1.886,
-   "change": -2.53
+   "price": 1.913,
+   "change": 1.43
   },
   "sh515230": {
-   "price": 0.696,
-   "change": -2.38
+   "price": 0.695,
+   "change": -0.14
   },
   "sz159985": {
-   "price": 2.344,
-   "change": -0.97
+   "price": 2.387,
+   "change": 1.83
   },
   "sh512720": {
-   "price": 1.177,
-   "change": -1.67
+   "price": 1.179,
+   "change": 0.17
   },
   "sh563200": {
-   "price": 1.533,
-   "change": -0.78
+   "price": 1.539,
+   "change": 0.39
   },
   "sh512200": {
-   "price": 1.208,
-   "change": -0.9
+   "price": 1.216,
+   "change": 0.66
   },
   "sh515080": {
-   "price": 1.595,
-   "change": -1.54
+   "price": 1.599,
+   "change": 0.25
   },
   "sh512800": {
-   "price": 0.844,
-   "change": -0.24
+   "price": 0.84,
+   "change": -0.47
   },
   "sh512100": {
-   "price": 3.078,
-   "change": -1.41
+   "price": 3.086,
+   "change": 0.26
   },
   "sh516780": {
-   "price": 0.827,
-   "change": -2.01
+   "price": 0.832,
+   "change": 0.6
   },
   "sh512890": {
-   "price": 1.201,
-   "change": -0.58
+   "price": 1.2,
+   "change": -0.08
   },
   "sh510050": {
-   "price": 3.025,
-   "change": -0.98
+   "price": 3.031,
+   "change": 0.2
   },
   "sz159996": {
-   "price": 1.429,
-   "change": -0.97
+   "price": 1.448,
+   "change": 1.33
   },
   "sh516020": {
-   "price": 0.857,
-   "change": -2.83
+   "price": 0.866,
+   "change": 1.05
   },
   "sh512880": {
-   "price": 1.09,
-   "change": -2.07
+   "price": 1.098,
+   "change": 0.73
   },
   "sh510500": {
-   "price": 7.751,
-   "change": -1.65
+   "price": 7.781,
+   "change": 0.39
   },
   "sh513130": {
-   "price": 0.56,
-   "change": -1.41
+   "price": 0.556,
+   "change": -0.71
   },
   "sh510300": {
-   "price": 4.62,
-   "change": -1.37
+   "price": 4.621,
+   "change": 0.02
   },
   "sh513050": {
-   "price": 1.05,
-   "change": -0.85
+   "price": 1.035,
+   "change": -1.43
   },
   "sh512660": {
-   "price": 1.142,
-   "change": 0.09
+   "price": 1.14,
+   "change": -0.18
   },
   "sh562320": {
-   "price": 1.352,
-   "change": -0.95
+   "price": 1.357,
+   "change": 0.37
   },
   "sz159949": {
-   "price": 1.553,
-   "change": -2.57
+   "price": 1.551,
+   "change": -0.13
   },
   "sh515030": {
-   "price": 1.557,
-   "change": -2.38
+   "price": 1.574,
+   "change": 1.09
   },
   "sh516160": {
-   "price": 2.364,
-   "change": -2.15
+   "price": 2.37,
+   "change": 0.25
   },
   "sh515880": {
-   "price": 0.648,
-   "change": -2.11
+   "price": 0.646,
+   "change": -0.31
   },
   "sh515050": {
-   "price": 1.009,
-   "change": -1.85
+   "price": 1.004,
+   "change": -0.5
   },
   "sh561910": {
-   "price": 0.686,
-   "change": -2.14
+   "price": 0.692,
+   "change": 0.87
   },
   "sh562500": {
-   "price": 0.947,
-   "change": -1.76
+   "price": 0.954,
+   "change": 0.74
   },
   "sz159967": {
    "price": 0.754,
-   "change": -2.2
+   "change": 0.0
   },
   "sh588000": {
-   "price": 1.708,
-   "change": -1.84
+   "price": 1.703,
+   "change": -0.29
   },
   "sh515790": {
-   "price": 0.811,
-   "change": -1.82
+   "price": 0.81,
+   "change": -0.12
   },
   "sh512760": {
-   "price": 1.073,
-   "change": -1.65
+   "price": 1.066,
+   "change": -0.65
   },
   "sh512480": {
-   "price": 1.01,
-   "change": -1.94
+   "price": 1.004,
+   "change": -0.59
   },
   "sh515980": {
-   "price": 1.02,
-   "change": -1.73
+   "price": 1.018,
+   "change": -0.2
   },
   "sh513030": {
    "price": 1.861,
-   "change": -1.74
+   "change": 0.0
   }
  }
 }
