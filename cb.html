@@ -195,7 +195,6 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <a class="navlink" href="fund_arb_top.html">TOP套利</a>
     <a class="navlink" href="pivot_live.html">口袋支点</a>
     <a class="navlink active" href="cb.html">可转债套利</a>
-    <a class="navlink" href="watchlist.html">自选池</a>
     <span class="navspacer"></span>
   </div>
 </div>
@@ -336,18 +335,21 @@ function renderCbHist(){
   var box=document.getElementById('cbHistBody'); if(!box) return;
   var rows=(window._cbHistRows||[]).slice();
   if(!rows.length){ box.innerHTML='<div class="hist-empty">暂无近 5 日严格折价信号记录（线上环境受网络限制无法扫描时，将展示最近交易日快照中的折价标的）</div>'; return; }
-  var head='<th>入选日期</th><th>转债代码</th><th>转债名称</th><th>入选价</th><th>正股</th><th>套利收益率</th><th>至今涨跌</th>';
+  var head='<th>入选日期</th><th>转债代码</th><th>转债名称</th><th>入选价</th><th>最新价</th><th>正股</th><th>套利收益率</th><th>至今涨跌</th>';
   var body=rows.map(function(r){
     var arbCls=(r.arb==null)?'':(r.arb>=0?'pos':'neg');
+    var chg=(r.lp!=null&&r.price!=null)?(r.lp-r.price)/r.price*100:null;
+    var chgCls=(chg==null)?'l':(chg>=0?'pos':'neg');
     var sc=String(r.stock_code||'');
     return '<tr>'
       +'<td>'+esc(r.date)+'</td>'
       +'<td><a class="codelink" href="https://quote.eastmoney.com/kzz/'+esc(r.code)+'.html" target="_blank" rel="noopener">'+esc(r.code)+'</a></td>'
       +'<td class="l">'+esc(r.name||'')+'</td>'
       +'<td>'+fmt(r.price)+'</td>'
+      +'<td>'+fmt(r.lp)+'</td>'
       +'<td class="l"><a class="codelink" href="https://quote.eastmoney.com/'+esc(sc)+'.html" target="_blank" rel="noopener">'+esc(r.stock_name||'')+'</a></td>'
       +'<td class="'+(arbCls||'l')+'">'+(r.arb==null?'—':fmt(r.arb)+'%')+'</td>'
-      +'<td class="l" style="color:var(--muted)">—</td>'
+      +'<td class="'+chgCls+'">'+(chg==null?'—':fmt(chg)+'%')+'</td>'
       +'</tr>';
   }).join("");
   box.innerHTML='<table class="histtbl"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';

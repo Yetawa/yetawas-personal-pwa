@@ -1936,8 +1936,8 @@ def deduce_exchange(code):
     """
     c = code.strip()
     two = c[:2]
-    if two in ("15", "16", "18") or c[0] in ("0", "2", "3"):
-        return "0." + c, "sz" + c          # 深交所
+    if two in ("12", "15", "16", "18") or c[0] in ("0", "2", "3"):
+        return "0." + c, "sz" + c          # 深交所（12开头=深市可转债）
     return "1." + c, "sh" + c              # 上交所
 
 
@@ -3329,12 +3329,39 @@ def history_payload(kind, days=5):
                     for e in snap_rows:
                         if e.get("code") not in existing:
                             out.append(e)
-            return out[-days:]
+            return out
     # 回退：实时历史为空 → 用快照派生（仅当没有真实历史时）
     snap_rows = _history_from_snapshot(kind)
     if snap_rows:
-        return snap_rows[-days:]
+        return snap_rows
     return []
+
+def _enrich_history_latest(rows, kind):
+    """为近5日入选记录补真实最新价(lp)，用于统计表「最新价/入选至今涨跌幅」列。
+    腾讯/新浪实时主源；onrender 美西节点拉不到行情时静默跳过，前端回退当前榜单匹配价。
+    code 经 deduce_exchange 转交易所前缀，LOF/股票/可转债均适用。"""
+    if not rows:
+        return
+    seen, codes = set(), []
+    for r in rows:
+        c = r.get("code")
+        if c and c not in seen:
+            seen.add(c); codes.append(c)
+    if not codes:
+        return
+    try:
+        quotes = fetch_lof_quotes(codes)
+    except Exception as e:
+        print(f"    [历史] 最新价补取失败({kind}): {e}")
+        return
+    if not quotes:
+        return
+    for r in rows:
+        c = r.get("code")
+        q = quotes.get(c)
+        if q and q.get("price") is not None:
+            r["lp"] = q["price"]
+
 
 
 def _history_from_snapshot(kind):
@@ -3461,8 +3488,7 @@ def serve_top_from_snapshot(date, threshold, dgate, top_n=20):
                 "candidates": snap["candidates"], "count": len(rows), "rows": rows,
                 "filter_trace": snap.get("filter_trace", {}),
                 "tz": "北京时间 (UTC+8)", "server_bj": bj_now().strftime("%Y-%m-%d %H:%M:%S"),
-                "server_ts": int(time.time()), "snapshot": True,
-                "deploy_tag": "v9583fb1-prewarm-guarded"}
+                "server_ts": int(time.time()), "snapshot": True}
     return compute_top_arbitrage(date, threshold, dgate, top_n)
 
 
@@ -4341,6 +4367,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             try:
                 rows = history_payload(k, days)
+                _enrich_history_latest(rows, k)
                 self._send(200, json.dumps({"type": k, "days": days, "rows": rows}, ensure_ascii=False),
                            "application/json; charset=utf-8")
             except Exception as e:
@@ -5252,19 +5279,22 @@ def _pivot_ohlcv_sina(symbol, n):
 
 
 def pivot_fetch_ohlcv(symbol, n=None):
-    """日线 OHLCV（时间升序）：腾讯前复权主源 → 新浪兜底（含整批切换探活）。"""
+    """日线 OHLCV（时间升序）：腾讯主源优先，新浪兜底。"""
     n = n or PIVOT_CFG["kline_len"]
-    _min = max(30, int(n * 0.5))   # 少于半数量视为取数不完整，走兜底
-    if not (_PIVOT_OHLCV_SRC["tx_fail"] >= 5 and _PIVOT_OHLCV_SRC["tx_ok"] == 0):
-        try:
-            k = _pivot_ohlcv_tencent(symbol, n)
-            if len(k.get("close", [])) >= _min:
-                _PIVOT_OHLCV_SRC["tx_ok"] += 1
-                return k
-        except Exception:
-            pass
-        _PIVOT_OHLCV_SRC["tx_fail"] += 1
-    return _pivot_ohlcv_sina(symbol, n)
+    _min = max(30, int(n * 0.5))
+    try:
+        k = _pivot_ohlcv_tencent(symbol, n)
+        if len(k.get("close", [])) >= _min:
+            return k
+    except Exception:
+        pass
+    try:
+        k = _pivot_ohlcv_sina(symbol, n)
+        if len(k.get("close", [])) >= _min:
+            return k
+    except Exception:
+        pass
+    return _pivot_ohlcv_tencent(symbol, n)
 
 
 def pivot_universe():
@@ -5882,7 +5912,7 @@ def main():
         # compute_top_arbitrage/compute_ranking 只会产出「回退官方净值」的垃圾榜单，
         # 并覆盖启动期从磁盘回填的优质快照(_TOP_SNAPSHOT / _API_CACHE)，导致线上
         # TOP/排行被污染成上一交易日数据或空榜。云端以「本地定时生成并推送的磁盘快照」
-        # 为唯一可信源(serve_top_from_snapshot 与 _hydrate_from_disk 已据此秒回)，
+        # 为唯一可信源（serve_top_from_snapshot 与 _hydrate_from_disk 已据此秒回），
         # 不主动重算；新交易日数据由本地生成后推送、触发部署即可生效。
         if host != '127.0.0.1':
             return
