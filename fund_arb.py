@@ -3803,24 +3803,57 @@ def _cb_http_get(url, timeout=20):
     return urlopen(req, timeout=timeout).read().decode("utf-8", "ignore")
 
 
-def cb_fetch_list():
-    """分页拉取东方财富全市场可转债（MK0354），返回原始 diff 列表。"""
+# 东财行情节点存在单点抖动：主域名偶发 RemoteDisconnected，而编号节点仍可用。
+# 按顺序做故障转移，全部分页必须来自同一节点，避免混入不同节点的行情时点。
+_CB_LIST_HOSTS = [
+    "push2delay.eastmoney.com",
+    "1.push2delay.eastmoney.com",
+    "2.push2delay.eastmoney.com",
+    "3.push2delay.eastmoney.com",
+    "4.push2delay.eastmoney.com",
+    "5.push2delay.eastmoney.com",
+    "6.push2delay.eastmoney.com",
+    "7.push2delay.eastmoney.com",
+    "8.push2delay.eastmoney.com",
+]
+
+
+def _cb_fetch_list_from_host(host):
+    """从单一节点分页拉取全市场可转债；任一分页失败即抛异常以触发节点切换。"""
     items = []
     for pn in range(1, 6):
-        url = ("https://push2delay.eastmoney.com/api/qt/clist/get?pn=%d&pz=100&po=1&np=1"
-               "&fltt=2&invt=2&fs=b:MK0354&fields=%s&ut=%s" % (pn, _CB_FIELDS, _UT))
-        try:
-            d = json.loads(_cb_http_get(url))
-            diff = (d.get("data") or {}).get("diff") or []
-            if not diff:
-                break
-            items += diff
-            if len(diff) < 100:
-                break
-        except Exception as e:
-            print("    [可转债] 第%d页拉取失败: %s" % (pn, e))
+        url = ("https://%s/api/qt/clist/get?pn=%d&pz=100&po=1&np=1"
+               "&fltt=2&invt=2&fs=b:MK0354&fields=%s&ut=%s" % (host, pn, _CB_FIELDS, _UT))
+        d = json.loads(_cb_http_get(url))
+        diff = (d.get("data") or {}).get("diff") or []
+        if not diff:
+            break
+        items += diff
+        if len(diff) < 100:
             break
     return items
+
+
+def cb_fetch_list():
+    """分页拉取东方财富全市场可转债（MK0354），返回原始 diff 列表。
+
+    主域名被拒时依次切换到编号节点；全部失败才返回空列表（避免用空列表
+    覆盖磁盘上已有的良好快照）。
+    """
+    last_err = None
+    for host in _CB_LIST_HOSTS:
+        try:
+            items = _cb_fetch_list_from_host(host)
+            if items:
+                if host != _CB_LIST_HOSTS[0]:
+                    print("    [可转债] 主节点不可用，已切换至 %s（%d 只）" % (host, len(items)))
+                return items
+            last_err = "空列表"
+        except Exception as e:
+            last_err = e
+            continue
+    print("    [可转债] 全部节点拉取失败: %s" % last_err)
+    return []
 
 
 def cb_compute(items, progress=None):
