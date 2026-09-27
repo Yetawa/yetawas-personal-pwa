@@ -233,8 +233,10 @@
 
     @media (max-width: 768px) {
       /* 手机端顶栏导航拆两行（每行约5个链接），不再横向滚动 */
-      .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
-      .topnav .navlink{padding:4px 8px;font-size:12px}
+      .topnav{flex-wrap:wrap;overflow-x:visible;gap:2px;padding:2px 4px}
+      .topnav .navlink{padding:2px 5px;font-size:11px;border-radius:5px}
+      .topnav .brand{padding:2px 4px;font-size:12px;gap:3px}
+      .topnav .brand svg{width:15px;height:15px}
       .page { padding: 88px 10px 58px; }
       .top-header { flex-direction: column; }
       .header-right { align-items: flex-start; width: 100%; }
@@ -292,7 +294,7 @@
     <a class="navlink" href="/ranking">排行表</a>
     <a class="navlink" href="/top">TOP套利</a>
     <a class="navlink" href="/pivot">口袋支点</a><a class="navlink" href="/xlj">寻龙诀</a>
-    <a class="navlink" href="/cb">可转债套利</a>
+    <a class="navlink" href="/cb">可转债</a>
     <a class="navlink" href="/watch">自选池</a>
     <span class="navspacer"></span>
   </div>

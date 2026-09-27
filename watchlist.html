@@ -36,8 +36,11 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 .theme-mini{flex:none;margin-left:6px;border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:8px;padding:2px 8px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;line-height:1.3}
 .theme-mini:hover{border-color:var(--accent);color:var(--accent)}
 @media(max-width:760px){
-  .topnav{flex-wrap:wrap;overflow-x:visible;gap:5px;padding:6px 8px}
-  .topnav .navlink{padding:4px 8px;font-size:12px}
+  .topnav{flex-wrap:wrap;overflow-x:visible;gap:2px;padding:2px 4px}
+  .topnav .navlink{padding:2px 5px;font-size:11px;border-radius:5px}
+  .topnav .brand{padding:2px 4px;font-size:12px;gap:3px}
+  .topnav .brand svg{display:none}
+  .topnav .navspacer{display:none}
   /* 上边距不再写死：由 JS 按 .topnav 实际高度（含折行）动态设置 --nav-h，根治标题遮挡 */
 }
 /* 标题行置于固定导航之上，确保不被遮挡（手机端顶栏折行时尤重要） */
@@ -124,7 +127,7 @@ h1{font-size:19px;font-weight:800;margin:0}
   <a class="navlink" data-file="fund_arb_top.html" data-route="/top">TOP套利</a>
   <a class="navlink" data-file="pivot_live.html" data-route="/pivot">口袋支点</a>
   <a class="navlink" data-file="xlj.html" data-route="/xlj">寻龙诀</a>
-  <a class="navlink" data-file="cb.html" data-route="/cb">可转债套利</a>
+  <a class="navlink" data-file="cb.html" data-route="/cb">可转债</a>
   <a class="navlink active" data-file="watchlist.html" data-route="/watch">自选池</a>
   <span class="navspacer"></span>
 </div>
