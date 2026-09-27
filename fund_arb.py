@@ -41,7 +41,7 @@ import os
 import threading
 import statistics
 import collections
-from fund_arb_tpl import (COMMON_CSS, PAGE_HTML, PAGE2_HTML, PAGE3_HTML, PAGE4_HTML, PAGE5_HTML, MANIFEST_JSON, ICON_SVG, ICON_PNG_192, ICON_PNG_512, SW_JS)
+from fund_arb_tpl import (COMMON_CSS, PAGE_HTML, PAGE2_HTML, PAGE3_HTML, PAGE4_HTML, PAGE5_HTML, PAGE_XLJ_HTML, MANIFEST_JSON, ICON_SVG, ICON_PNG_192, ICON_PNG_512, SW_JS)
 
 # 导出表格/图片浮动条（来源：公众号 航城大叔），在线页面统一注入
 EXPORT_BAR_HTML = ""
@@ -3372,6 +3372,9 @@ def _history_from_snapshot(kind):
     elif kind == "cb":
         fn = CB_SNAP_FILE
         entries_fn = _cb_history_entries
+    elif kind == "xlj":
+        fn = XLJ_DATA_FILE
+        entries_fn = _xlj_history_entries
     else:
         return []
     try:
@@ -3379,7 +3382,7 @@ def _history_from_snapshot(kind):
             return []
         with open(fn, "r", encoding="utf-8") as f:
             snap = json.load(f)
-        td = snap.get("trade_date") or snap.get("updated") or (snap.get("picks") and "")
+        td = snap.get("trade_date") or snap.get("updated") or snap.get("run_date") or (snap.get("picks") and "")
         if not td:
             return []
         # trade_date 可能是 "2026-08-21"；取前10字符作日期
@@ -3433,6 +3436,21 @@ def _cb_history_entries(res):
             "arb": p.get("arb"),
         })
     return out
+
+XLJ_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xlj_data.json")
+
+def _xlj_history_entries(data):
+    """寻龙诀：当日综合评分前三名入选记录。"""
+    out = []
+    for i, s in enumerate((data.get("stocks") or [])[:3]):
+        out.append({
+            "code": s.get("code"), "name": s.get("name"),
+            "rank": i + 1,
+            "score_total": s.get("score_total"), "signal": s.get("signal"),
+            "price": s.get("close"),  # 入选日收盘价
+        })
+    return out
+
 
 def _persist_top_snapshot():
     """把 TOP 全量快照落盘（去抖 30s），使冷启动也能秒回历史候选。"""
@@ -4395,8 +4413,8 @@ class Handler(BaseHTTPRequestHandler):
                 days = max(1, min(10, int(qs.get("days", ["5"])[0])))
             except ValueError:
                 days = 5
-            if k not in ("pivot", "top", "cb"):
-                self._send(400, json.dumps({"error": "type 应为 pivot/top/cb"}))
+            if k not in ("pivot", "top", "cb", "xlj"):
+                self._send(400, json.dumps({"error": "type 应为 pivot/top/cb/xlj"}))
                 return
             try:
                 rows = history_payload(k, days)
@@ -4481,6 +4499,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path in ("/top", "/top.html"):
             self._send(200, PAGE3_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
+        if parsed.path in ("/xlj", "/xlj.html"):
+            self._send(200, PAGE_XLJ_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
+            return
         if parsed.path in ("/pivot", "/pivot.html"):
             self._send(200, PAGE4_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
@@ -4494,6 +4515,14 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, _sf.read(), "text/html; charset=utf-8")
             except Exception:
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
+            return
+        if parsed.path == "/api/xlj":
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xlj_data.json")
+            try:
+                with open(_fp, encoding="utf-8") as _f:
+                    self._send(200, _f.read(), "application/json; charset=utf-8")
+            except Exception:
+                self._send(200, json.dumps({"error": "data not uploaded", "stocks": []}, ensure_ascii=False), "application/json; charset=utf-8")
             return
         if parsed.path == "/api/pivot":
             qs = parse_qs(parsed.query)
@@ -4760,8 +4789,26 @@ class Handler(BaseHTTPRequestHandler):
             return
         qs = parse_qs(parsed.query)
         tok = os.environ.get("PUSH_LOCK_TOKEN")
-        if tok and qs.get("token", [""])[0] != tok:
+        if tok and parsed.path != "/api/xlj/upload" and qs.get("token", [""])[0] != tok:
             self._send(403, json.dumps({"error": "token 校验失败"}))
+            return
+        if parsed.path == "/api/xlj/upload":
+            try:
+                body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                data = json.loads(body.decode("utf-8"))
+                if not isinstance(data, dict) or "stocks" not in data:
+                    self._send(400, json.dumps({"error": "invalid format"}, ensure_ascii=False))
+                    return
+                _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xlj_data.json")
+                with open(_fp, "w", encoding="utf-8") as _f:
+                    json.dump(data, _f, ensure_ascii=False)
+                try:
+                    history_append("xlj", data.get("run_date", ""), _xlj_history_entries(data))
+                except Exception as _he:
+                    print(f"    [历史] 寻龙诀记录失败: {_he}")
+                self._send(200, json.dumps({"ok": True, "count": len(data.get("stocks", []))}, ensure_ascii=False))
+            except Exception as e:
+                self._send(500, json.dumps({"error": str(e)}, ensure_ascii=False))
             return
         if parsed.path == "/api/push/lock":
             date = qs.get("date", [""])[0]
