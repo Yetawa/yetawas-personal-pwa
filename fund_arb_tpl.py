@@ -30,7 +30,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Microsoft YaHei","Segoe UI",s
 .tzline{font-size:13px;color:var(--muted);background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin:6px 0 14px}
 .tzline b{color:var(--text)}
 .titles{flex:1;min-width:0}
-h1{font-size:22px;margin:0 0 4px;color:var(--title)}
+h1{font-size:21px;margin:0 0 4px;color:var(--title)}
 .sub{color:var(--muted);font-size:13px;margin-bottom:14px}
 .top-actions{display:flex;align-items:flex-start;gap:8px;flex:none}
 .theme-btn{background:var(--panel);color:var(--title);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
@@ -172,8 +172,8 @@ PAGE_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta 
     <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
     <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>
     <a class="navlink active" href="/arb">套利看板</a>
-    <a class="navlink" href="/ranking">排行表</a>
-    <a class="navlink" href="/top">TOP套利</a>
+    <a class="navlink" href="/ranking">溢价表</a>
+    <a class="navlink" href="/top">LOF</a>
     <a class="navlink" href="/pivot">口袋支点</a><a class="navlink" href="/xlj">寻龙诀</a>
     <a class="navlink" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
@@ -543,8 +543,8 @@ PAGE2_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
     <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
     <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>
     <a class="navlink" href="/arb">套利看板</a>
-    <a class="navlink active" href="/ranking">排行表</a>
-    <a class="navlink" href="/top">TOP套利</a>
+    <a class="navlink active" href="/ranking">溢价表</a>
+    <a class="navlink" href="/top">LOF</a>
     <a class="navlink" href="/pivot">口袋支点</a><a class="navlink" href="/xlj">寻龙诀</a>
     <a class="navlink" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
@@ -896,8 +896,8 @@ PAGE3_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
     <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
     <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>
     <a class="navlink" href="/arb">套利看板</a>
-    <a class="navlink" href="/ranking">排行表</a>
-    <a class="navlink active" href="/top">TOP套利</a>
+    <a class="navlink" href="/ranking">溢价表</a>
+    <a class="navlink active" href="/top">LOF</a>
     <a class="navlink" href="/pivot">口袋支点</a><a class="navlink" href="/xlj">寻龙诀</a>
     <a class="navlink" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>
     <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>刷新中</span>
@@ -1161,7 +1161,7 @@ PAGE4_HTML = (
     '<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8"><script>(function(){try{var h=new Date().getHours(),t=localStorage.getItem("arb_theme")||((h>=18||h<6)?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="theme-color" content="#0d1117">\n<link rel="manifest" href="/manifest.json">\n<link rel="apple-touch-icon" href="/icon-192.png">\n<title>口袋支点量化选股 V1.0</title>\n<style>'
     + COMMON_CSS
     + '</style></head><body>\n'
-    + '<div class="wrap">\n<div class="topbar">\n  <div class="titles">\n    <h1>口袋支点量化选股 <span class="ver">V1.0</span></h1>\n    <div class="sub">基于欧奈尔 CAN SLIM · 米勒维尼趋势模板/VCP · 斯泰恩超级强势股，全市场扫描口袋支点买点。每交易日 14:50（收盘前 10 分钟）自动更新。</div>\n  </div>\n  <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>\n  <div class="topnav">\n    <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>\n    <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>\n    <a class="navlink" href="/arb">套利看板</a>\n    <a class="navlink" href="/ranking">排行表</a>\n    <a class="navlink" href="/top">TOP套利</a>\n    <a class="navlink active" href="/pivot">口袋支点</a><a class="navlink" href="/xlj">寻龙诀</a>\n    <a class="navlink" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>\n    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>扫描中</span>\n  </div>\n</div>\n\n<div class="tzline">数据更新时间（北京时间）<b id="updated">—</b><span id="elapsedInfo"></span></div>\n\n<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div><div id="statusbar" class="statusbar" style="display:none"></div>\n<div id="summary" class="summary"></div>\n<div id="loading">加载中…</div>\n<div id="err"></div>\n\n\n<div class="panel">\n  <div class="field"><label>最低评分</label><input id="minScore" value="0" type="number" min="0" max="100" step="5"></div>\n  <div class="field"><label>最低 RS 评级</label><input id="minRs" value="0" type="number" min="0" max="99" step="5"></div>\n  <div class="field"><label>趋势模板下限</label><select id="minTt">\n    <option value="0">不限</option>\n    <option value="6">≥ 6 条</option>\n    <option value="7">≥ 7 条</option>\n    <option value="8">8 条全过</option>\n  </select></div>\n  <div class="field"><label>信号分级</label><select id="fGrade">\n    <option value="">全部</option>\n    <option value="S">S 级（全优）</option>\n    <option value="A">A 级（模板全过）</option>\n    <option value="B">B 级</option>\n    <option value="C">C 级（观察）</option>\n  </select></div>\n  <button id="btn" onclick="applyFilter()">筛选</button>\n  <button id="rescanBtn" onclick="rescan()" style="background:var(--panel);color:var(--title);border:1px solid var(--border)">立即重扫</button>\n  <div id="pick-count" class="fund-title"></div>\n</div>\n\n<div class="histbox" id="pivotHist">\n  <h3>近 5 个交易日 A 级及以上入选</h3>\n  <div id="pivotHistBody"></div>\n</div>\n<div class="note">\n<b>方法论与用法</b>\n<ul>\n  <li><b>口袋支点</b>（Morales &amp; Kacher）：当日成交量 &gt; 过去 10 日所有<b>下跌日</b>的最大成交量，且收阳、实体阳线、收在振幅上半部、站上 50 日线、贴近 10 日线、未过度延伸、未跳空追高、非涨停 —— 共 13 条硬条件全过才算命中。</li>\n  <li><b>趋势模板 8 条</b>（Minervini 第二阶段）：现价 &gt; 150/200 日线、150 &gt; 200 日线、200 日线上行 1 个月、50 &gt; 150 &gt; 200 多头排列、现价 &gt; 50 日线、高于 52 周低点 30%、距 52 周高点 25% 内、RS ≥ 70。</li>\n  <li><b>评分权重</b>（2024-11~2026-07 全市场 32326 个信号回测标定）：趋势模板 40 + RS 22 + 支点质量 15 + VCP 10 + 距高点 8 + 行业 5。实证：趋势模板 8/8 超额 +2.22%，RS 80-90 超额 +2.05%，<b>大盘空头环境超额 -2.95%（择时优先级最高）</b>。</li>\n  <li><b>离场规则</b>：8% 硬止损（Minervini 铁律）+ 收盘跌破 50 日线离场，<b>不设固定止盈</b> —— 回测证明 25% 止盈会把最优组收益从 6.0% 砍到 4.5%。仓位按单笔 1% 风险预算反推。</li>\n  <li>大盘为<b>空仓/防御</b>时信号天然稀少，属纪律性表现，不是程序故障。本页为量化信号提示，不构成投资建议。</li>\n</ul>\n</div>\n</div>'
+    + '<div class="wrap">\n<div class="topbar">\n  <div class="titles">\n    <h1>口袋支点量化选股 <span class="ver">V1.0</span></h1>\n    <div class="sub">基于欧奈尔 CAN SLIM · 米勒维尼趋势模板/VCP · 斯泰恩超级强势股，全市场扫描口袋支点买点。每交易日 14:50（收盘前 10 分钟）自动更新。</div>\n  </div>\n  <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>\n  <div class="topnav">\n    <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>\n    <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>\n    <a class="navlink" href="/arb">套利看板</a>\n    <a class="navlink" href="/ranking">溢价表</a>\n    <a class="navlink" href="/top">LOF</a>\n    <a class="navlink active" href="/pivot">口袋支点</a><a class="navlink" href="/xlj">寻龙诀</a>\n    <a class="navlink" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>\n    <span id="staleBadge" class="stale-badge" style="display:none"><span class="dot"></span>扫描中</span>\n  </div>\n</div>\n\n<div class="tzline">数据更新时间（北京时间）<b id="updated">—</b><span id="elapsedInfo"></span></div>\n\n<div class="tablebox" id="tablebox" style="display:none"><table id="tbl"></table></div><div id="statusbar" class="statusbar" style="display:none"></div>\n<div id="summary" class="summary"></div>\n<div id="loading">加载中…</div>\n<div id="err"></div>\n\n\n<div class="panel">\n  <div class="field"><label>最低评分</label><input id="minScore" value="0" type="number" min="0" max="100" step="5"></div>\n  <div class="field"><label>最低 RS 评级</label><input id="minRs" value="0" type="number" min="0" max="99" step="5"></div>\n  <div class="field"><label>趋势模板下限</label><select id="minTt">\n    <option value="0">不限</option>\n    <option value="6">≥ 6 条</option>\n    <option value="7">≥ 7 条</option>\n    <option value="8">8 条全过</option>\n  </select></div>\n  <div class="field"><label>信号分级</label><select id="fGrade">\n    <option value="">全部</option>\n    <option value="S">S 级（全优）</option>\n    <option value="A">A 级（模板全过）</option>\n    <option value="B">B 级</option>\n    <option value="C">C 级（观察）</option>\n  </select></div>\n  <button id="btn" onclick="applyFilter()">筛选</button>\n  <button id="rescanBtn" onclick="rescan()" style="background:var(--panel);color:var(--title);border:1px solid var(--border)">立即重扫</button>\n  <div id="pick-count" class="fund-title"></div>\n</div>\n\n<div class="histbox" id="pivotHist">\n  <h3>近 5 个交易日 A 级及以上入选</h3>\n  <div id="pivotHistBody"></div>\n</div>\n<div class="note">\n<b>方法论与用法</b>\n<ul>\n  <li><b>口袋支点</b>（Morales &amp; Kacher）：当日成交量 &gt; 过去 10 日所有<b>下跌日</b>的最大成交量，且收阳、实体阳线、收在振幅上半部、站上 50 日线、贴近 10 日线、未过度延伸、未跳空追高、非涨停 —— 共 13 条硬条件全过才算命中。</li>\n  <li><b>趋势模板 8 条</b>（Minervini 第二阶段）：现价 &gt; 150/200 日线、150 &gt; 200 日线、200 日线上行 1 个月、50 &gt; 150 &gt; 200 多头排列、现价 &gt; 50 日线、高于 52 周低点 30%、距 52 周高点 25% 内、RS ≥ 70。</li>\n  <li><b>评分权重</b>（2024-11~2026-07 全市场 32326 个信号回测标定）：趋势模板 40 + RS 22 + 支点质量 15 + VCP 10 + 距高点 8 + 行业 5。实证：趋势模板 8/8 超额 +2.22%，RS 80-90 超额 +2.05%，<b>大盘空头环境超额 -2.95%（择时优先级最高）</b>。</li>\n  <li><b>离场规则</b>：8% 硬止损（Minervini 铁律）+ 收盘跌破 50 日线离场，<b>不设固定止盈</b> —— 回测证明 25% 止盈会把最优组收益从 6.0% 砍到 4.5%。仓位按单笔 1% 风险预算反推。</li>\n  <li>大盘为<b>空仓/防御</b>时信号天然稀少，属纪律性表现，不是程序故障。本页为量化信号提示，不构成投资建议。</li>\n</ul>\n</div>\n</div>'
     + '<script>'
     + 'let RAW=null, POLL=null;\nconst GRADE_COLORS={"S":"#e6394a","A":"#fa8c16","B":"#1f6feb","C":"#8c8c8c"};\n\nfunction applyTheme(t){\n  document.documentElement.setAttribute(\'data-theme\', t);\n  const icon=document.getElementById(\'themeIcon\'), lbl=document.getElementById(\'themeLbl\');\n  if(icon) icon.textContent=(t===\'light\')?\'☀️\':\'🌙\';\n  if(lbl) lbl.textContent=(t===\'light\')?\'日间\':\'夜间\';\n  try{ localStorage.setItem(\'arb_theme\',t); }catch(e){}\n}\nfunction toggleTheme(){\n  applyTheme(document.documentElement.getAttribute(\'data-theme\')===\'light\'?\'dark\':\'light\');\n}\nfunction arbAutoTheme(){ var h=new Date().getHours(); return (h>=18||h<6)?\'dark\':\'light\'; }\n(function(){ let t=arbAutoTheme(); try{ t=localStorage.getItem(\'arb_theme\')||arbAutoTheme(); }catch(e){} applyTheme(t); })();\n\nfunction esc(s){ return String(s==null?"":s).replace(/[&<>"\']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;","\'":"&#39;"}[c])); }\nfunction fmtPct(v,plus){ if(v==null)return "—"; const s=(plus&&v>0)?"+":""; return s+Number(v).toFixed(2)+"%"; }\nfunction cls(v){ return v==null?"":(v>0?"pos":(v<0?"neg":"")); }\nfunction fmtAmt(w){ if(w==null)return "—"; return w>=10000?(w/10000).toFixed(2)+"亿":Math.round(w)+"万"; }\n\n// 近5日 A级及以上入选统计表\nlet histSortKey=\'date\', histSortDesc=false;\nfunction histSort(k){ if(histSortKey===k) histSortDesc=!histSortDesc; else { histSortKey=k; histSortDesc=true; } renderPivotHist(); }\nfunction histCell(k,l){ return \'<th class="\'+(k===\'code\'||k===\'name\'?\'l\':\'\')+\'" onclick="histSort(\'+k+\')" title="点击排序">\'+l+\'</th>\'; }\nasync function loadPivotHist(){\n  const box=document.getElementById(\'pivotHist\');\n  try{\n    const r=await fetch(\'/api/history?type=pivot&days=5&t=\'+Date.now());\n    const d=await r.json();\n    window._histRows=d.rows||[];\n    renderPivotHist();\n  }catch(e){ if(box) box.innerHTML=\'<div class="hist-empty">统计表加载失败：\'+e.message+\'</div>\'; }\n}\nfunction fmtNum4(v){ if(v==null||isNaN(v)) return \'—\'; return Number(v).toFixed(4); }\nfunction fmtPct2(v){ if(v==null||isNaN(v)) return \'—\'; return (v>0?\'+\':\'\')+Number(v).toFixed(2)+\'%\'; }\nfunction renderPivotHist(){\n  const box=document.getElementById(\'pivotHistBody\'); if(!box) return;\n  const rows=(window._histRows||[]).slice();\n  const pm=(window._latestPivot&&window._latestPivot.pickMap)||{};\n  rows.forEach(function(r){ r._cur=(r.lp!=null)?r.lp:((pm[r.code]&&pm[r.code].close)||null); r._chg=(r._cur!=null&&r.price)?(r._cur-r.price)/r.price*100:null; });\n  const numKeys=[\'price\',\'_cur\',\'_chg\'];\n  rows.sort(function(a,b){ var av=a[histSortKey],bv=b[histSortKey]; if(av==null&&bv==null)return 0; if(av==null)return 1; if(bv==null)return -1; if(numKeys.indexOf(histSortKey)>=0) return histSortDesc?(bv-av):(av-bv); return histSortDesc?String(bv).localeCompare(String(av),\'zh\'):String(av).localeCompare(String(bv),\'zh\'); });\n  if(!rows.length){ box.innerHTML=\'<div class="hist-empty">暂无近 5 日 A 级及以上入选记录</div>\'; return; }\n  const head=histCell(\'date\',\'入选日期\')+histCell(\'code\',\'代码\')+histCell(\'name\',\'名称\')+histCell(\'grade\',\'级别\')+histCell(\'price\',\'入选价\')+histCell(\'_cur\',\'最新价\')+histCell(\'_chg\',\'入选至今涨跌幅\');\n  box.innerHTML=\'<table class="histtbl"><thead><tr>\'+head+\'</tr></thead><tbody>\'+rows.map(function(r){\n    const chgCls=(r._chg==null)?\'\':(r._chg>=0?\'pos\':\'neg\');\n    const plain=String(r.code||\'\').replace(/^(sh|sz|bj)/i,\'\');\n    return \'<tr><td>\'+esc(r.date)+\'</td><td><a class="codelink" href="\'+(location.protocol===\'file:\'?\'fund_arb.html\':\'/arb\')+\'?code=\'+plain+\'" target="_blank">\'+esc(r.code)+\'</a></td><td class="l">\'+esc(r.name)+\'</td><td>\'+esc(r.grade)+\'</td><td>\'+fmtNum4(r.price)+\'</td><td>\'+fmtNum4(r._cur)+\'</td><td class="\'+chgCls+\'">\'+fmtPct2(r._chg)+\'</td></tr>\';\n  }).join(\'\')+\'</tbody></table>\';\n}\n\n\nasync function load(){\n  try{\n    const r=await fetch(\'/api/pivot?t=\'+Date.now());\n    const d=await r.json();\n    if(d.error) throw new Error(d.error);\n    RAW=d;\n    window._latestPivot={pickMap:{}};\n    (d.picks||[]).forEach(function(p){ window._latestPivot.pickMap[p.code]=p; });\n    render(d);\n    loadPivotHist();\n    // 扫描进行中 → 轮询进度\n    if(d.scanning){\n      document.getElementById(\'staleBadge\').style.display=\'inline-flex\';\n      if(!POLL) POLL=setInterval(load,4000);\n    }else{\n      document.getElementById(\'staleBadge\').style.display=\'none\';\n      if(POLL){ clearInterval(POLL); POLL=null; }\n    }\n  }catch(e){\n    document.getElementById(\'loading\').style.display=\'none\';\n    document.getElementById(\'err\').textContent=\'加载失败：\'+e.message;\n  }\n}\n\nfunction render(d){\n  document.getElementById(\'loading\').style.display=\'none\';\n  document.getElementById(\'err\').textContent=\'\';\n  document.getElementById(\'updated\').textContent=d.updated||\'—\';\n  const ei=document.getElementById(\'elapsedInfo\');\n  if(d.scanning){\n    const p=d.progress||{};\n    ei.textContent=\'\u3000｜\u3000正在扫描：\'+(p.phase||\'\')+\' \'+(p.done||0)+\'/\'+(p.total||0);\n  }else if(d.elapsed!=null){\n    ei.textContent=\'\u3000｜\u3000本次扫描耗时 \'+d.elapsed+\' 秒，覆盖 \'+((d.stats&&d.stats.universe)||0)+\' 只个股\';\n  }else{ ei.textContent=\'\'; }\n\n  // ---- 大盘状态条 ----\n  const m=d.market||{};\n  const bar=document.getElementById(\'statusbar\');\n  if(m.state){\n    const good=(m.state===\'进攻\'), bad=(m.state===\'空仓\'||m.state===\'防御\');\n    bar.className=\'statusbar \'+(good?\'ok\':(bad?\'warn\':\'info\'));\n    bar.style.display=\'flex\';\n    const col=good?\'#52c41a\':(bad?\'#ff4d4f\':\'#fa8c16\');\n    bar.innerHTML=\'<div class="status-item"><span class="status-label">大盘状态</span>\'\n      +\'<span class="badge" style="background:\'+col+\'22;color:\'+col+\';border:1px solid \'+col+\'55">\'+esc(m.state)+\'</span></div>\'\n      +\'<div class="status-item"><span class="status-label">市场健康度</span><span>\'+(m.score!=null?m.score:\'—\')+\' / 100</span></div>\'\n      +\'<div class="status-item"><span class="status-label">建议仓位上限</span><span>\'+(m.max_position!=null?m.max_position+\'%\':\'—\')+\'</span></div>\'\n      +\'<div class="status-item"><span class="status-label">25日分销日</span><span>\'+(m.dd_count!=null?m.dd_count+\' 个\':\'—\')+\'</span></div>\'\n      +\'<div class="status-item" style="margin-left:auto;color:var(--muted)">\'+esc(m.detail||\'\')+\'</div>\';\n  }else{ bar.style.display=\'none\'; }\n\n  // ---- 统计卡片（可点击筛选分级）----\n  const st=d.stats||{}, g=st.grade||{};\n  const cur=document.getElementById(\'fGrade\').value;\n  const cards=[[\'\',\'命中总数\',st.picks!=null?st.picks:0],\n               [\'S\',\'S 级（全优）\',g.S||0],[\'A\',\'A 级（模板全过）\',g.A||0],\n               [\'B\',\'B 级\',g.B||0],[\'C\',\'C 级（观察）\',g.C||0]];\n  document.getElementById(\'summary\').innerHTML=cards.map(function(x){\n    const on=(cur===x[0])?\' active\':\'\';\n    const c=GRADE_COLORS[x[0]];\n    return \'<div class="sitem clickable\'+on+\'" onclick="pickGrade(\\\'\'+x[0]+\'\\\')">\'\n      +\'<div class="l">\'+x[1]+\'</div><div class="v"\'+(c?\' style="color:\'+c+\'"\':\'\')+\'>\'+x[2]+\'</div></div>\';\n  }).join(\'\');\n\n  applyFilter();\n}\n\nfunction pickGrade(g){\n  document.getElementById(\'fGrade\').value=g;\n  render(RAW);\n}\n\nlet pivotSortKey=\'score\', pivotSortDesc=true;\n\nfunction pivotSortBy(key){ if(pivotSortKey===key) pivotSortDesc=!pivotSortDesc; else { pivotSortKey=key; pivotSortDesc=true; } applyFilter(); }\nfunction pivotHeadCell(k,l){ var arrow=(pivotSortKey===k)?(pivotSortDesc?\' ▼\':\' ▲\'):\'\'; return \'<th style=\\"cursor:pointer\\" onclick=\\"pivotSortBy(\\\'\'+k+\'\\\')\\" title=\\"点击排序\\">\'+l+arrow+\'</th>\'; }\nfunction pivotSorted(rows){ var numKeys=[\'score\',\'rs\',\'trend_pass\',\'close\',\'chg_pct\',\'vol_x\',\'off_high_pct\',\'plan_stop\',\'plan_pos\']; var numeric=numKeys.indexOf(pivotSortKey)>=0; return rows.slice().sort(function(a,b){ var av=a[pivotSortKey], bv=b[pivotSortKey]; if(av==null&&bv==null)return 0; if(av==null)return 1; if(bv==null)return -1; if(numeric)return pivotSortDesc?(bv-av):(av-bv); return pivotSortDesc?String(bv).localeCompare(String(av),\'zh\'):String(av).localeCompare(String(bv),\'zh\'); }); }\n\nfunction applyFilter(){\n  if(!RAW) return;\n  const minScore=parseFloat(document.getElementById(\'minScore\').value)||0;\n  const minRs=parseFloat(document.getElementById(\'minRs\').value)||0;\n  const minTt=parseInt(document.getElementById(\'minTt\').value)||0;\n  const fg=document.getElementById(\'fGrade\').value;\n  let rows=(RAW.picks||[]).filter(function(p){\n    return p.score>=minScore && p.rs>=minRs && p.trend_pass>=minTt && (!fg||p.grade===fg);\n  });\n  document.getElementById(\'pick-count\').innerHTML=rows.length+\' 只 <small>符合当前条件</small>\';\n\n  if(!rows.length){\n    document.getElementById(\'tablebox\').style.display=\'none\';\n    document.getElementById(\'err\').textContent=(RAW.scanning\n      ? \'首次扫描进行中，请稍候（全市场约需 3-6 分钟）…\'\n      : \'当前条件下无命中。大盘走弱时信号稀少属正常，可放宽筛选条件。\');\n    return;\n  }\n  document.getElementById(\'err\').textContent=\'\';\n\n  rows = pivotSorted(rows);\n  rows.forEach(function(p){ p.plan_stop=(p.plan&&p.plan.stop!=null)?p.plan.stop:null; p.plan_pos=(p.plan&&p.plan.pos_pct!=null)?p.plan.pos_pct:null; });\n  let html=\'<thead><tr>\' + pivotHeadCell(\'name\',\'名称/代码\') + pivotHeadCell(\'grade\',\'级别\') + pivotHeadCell(\'score\',\'评分\')\n    + pivotHeadCell(\'rs\',\'RS\') + pivotHeadCell(\'trend_pass\',\'模板\') + pivotHeadCell(\'close\',\'现价\')\n    + pivotHeadCell(\'chg_pct\',\'涨跌\') + pivotHeadCell(\'vol_x\',\'量能倍数\') + pivotHeadCell(\'off_high_pct\',\'距52周高\')\n    + pivotHeadCell(\'plan_stop\',\'止损\') + pivotHeadCell(\'plan_pos\',\'仓位\') + \'<th>详情</th></tr></thead><tbody>\';\n  rows.forEach(function(p,i){\n    const gc=GRADE_COLORS[p.grade]||\'#8c8c8c\';\n    html+=\'<tr>\'\n      +\'<td class="name"><b>\'+esc(p.name)+\'</b> <a class="codelink" href="https://gu.qq.com/\'+esc(p.symbol)+\'" target="_blank" rel="noopener">\'+esc(p.code)+\'</a></td>\'\n      +\'<td><span class="badge" style="background:\'+gc+\'22;color:\'+gc+\';border:1px solid \'+gc+\'55">\'+esc(p.grade||\'—\')+\'</span></td>\'\n      +\'<td><b>\'+p.score+\'</b></td>\'\n      +\'<td>\'+p.rs+\'</td>\'\n      +\'<td>\'+p.trend_pass+\'/8</td>\'\n      +\'<td>\'+p.close+\'</td>\'\n      +\'<td class="\'+cls(p.chg_pct)+\'">\'+fmtPct(p.chg_pct,true)+\'</td>\'\n      +\'<td>\'+p.vol_x+\'×</td>\'\n      +\'<td class="\'+cls(p.off_high_pct)+\'">\'+fmtPct(p.off_high_pct,false)+\'</td>\'\n      +\'<td>\'+(p.plan_stop==null?\'—\':p.plan_stop)+\'</td>\'\n      +\'<td>\'+(p.plan_pos==null?\'—\':p.plan_pos)+\'%</td>\'\n      +\'<td class="op-cell"><button style="padding:4px 10px;font-size:12px" onclick="toggleDetail(\'+i+\')">展开</button></td>\'\n      +\'</tr>\'\n      +\'<tr id="dt\'+i+\'" style="display:none"><td colspan="12" style="text-align:left;white-space:normal;padding:12px 14px;background:var(--row-hover)">\'\n      +detailHtml(p)+\'</td></tr>\';\n  });\n  document.getElementById(\'tbl\').innerHTML=html+\'</tbody>\';\n  document.getElementById(\'tablebox\').style.display=\'block\';\n  window.__rows=rows;\n}\n\nfunction detailHtml(p){\n  const tt=p.tt||{}, stine=p.stine||{}, pl=p.plan||{};\n  const mark=function(v){ return v?\'<span style="color:var(--neg)">✓</span>\':\'<span style="color:var(--muted)">✗</span>\'; };\n  let s=\'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">\';\n  // 趋势模板\n  s+=\'<div><b>Minervini 趋势模板 \'+p.trend_pass+\'/8</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\';\n  Object.keys(tt).forEach(function(k){ s+=mark(tt[k])+\' \'+esc(k)+\'<br>\'; });\n  s+=mark(p.rs>=70)+\' ⑧RS评级≥70（当前 \'+p.rs+\'）\';\n  s+=\'</div></div>\';\n  // 交易计划\n  s+=\'<div><b>交易计划（1% 风险预算）</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\'\n    +\'买入区间：<b>\'+pl.buy_low+\' ~ \'+pl.buy_high+\'</b><br>\'\n    +\'止损价：<b style="color:var(--pos)">\'+pl.stop+\'</b>（风险 \'+pl.risk_pct+\'%）<br>\'\n    +\'2R 目标：\'+pl.target2+\'\u30003R 目标：\'+pl.target3+\'<br>\'\n    +\'建议仓位：<b>\'+pl.pos_pct+\'%</b><br>\'\n    +\'离场：\'+esc(pl.exit_rule||\'\')\n    +\'</div></div>\';\n  // Stine + 关键指标\n  s+=\'<div><b>超级强势股（Stine）</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\';\n  Object.keys(stine).forEach(function(k){ s+=mark(stine[k])+\' \'+esc(k)+\'<br>\'; });\n  s+=\'</div></div>\';\n  s+=\'<div><b>关键指标</b><div style="margin-top:6px;line-height:1.9;font-size:12px">\'\n    +\'支点质量：\'+p.pocket_quality+\' / 100<br>\'\n    +\'VCP：\'+(p.vcp?\'成立\':\'不成立\')+\'（\'+p.vcp_score+\' 分）<br>\'\n    +\'量能 / 50日均量：\'+p.vol_vs_ma50+\'×<br>\'\n    +\'距 52 周低点：+\'+p.up_from_low_pct+\'%<br>\'\n    +\'成交额：\'+fmtAmt(p.amount_wan)+\'\u3000换手：\'+p.turn_rate+\'%<br>\'\n    +\'流通市值：\'+p.float_mcap+\' 亿\'\n    +\'</div></div>\';\n  s+=\'</div>\';\n  if(p.reasons&&p.reasons.length){\n    s+=\'<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px">\'\n      +\'<b>入选理由</b>：\'+p.reasons.map(esc).join(\' ｜ \')+\'</div>\';\n  }\n  return s;\n}\n\nfunction toggleDetail(i){\n  const el=document.getElementById(\'dt\'+i);\n  if(el) el.style.display=(el.style.display===\'none\')?\'table-row\':\'none\';\n}\n\nasync function rescan(){\n  const b=document.getElementById(\'rescanBtn\');\n  b.disabled=true; b.textContent=\'已触发…\';\n  try{\n    await fetch(\'/api/pivot?force=1&t=\'+Date.now());\n    document.getElementById(\'staleBadge\').style.display=\'inline-flex\';\n    if(!POLL) POLL=setInterval(load,4000);\n  }catch(e){}\n  setTimeout(function(){ b.disabled=false; b.textContent=\'立即重扫\'; },3000);\n}\n\n[\'minScore\',\'minRs\'].forEach(function(id){\n  document.getElementById(id).addEventListener(\'keydown\',function(e){ if(e.key===\'Enter\') applyFilter(); });\n});\n[\'minTt\',\'fGrade\'].forEach(function(id){\n  document.getElementById(id).addEventListener(\'change\',applyFilter);\n});\n\nload();\nsetInterval(function(){ if(!POLL) load(); }, 60000);\n\nif(\'serviceWorker\' in navigator){\n  window.addEventListener(\'load\',function(){\n    navigator.serviceWorker.register(\'/sw.js\').catch(function(err){ console.log(\'SW 注册失败：\',err); });\n  });\n}'
     + '</script>\n<script src="watchlist.js"></script></body></html>'
@@ -1212,8 +1212,8 @@ PAGE5_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta
     <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
     <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>
     <a class="navlink" href="/arb">套利看板</a>
-    <a class="navlink" href="/ranking">排行表</a>
-    <a class="navlink" href="/top">TOP套利</a>
+    <a class="navlink" href="/ranking">溢价表</a>
+    <a class="navlink" href="/top">LOF</a>
     <a class="navlink" href="/pivot">口袋支点</a><a class="navlink" href="/xlj">寻龙诀</a>
     <a class="navlink active" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>
   </div>
@@ -1472,6 +1472,18 @@ PAGE_XLJ_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><m
 .xlj-market.up b{color:#2ecc71}
 .xlj-market.down b{color:#ff6b6e}
 .xlj-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:12px;margin-bottom:14px}
+.xlj-fold{margin-bottom:14px}
+.xlj-fold .fold-head{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:9px 14px;transition:border-color .15s}
+.xlj-fold .fold-head:hover{border-color:var(--btn)}
+.xlj-fold .fold-title{font-size:13.5px;font-weight:700;color:var(--title)}
+.xlj-fold .fold-arrow{margin-left:auto;font-size:11px;color:var(--muted);transition:transform .2s}
+.xlj-fold .fold-body{overflow:hidden;transition:max-height .25s ease}
+.xlj-fold .fold-body.closed{max-height:0}
+.xlj-fold .fold-body.open{max-height:440px}
+.xlj-fold .xlj-kpi{margin:10px 0 0}
+.btn-refresh{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 9px;font-size:11.5px;font-weight:600;cursor:pointer;margin-left:8px;font-family:inherit;vertical-align:middle}
+.btn-refresh:hover{border-color:var(--btn);color:var(--btn)}
+.xlj-snap-tip{color:var(--muted);font-size:11.5px;margin-left:8px}
 .xlj-kpi .sitem{padding:13px 12px;transition:border-color .15s}
 .xlj-kpi .sitem:hover{border-color:var(--btn)}
 .xlj-kpi .sitem .v{font-size:21px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
@@ -1548,8 +1560,8 @@ PAGE_XLJ_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><m
 <div class="topnav">
 <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
 <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>
-<a class="navlink" href="/arb">套利看板</a><a class="navlink" href="/ranking">排行表</a>
-<a class="navlink" href="/top">TOP套利</a><a class="navlink" href="/pivot">口袋支点</a>
+<a class="navlink" href="/arb">套利看板</a><a class="navlink" href="/ranking">溢价表</a>
+<a class="navlink" href="/top">LOF</a><a class="navlink" href="/pivot">口袋支点</a>
 <a class="navlink active" href="/xlj">寻龙诀</a>
 <a class="navlink" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>
 <span class="navspacer"></span>
@@ -1558,13 +1570,13 @@ PAGE_XLJ_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><m
 <div class="wrap">
 <div class="topbar">
   <div class="titles">
-    <h1>寻龙诀 · CANSLIM 选股 <span class="ver">V2.1</span></h1>
+    <h1>寻龙诀 · CANSLIM 选股 <span class="ver">V3.0</span></h1>
     <div class="sub">欧奈尔 CANSLIM + 口袋支点 + RPS 相对强度，全市场扫描后取综合评分前 20 名，每交易日 14:57 自动更新 · 点击任意行查看个股诊断</div>
   </div>
 </div>
-<div class="tzline">数据快照 <b id="snapDate">&mdash;</b> &middot; 北京时间 <b id="clock">&mdash;</b> &middot; 引擎 <b>V2.1</b></div>
+<div class="tzline">数据快照 <b id="snapDate">&mdash;</b> &middot; 北京时间 <b id="clock">&mdash;</b> &middot; 引擎 <b id="xljVer">V3.0</b><button class="btn-refresh" id="xljRefresh" onclick="refreshXlj()">&#8635; 刷新</button><span class="xlj-snap-tip" id="xljSnapTip">每交易日14:05自动同步快照</span></div>
 <div id="xlj-market" class="xlj-market"></div>
-<div id="xlj-kpi" class="xlj-kpi"></div>
+<div class="xlj-fold"><div class="fold-head" onclick="toggleKpi()"><span class="fold-title">市场概览</span><span class="fold-arrow" id="kpiArrow">&#9660;</span></div><div class="fold-body closed" id="kpiBody"><div id="xlj-kpi" class="xlj-kpi"></div></div></div>
 <div class="panel xlj-panel">
   <div class="xlj-filter">
     <div class="field"><label>信号</label><select id="fSig"><option value="">全部</option><option value="buy">买入</option><option value="watch">观察</option></select></div>
@@ -1589,6 +1601,8 @@ PAGE_XLJ_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><m
 <th data-k="near_high_pct">距高%<span class="arr"></span></th>
 <th data-k="eps_growth">季增%<span class="arr"></span></th>
 <th data-k="year_growth">年增%<span class="arr"></span></th>
+<th data-k="buy_pivot">买点<span class="arr"></span></th>
+<th data-k="stop">止损<span class="arr"></span></th>
 <th data-k="fund_count">基金<span class="arr"></span></th>
 </tr></thead>
 <tbody id="xljBody"></tbody>
@@ -1601,17 +1615,19 @@ PAGE_XLJ_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><m
 <div class="note">
 <b>评分体系（满分 100）</b>
 <ul>
-<li><b>L</b> RPS 相对强度 25 分 &middot; <b>N</b> 新高距离 10 分 &middot; <b>S</b> 量价确认 15 分 &middot; <b>M</b> 市场方向 10 分 &middot; <b>口袋支点</b> 20 分</li>
-<li><b>C</b> 当季 EPS 增长 10 分 &middot; <b>A</b> 年度 EPS 增长 5 分 &middot; <b>I</b> 机构持仓 5 分</li>
+<li><b>L</b> RPS 相对强度 25 分 &middot; <b>N</b> 距 52 周新高 10 分 &middot; <b>S</b> 量价确认 15 分 &middot; <b>T</b> 趋势模板 10 分 &middot; <b>P</b> 形态（口袋支点 / 杯柄）20 分</li>
+<li><b>C</b> 当季 EPS 同比 10 分 &middot; <b>A</b> 年度 EPS 同比 5 分 &middot; <b>I</b> 基金持仓家数 5 分</li>
 </ul>
 <b>买入纪律</b>
 <ul>
-<li>买入信号 = 口袋支点 + RPS&#8805;85 + 市场向上 + 基金&#8805;3 家；市场向下时不买入，全部列为观察。</li>
+<li>买入信号 = 出现口袋支点 / 杯柄突破 + 综合评分 &ge; 60 + 大盘趋势向上；大盘转弱时一律降为观察，不新开仓。</li>
+<li>买点参考价 = 枢轴价（突破前高）&middot; 止损 = 现价 &minus;8%（欧奈尔铁律）&middot; 跌破 MA50 减仓。</li>
 </ul>
 <b>数据与范围</b>
 <ul>
-<li>数据源：通达信本地日线 + 财报（gpcw）+ 基金持仓（fundstk）；排除科创板 688 与北证。</li>
-<li>本页为量化筛选结果，仅供参考，不构成投资建议。</li>
+<li>数据源：通达信本地日线 + 腾讯前复权因子 + 财报（gpcw，最新报告期 2026 中报）+ 基金持仓（fundstk，2025Q3）。</li>
+<li>覆盖沪深主板 / 创业板 / 科创板 / 北交所；剔除 ST、退市、停牌与上市不足 250 个交易日的次新，再叠加 RPS 与趋势模板硬门槛。</li>
+<li>本系统按公开欧奈尔 CANSLIM / 口袋支点理论自建，阈值可调可回测；寻龙诀原作者参数未公开，本页不是其复刻。仅供参考，不构成投资建议。</li>
 </ul>
 </div>
 </div>
@@ -1628,12 +1644,15 @@ function pctColor(v){return(v>=0)?"pos":"neg"}
 function scFill(s){return(s>=65)?"s-hi":(s>=50)?"s-md":""}
 function scBar(s){return"<span class='score-cell'><span class='score-bar'><span class='score-fill "+scFill(s)+"' style='width:"+Math.max(3,s)+"%'></span></span><b>"+s+"</b></span>"}
 function esc(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
-function loadData(){fetch("/api/xlj").then(function(r){return r.json()}).then(function(d){D=d;render()}).catch(function(e){document.getElementById("xljBody").innerHTML="<tr><td colspan='12' style='text-align:center;color:var(--muted);padding:44px 8px'>数据加载失败或尚未上传</td></tr>"})}
+function periodTag(p){if(!p)return"";p=String(p);var mmdd=p.slice(4),y=p.slice(2,4);
+var m={"1231":"年报","0630":"中报","0331":"一季报","0930":"三季报"}[mmdd]||("报告期"+mmdd);return"财报 "+y+"年"+m}
+function loadData(){fetch("/api/xlj").then(function(r){return r.json()}).then(function(d){D=d;render()}).catch(function(e){document.getElementById("xljBody").innerHTML="<tr><td colspan='14' style='text-align:center;color:var(--muted);padding:44px 8px'>数据加载失败或尚未上传</td></tr>"})}
 function render(){
 var md=D.market_direction||{};
+var stName={confirmed_uptrend:"确认上升趋势",uptrend:"上升趋势",under_pressure:"高位承压",rally_in_downtrend:"下跌中反弹",downtrend:"下跌趋势"}[md.state]||"";
 var bar=document.getElementById("xlj-market");
-if(md.direction==="up"){bar.className="xlj-market up";bar.innerHTML="市场方向 <b>向上</b> — 上证指数 "+fmt(md.price)+" 高于 MA50 "+fmt(md.ma50)+"，符合 CANSLIM 买入条件<span class='m-sub'>M 项计 10 分，个股买入信号照常发出</span>"}
-else{bar.className="xlj-market down";bar.innerHTML="市场方向 <b>向下</b> — 上证指数 "+fmt(md.price)+" 低于 MA50 "+fmt(md.ma50)+"<span class='m-sub'>按纪律暂不发出买入信号，全部达标股列为观察</span>"}
+if(md.direction==="up"){bar.className="xlj-market up";bar.innerHTML="市场方向 <b>向上</b> — 上证指数 "+fmt(md.price)+" 高于 MA50 "+fmt(md.ma50)+"<span class='m-sub'>"+stName+"（建议仓位 "+Math.round((md.position||0)*100)+"%），个股买入信号照常发出</span>"}
+else{bar.className="xlj-market down";bar.innerHTML="市场方向 <b>向下</b> — 上证指数 "+fmt(md.price)+" 低于 MA50 "+fmt(md.ma50)+"<span class='m-sub'>"+stName+"（建议仓位 "+Math.round((md.position||0)*100)+"%），按纪律暂不发出买入信号，全部达标股列为观察</span>"}
 var pc=0;((D.stocks)||[]).forEach(function(s){if(s.is_pocket)pc++});
 var k=document.getElementById("xlj-kpi");
 k.innerHTML=[
@@ -1644,6 +1663,7 @@ k.innerHTML=[
 {l:"口袋支点",v:pc,c:((D.buy_count||0)>0)?"c-pos":""}
 ].map(function(x){return"<div class='sitem'><div class='l'>"+x.l+"</div><div class='v "+x.c+"'>"+x.v+"</div></div>"}).join("");
 var sd=document.getElementById("snapDate");if(sd&&D.run_date)sd.textContent=D.run_date;
+var vv=document.getElementById("xljVer");if(vv&&D.engine_version)vv.textContent=D.engine_version;
 renderTable()}
 function filtered(){var fSig=document.getElementById("fSig").value,fSc=+document.getElementById("fScore").value,fRps=+document.getElementById("fRps").value,fPk=document.getElementById("fPocket").value;
 return(D.stocks||[]).filter(function(s){if(fSig&&s.signal!==fSig)return false;if((s.score_total||0)<fSc)return false;if(rpsMax(s)<fRps)return false;if(fPk==="1"&&!s.is_pocket)return false;return true})}
@@ -1655,10 +1675,10 @@ else list.sort(function(a,b){return sortDir*(((a[sortKey]||0)-(b[sortKey]||0)))}
 document.querySelectorAll("#xljTable th[data-k]").forEach(function(th){var a=th.querySelector(".arr");if(a)a.innerHTML=(th.getAttribute("data-k")===sortKey)?((sortDir<0)?"&#9660;":"&#9650;"):"&nbsp;"});
 var body=document.getElementById("xljBody");
 document.getElementById("xljCount").innerHTML="显示 <b>"+list.length+"</b> / Top20 · 全市场达标 <b>"+(D.total_qualified||0)+"</b> 只";
-if(!list.length){body.innerHTML="<tr><td colspan='12' style='text-align:center;color:var(--muted);padding:36px 8px'>无符合条件的股票，试试放宽筛选</td></tr>";return}
+if(!list.length){body.innerHTML="<tr><td colspan='14' style='text-align:center;color:var(--muted);padding:36px 8px'>无符合条件的股票，试试放宽筛选</td></tr>";return}
 body.innerHTML=list.map(function(s){var rm=rpsMax(s);
 return"<tr onclick=\"showDetail('"+s.code+"')\">"+
-"<td class='name'><span class='xlj-name'><span class='nm'>"+esc(s.name||"—")+"</span><span class='cd'>"+s.code+"</span></span></td>"+
+"<td class='name'><span class='xlj-name'><span class='nm'>"+esc(s.code||"—")+esc(s.name?(" "+s.name):"")+"</span><span class='cd'>"+periodTag(s.report_period)+"</span></span></td>"+
 "<td>"+scBar(s.score_total)+"</td>"+
 "<td>"+sigTag(s.signal)+"</td>"+
 "<td>"+(s.is_pocket?"<span class='tag pocket'>支点</span>":"<span class='muted-cell'>—</span>")+"</td>"+
@@ -1669,16 +1689,18 @@ return"<tr onclick=\"showDetail('"+s.code+"')\">"+
 "<td>"+fmt(s.near_high_pct,1)+"</td>"+
 "<td class='"+((s.eps_growth>=0)?"pos":"neg")+"'>"+(s.eps_growth?pct(s.eps_growth):"—")+"</td>"+
 "<td class='"+((s.year_growth>=0)?"pos":"neg")+"'>"+(s.year_growth?pct(s.year_growth):"—")+"</td>"+
+"<td style='color:var(--est)'>"+(s.buy_pivot!=null?fmt(s.buy_pivot,2):"—")+"</td>"+
+"<td style='color:var(--pos)'>"+(s.stop!=null?fmt(s.stop,2):"—")+"</td>"+
 "<td>"+(s.fund_count||0)+"</td>"+
 "</tr>"}).join("")}
 document.querySelectorAll("#xljTable th[data-k]").forEach(function(th){th.addEventListener("click",function(){var k=th.getAttribute("data-k");if(sortKey===k){sortDir*=-1}else{sortKey=k;sortDir=-1}renderTable()})});
 ["fSig","fScore","fRps","fPocket"].forEach(function(id){document.getElementById(id).addEventListener("change",renderTable)});
 function resetFilter(){document.getElementById("fSig").value="";document.getElementById("fScore").value="40";document.getElementById("fRps").value="0";document.getElementById("fPocket").value="";renderTable()}
 function showDetail(code){var s=(D.stocks||[]).find(function(x){return x.code===code});if(!s)return;var rm=rpsMax(s);
-var cas=[["L · RPS",s.score_l],["N · 新高",s.score_n],["S · 量价",s.score_s],["M · 市场",s.score_m],["口袋支点",s.score_p],["C · 季增",s.score_c],["A · 年增",s.score_a],["I · 机构",s.score_i]];
+var cas=[["L · RPS",s.score_l],["N · 新高",s.score_n],["S · 量价",s.score_s],["T · 趋势",s.score_m],["口袋支点",s.score_p],["C · 季增",s.score_c],["A · 年增",s.score_a],["I · 机构",s.score_i]];
 var reasons=(s.reason||"").split(";").filter(function(x){return x&&x.trim()});
 document.getElementById("xljDetailBox").innerHTML=
-"<h3><span>"+esc(s.name||"")+"</span><span class='d-code'>"+s.code+"</span><span class='d-score'>综合评分 <b>"+s.score_total+"</b> / 100</span></h3>"+
+"<h3><span class='d-code'>"+esc(s.code||"")+"</span><span>"+esc(s.name||"")+"</span><span class='d-score'>综合评分 <b>"+s.score_total+"</b> / 100</span></h3>"+
 "<div class='detail-sec'>CANSLIM 八维评分</div>"+
 "<div class='cas-grid'>"+cas.map(function(c){return"<div class='cas'><div class='cl'>"+c[0]+"</div><div class='cv "+((c[1]||0)>0?"on":"")+"'>"+(c[1]||0)+"</div></div>"}).join("")+"</div>"+
 "<div class='detail-sec'>关键指标</div>"+
@@ -1692,6 +1714,12 @@ document.getElementById("xljDetailBox").innerHTML=
 "<div class='item'><div class='k'>EPS 同比</div><div class='v "+((s.eps_growth>=0)?"pos":"neg")+"' style='font-size:12px'>"+(s.eps_growth?pct(s.eps_growth):"—")+"</div></div>"+
 "<div class='item'><div class='k'>年度增长</div><div class='v' style='font-size:12px'>"+(s.year_growth?pct(s.year_growth):"—")+"</div></div>"+
 "<div class='item'><div class='k'>基金持仓</div><div class='v' style='font-size:12px'>"+(s.fund_count||0)+" 家"+((s.fund_value)?" / "+fmt(s.fund_value,0)+" 万":"")+"</div></div>"+
+"<div class='item'><div class='k'>形态</div><div class='v' style='font-size:12px'>"+({pocket:"口袋支点",cup:"杯柄突破",near_pivot:"逼近枢轴",none:"—"}[s.pattern]||"—")+"</div></div>"+
+"<div class='item'><div class='k'>趋势模板</div><div class='v' style='font-size:12px'>"+((s.trend_pass!=null)?s.trend_pass+"/8":"—")+"</div></div>"+
+"<div class='item'><div class='k'>枢轴买点</div><div class='v' style='color:var(--est);font-size:12px'>"+(s.buy_pivot!=null?fmt(s.buy_pivot,2):"—")+"</div></div>"+
+"<div class='item'><div class='k'>8% 止损位</div><div class='v' style='color:var(--pos);font-size:12px'>"+(s.stop!=null?fmt(s.stop,2):"—")+"</div></div>"+
+"<div class='item'><div class='k'>MA50 减仓线</div><div class='v' style='font-size:12px'>"+(s.sell_ma50!=null?fmt(s.sell_ma50,2):"—")+"</div></div>"+
+"<div class='item'><div class='k'>ROE / 流通市值</div><div class='v' style='font-size:12px'>"+((s.roe!=null)?fmt(s.roe,1)+"%":"—")+" / "+((s.mktcap_yi!=null)?fmt(s.mktcap_yi,1)+" 亿":"—")+"</div></div>"+
 "</div>"+
 "<div class='detail-sec'>选股理由</div>"+
 "<div class='detail-reason'>"+(reasons.length?reasons.map(function(r){return"<span class='dot'>&#9670;</span>"+esc(r.trim())}).join("<br>"):"—")+"</div>"+
@@ -1700,6 +1728,11 @@ document.getElementById("xljDetail").classList.add("show")}
 document.getElementById("xljDetail").addEventListener("click",function(e){if(e.target===this)this.classList.remove("show")});
 function tick(){try{document.getElementById("clock").textContent=new Intl.DateTimeFormat("zh-CN",{timeZone:"Asia/Shanghai",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(new Date())}catch(e){document.getElementById("clock").textContent=new Date().toLocaleString()}}
 tick();setInterval(tick,1000);
+var kpiOpen=false;
+function toggleKpi(){kpiOpen=!kpiOpen;var b=document.getElementById('kpiBody'),a=document.getElementById('kpiArrow');if(b)b.classList.toggle('open',kpiOpen);if(a)a.innerHTML=kpiOpen?'&#9650;':'&#9660;';}
+var xljPolling=false;
+function refreshXlj(){var btn=document.getElementById('xljRefresh'),tip=document.getElementById('xljSnapTip');if(btn)btn.disabled=true;tip.textContent='正在刷新…';fetch('/api/xlj?recalc=1&t='+Date.now()).then(function(r){return r.json()}).then(function(d){if(d.recalc==='started'||d.recalc==='running'){tip.textContent='正在重新计算（约需2分钟）…';if(!xljPolling){xljPolling=true;pollXljRecalc();}}else{D=d;render();loadXljHist();tip.textContent='已刷新 '+new Date().toLocaleTimeString('zh-CN',{hour12:false});if(btn)btn.disabled=false;}}).catch(function(e){tip.textContent='刷新失败';if(btn)btn.disabled=false;})}
+function pollXljRecalc(){var btn=document.getElementById('xljRefresh');setTimeout(function(){fetch('/api/xlj?t='+Date.now()).then(function(r){return r.json()}).then(function(d){if(d.recalc_running){document.getElementById('xljSnapTip').textContent='正在重新计算（约需2分钟）…';pollXljRecalc();}else{xljPolling=false;D=d;render();loadXljHist();document.getElementById('xljSnapTip').textContent='已更新 '+new Date().toLocaleTimeString('zh-CN',{hour12:false});if(btn)btn.disabled=false;}}).catch(function(){xljPolling=false;document.getElementById('xljSnapTip').textContent='刷新失败';if(btn)btn.disabled=false;});},8000);}
 function loadXljHist(){
 fetch("/api/history?type=xlj&days=5&t="+Date.now()).then(function(r){return r.json()}).then(function(d){
 var rows=d.rows||[];

@@ -3438,6 +3438,45 @@ def _cb_history_entries(res):
     return out
 
 XLJ_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xlj_data.json")
+# 本地重算引擎路径（仅本机存在；线上无此路径 → 自动降级为快照刷新）
+_XLJ_ENGINE = r"D:\teleagent\寻龙诀\engine_v2.py"
+_XLJ_RECALC = {"running": False, "last_start": 0.0, "last_finish": 0.0, "updated": 0.0}
+_XLJ_RECALC_LOCK = _threading.Lock()
+
+def _xlj_recalc_available():
+    return os.path.exists(_XLJ_ENGINE)
+
+def _xlj_run_recalc():
+    """本地有引擎时后台重算并更新快照；返回 started/running。"""
+    import subprocess, sys
+    with _XLJ_RECALC_LOCK:
+        if _XLJ_RECALC["running"]:
+            return "running"
+        _XLJ_RECALC["running"] = True
+        _XLJ_RECALC["last_start"] = time.time()
+    def _job():
+        try:
+            res = subprocess.run([sys.executable, _XLJ_ENGINE],
+                                 cwd=os.path.dirname(_XLJ_ENGINE), timeout=420,
+                                 capture_output=True)
+            rp = os.path.join(os.path.dirname(_XLJ_ENGINE), "results.json")
+            if os.path.exists(rp):
+                with open(rp, encoding="utf-8") as _f:
+                    data = json.load(_f)
+                with open(XLJ_DATA_FILE, "w", encoding="utf-8") as _f:
+                    json.dump(data, _f, ensure_ascii=False)
+                try:
+                    history_append("xlj", data.get("run_date", ""), _xlj_history_entries(data))
+                except Exception:
+                    pass
+                _XLJ_RECALC["updated"] = time.time()
+        except Exception as e:
+            print(f"    [寻龙诀] 重算失败: {e}")
+        finally:
+            _XLJ_RECALC["last_finish"] = time.time()
+            _XLJ_RECALC["running"] = False
+    _threading.Thread(target=_job, daemon=True).start()
+    return "started"
 
 def _xlj_history_entries(data):
     """寻龙诀：当日综合评分前三名入选记录。"""
@@ -4517,12 +4556,24 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
         if parsed.path == "/api/xlj":
-            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xlj_data.json")
+            qs = parse_qs(parsed.query)
+            _fp = XLJ_DATA_FILE
             try:
                 with open(_fp, encoding="utf-8") as _f:
-                    self._send(200, _f.read(), "application/json; charset=utf-8")
+                    data = json.load(_f)
             except Exception:
-                self._send(200, json.dumps({"error": "data not uploaded", "stocks": []}, ensure_ascii=False), "application/json; charset=utf-8")
+                data = {"error": "data not uploaded", "stocks": [], "run_date": ""}
+            recalc = qs.get("recalc", ["0"])[0] in ("1", "true", "True")
+            if recalc and _xlj_recalc_available():
+                data["recalc"] = _xlj_run_recalc()
+                data["recalc_running"] = _XLJ_RECALC["running"]
+            else:
+                if recalc:
+                    data["recalc"] = "snapshot"  # 线上/无引擎 → 降级为拉快照
+                data["recalc_running"] = _XLJ_RECALC["running"]
+                data["recalc_finish"] = int(_XLJ_RECALC["last_finish"])
+                data["recalc_available"] = _xlj_recalc_available()
+            self._send(200, json.dumps(data, ensure_ascii=False), "application/json; charset=utf-8")
             return
         if parsed.path == "/api/pivot":
             qs = parse_qs(parsed.query)
