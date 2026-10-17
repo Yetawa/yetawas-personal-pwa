@@ -245,6 +245,56 @@ def _fetch_style_quotes(secids_map):
     return out
 
 
+def _fetch_quotes_hist(secids_map, date_str, n_days=15):
+    """按「指定交易日」从东财历史日K取指数/风格指数收盘与涨跌幅。
+
+    用途：实时报价接口(ulist.np)不可达、或补跑历史交易日时，用它补齐
+    indices/style —— 否则这两个板块会停留在上一次成功抓取的日期，
+    出现「行业热力是 10-16、大盘概览还是 10-08」的日期错位。
+    返回 {name: [close, chg]}；date_str 那天没有数据（非交易日/未开盘）则取最近一根。
+    """
+    hosts = ["%d.push2his.eastmoney.com" % random.randint(1, 99) for _ in range(4)]
+    hosts += ["push2his.eastmoney.com"]
+    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    out = {}
+    for secid, name in secids_map.items():
+        got = None
+        for host in hosts:
+            url = ("https://%s/api/qt/stock/kline/get?secid=%s"
+                   "&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
+                   "&klt=101&fqt=1&end=20500101&lmt=%d&_=%d"
+                   % (host, secid, n_days + 5, int(time.time() * 1000)))
+            try:
+                req = urllib.request.Request(url, headers={
+                    "User-Agent": ua, "Referer": "https://quote.eastmoney.com/",
+                })
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    j = json.loads(r.read().decode("utf-8", "replace"))
+                kls = ((j or {}).get("data") or {}).get("klines") or []
+                if not kls:
+                    continue
+                pick = None
+                for row in reversed(kls):
+                    parts = row.split(",")
+                    if len(parts) < 9:
+                        continue
+                    if parts[0] == date_str:
+                        pick = parts
+                        break
+                    if pick is None and parts[0] <= date_str:
+                        pick = parts  # 目标日缺该指数时退化为最近一根不晚于目标日的K线
+                if pick is None:
+                    continue
+                got = [round(float(pick[2]), 2), round(float(pick[8]), 2)]
+                break
+            except Exception:
+                continue
+        if got:
+            out[name] = got
+    return out
+
+
 def _fetch_style_hist(n_days=10):
     """近 n_days 交易日风格指数收盘历史（需求5：风格差值曲线）。
     返回 {YYYY-MM-DD: {风格名:[收盘, 涨跌幅%]}}；失败返回 {}。"""
@@ -520,9 +570,13 @@ def _gen_judge(days, indices, style):
     if style and "大盘成长" in style and "大盘价值" in style:
         gc = style["大盘成长"][1]
         gv = style["大盘价值"][1]
-        style_txt = ("成长占优：大盘成长 %+.2f%% 跑赢大盘价值 %+.2f%%。" % (gc, gv)
-                     if gc > gv else
-                     "价值占优：大盘价值 %+.2f%% 跑赢大盘成长 %+.2f%%。" % (gv, gc))
+        if abs(gc - gv) < 0.10:
+            style_txt = ("风格均衡：大盘成长 %+.2f%% 与大盘价值 %+.2f%% 基本同步，无明显大小盘偏向。"
+                         % (gc, gv))
+        elif gc > gv:
+            style_txt = ("成长占优：大盘成长 %+.2f%% 跑赢大盘价值 %+.2f%%。" % (gc, gv))
+        else:
+            style_txt = ("价值占优：大盘价值 %+.2f%% 跑赢大盘成长 %+.2f%%。" % (gv, gc))
 
     out = []
     up_s = "、".join("%s%+.2f%%" % (n, c) for n, c, _ in top_up)
@@ -604,6 +658,21 @@ def main():
     indices = {k: idx_style[k] for k in INDEX_NAMES if k in idx_style}
     style = {k: idx_style[k] for k in STYLE_NAMES if k in idx_style}
 
+    # 兜底：实时报价拿不到（或补跑历史日）时，改用「指定交易日的历史日K」补齐，
+    # 否则 indices/style 会停留在上一次成功抓取的日期，与行业热力日期错位。
+    need_hist = (args.date is not None) or (len(indices) < len(INDEX_NAMES))
+    if need_hist:
+        hist_q = _fetch_quotes_hist(INDEX_SECIDS, today.isoformat())
+        if hist_q:
+            # 实时价优先（今日盘中更准）；历史补齐仅填空缺或历史日模式
+            for k in INDEX_NAMES:
+                if k in hist_q and (args.date is not None or k not in indices):
+                    indices[k] = hist_q[k]
+            for k in STYLE_NAMES:
+                if k in hist_q and (args.date is not None or k not in style):
+                    style[k] = hist_q[k]
+            print("    指数/风格补历史日K: %d 项" % len(hist_q))
+
     # 风格指数近10日历史（需求5：风格差值曲线）。拉取失败则 style_hist 为空，前端降级提示。
     style_hist = {}
     try:
@@ -654,8 +723,13 @@ def main():
         merged = dict(ind_h)
         prev_ind = (prev.get("days", {}).get(d, {}).get("industries", {})) if prev else {}
         for nm, val in prev_ind.items():
-            if nm not in merged:
+            cur = merged.get(nm)
+            if cur is None:
+                # 该行业本次回补完全缺失：整条用旧文件兜底
                 merged[nm] = val
+            elif cur.get("main") is None and isinstance(val.get("main"), (int, float)):
+                # 只拿到 chg、资金流日K 取数失败（main=None）：保留本次 chg，main 用旧文件兜底
+                merged[nm] = {"chg": cur.get("chg", val.get("chg")), "main": val["main"]}
         days[d] = {
             "label": _label(d),
             "source": "东方财富历史行情(日K) · 主力净流入=超大单+大单(历史资金流日K)",
