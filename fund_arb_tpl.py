@@ -1565,7 +1565,7 @@ PAGE_XLJ_HTML = r"""<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><m
 <a class="navlink active" href="/xlj">寻龙诀</a>
 <a class="navlink" href="/cb">可转债</a><a class="navlink" href="/watch">自选池</a>
 <span class="navspacer"></span>
-<button class="theme-mini" onclick="toggleTheme()" id="themeBtn">&#127769;</button>
+<button class="theme-mini" onclick="toggleTheme()" id="themeBtn"><span id="themeIcon">&#127769;</span></button>
 </div>
 <div class="wrap">
 <div class="topbar">

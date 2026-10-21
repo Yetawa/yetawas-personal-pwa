@@ -48,13 +48,13 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang S
 /* padding-top 由 JS 按顶栏实际高度(.topnav.offsetHeight，含折行)动态设置，
    避免写死值导致窄屏顶栏折成多行时遮挡标题"自选池"与模式切换按钮 */
 .wrap{max-width:1080px;margin:0 auto;padding:calc(var(--nav-h,56px) + 14px) 14px 50px}
-h1{font-size:19px;font-weight:800;margin:0}
+h1{font-size:21px;font-weight:700;margin:0 0 6px}
 .title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;padding-top:0}
 /* 站点品牌（需求12） */
 .topnav .brand{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--txt);text-decoration:none;font-weight:800;font-size:14px;white-space:nowrap;flex:none;cursor:pointer;padding:6px 8px;margin-right:2px}
 .topnav .brand:hover{color:var(--accent)}
 .topnav .brand svg{width:20px;height:20px;flex:none}
-.sub{font-size:12px;color:var(--txt3);margin:6px 0 14px;line-height:1.7}
+.sub{font-size:13px;color:var(--txt3);margin:6px 0 14px;line-height:1.7}
 /* 添加区 */
 .addbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
 .addbar input{background:var(--card);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 11px;font-size:13px;outline:none}
@@ -123,8 +123,8 @@ h1{font-size:19px;font-weight:800;margin:0}
   <a class="navlink" data-file="sector_dashboard.html" data-route="/sector">行业轮动</a>
   <a class="navlink" data-file="fish_basin.html" data-route="/yupen">鱼盆模型</a>
   <a class="navlink" data-file="fund_arb.html" data-route="/arb">套利看板</a>
-  <a class="navlink" data-file="fund_arb_ranking.html" data-route="/ranking">排行表</a>
-  <a class="navlink" data-file="fund_arb_top.html" data-route="/top">TOP套利</a>
+  <a class="navlink" data-file="fund_arb_ranking.html" data-route="/ranking">溢价表</a>
+  <a class="navlink" data-file="fund_arb_top.html" data-route="/top">LOF</a>
   <a class="navlink" data-file="pivot_live.html" data-route="/pivot">口袋支点</a>
   <a class="navlink" data-file="xlj.html" data-route="/xlj">寻龙诀</a>
   <a class="navlink" data-file="cb.html" data-route="/cb">可转债</a>
