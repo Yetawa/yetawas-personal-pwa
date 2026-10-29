@@ -4080,6 +4080,11 @@ def _cb_suspended_soon_set():
 
 def cb_scan(progress=None):
     items = cb_fetch_list()
+    # 东财 MK0354 全部节点失败时 cb_fetch_list 返回空列表。此处必须抛错而不是继续算，
+    # 否则 cb_compute([]) 产出的空结果会被 _cb_save_disk 落盘，覆盖上一交易日的良好快照
+    # （2026-10-29 20:55 就因此把 10-16 的缓存冲成了 0 只）。
+    if not items:
+        raise RuntimeError("可转债列表拉取失败（东财 MK0354 全部节点不可达），保留上一版快照不覆盖")
     return cb_compute(items, progress=progress)
 
 
@@ -4107,6 +4112,16 @@ def _cb_load_disk():
 
 
 def _cb_save_disk(res):
+    # 二次防御：即使上游判断漏了，空扫描结果（universe=0 且 picks 为空）也绝不落盘，
+    # 避免把上一交易日的良好快照覆盖成空数据。
+    try:
+        _uni = int(((res or {}).get("stats") or {}).get("universe") or 0)
+        _npk = len((res or {}).get("picks") or [])
+    except Exception:
+        _uni, _npk = 0, 0
+    if _uni <= 0 and _npk == 0:
+        print("    [可转债] 扫描结果为空（universe=0），保留上一版磁盘快照不覆盖")
+        return
     try:
         with open(CB_CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(res, f, ensure_ascii=False)
