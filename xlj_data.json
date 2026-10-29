@@ -3,11 +3,16 @@
  "engine_version": "3.1",
  "market_direction": {
   "price": 4041.84,
-  "ma20": 4214.71,
-  "ma50": 4432.8,
-  "ma250": 4646.5,
+  "ma20": 4204.36,
+  "ma50": 4425.18,
+  "ma250": 4645.68,
   "index": "沪深300",
-  "direction": "down"
+  "direction": "down",
+  "state": "downtrend",
+  "position": 0.0,
+  "gate": "MA250",
+  "source": "online",
+  "as_of": "2026-10-29"
  },
  "total_scanned": 5003,
  "total_qualified": 91,
