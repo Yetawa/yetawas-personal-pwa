@@ -1650,9 +1650,14 @@ function loadData(){fetch("/api/xlj").then(function(r){return r.json()}).then(fu
 function render(){
 var md=D.market_direction||{};
 var stName={confirmed_uptrend:"确认上升趋势",uptrend:"上升趋势",under_pressure:"高位承压",rally_in_downtrend:"下跌中反弹",downtrend:"下跌趋势"}[md.state]||"";
+var idxName=md.index||"沪深300";
+var gateMa=(md.ma250!=null)?md.ma250:md.ma50,gateName=(md.ma250!=null)?"年线 MA250":"MA50";
+var gateTxt=gateName+" "+fmt(gateMa);
+var posTxt=(md.position!=null)?("（建议仓位 "+Math.round(md.position*100)+"%）"):"";
+var sub=stName+posTxt;
 var bar=document.getElementById("xlj-market");
-if(md.direction==="up"){bar.className="xlj-market up";bar.innerHTML="市场方向 <b>向上</b> — 上证指数 "+fmt(md.price)+" 高于 MA50 "+fmt(md.ma50)+"<span class='m-sub'>"+stName+"（建议仓位 "+Math.round((md.position||0)*100)+"%），个股买入信号照常发出</span>"}
-else{bar.className="xlj-market down";bar.innerHTML="市场方向 <b>向下</b> — 上证指数 "+fmt(md.price)+" 低于 MA50 "+fmt(md.ma50)+"<span class='m-sub'>"+stName+"（建议仓位 "+Math.round((md.position||0)*100)+"%），按纪律暂不发出买入信号，全部达标股列为观察</span>"}
+if(md.direction==="up"){bar.className="xlj-market up";bar.innerHTML="市场方向 <b>向上</b> — "+idxName+" "+fmt(md.price)+" 高于"+gateTxt+"<span class='m-sub'>"+sub+"，个股买入信号照常发出</span>"}
+else{bar.className="xlj-market down";bar.innerHTML="市场方向 <b>向下</b> — "+idxName+" "+fmt(md.price)+" 低于"+gateTxt+"<span class='m-sub'>"+sub+"，按纪律暂不发出买入信号，全部达标股列为观察</span>"}
 var pc=0;((D.stocks)||[]).forEach(function(s){if(s.is_pocket)pc++});
 var k=document.getElementById("xlj-kpi");
 k.innerHTML=[
