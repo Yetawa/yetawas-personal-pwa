@@ -4251,9 +4251,14 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
-        # CORS：允许任意来源跨域读取（file:// 本地页 / 手机页 fetch 线上 JSON 快照时必需，
-        # 否则浏览器拦截导致行业轮动等页面回退到内嵌旧兜底数据）
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # 跨域仅放行本地/同源（含 file:// 的独立 HTML/手机本地页）；其余来源用 *
+        # 注意：ACAO 只能发一个值——既发 * 又回显 origin 会被浏览器判定「多值」直接拒绝
+        origin = self.headers.get("Origin")
+        if origin and (re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or origin == "null"):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+        else:
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "*")
         # HTML 页面禁用缓存：改完代码重启服务后，浏览器普通刷新即可拿到新版，
@@ -4270,11 +4275,6 @@ class Handler(BaseHTTPRequestHandler):
             "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; manifest-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         )
-        # 跨域仅放行本地/同源（含 file:// 的独立 HTML）；杜绝任意站点跨域调用
-        origin = self.headers.get("Origin")
-        if origin and (re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin) or origin == "null"):
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
         self.end_headers()
         if isinstance(body, str):
             body = body.encode("utf-8")
@@ -5813,6 +5813,34 @@ def _push_est(r):
     e = r.get("est_premium")
     return e if e is not None else (r.get("premium") or 0)
 
+def _fmt_push_limit(r):
+    """限购额度短标签：不限购 / 限购1000元/日 / 限购2万/日 / 暂停申购。"""
+    st = (r.get("subscribe_status") or "").strip()
+    if st == "暂停申购":
+        return "暂停申购"
+    lim = r.get("purchase_limit")
+    if isinstance(lim, (int, float)) and lim > 0:
+        if lim >= 100000000:
+            return f"限购{lim / 100000000:.1f}亿/日"
+        if lim >= 10000:
+            return f"限购{lim / 10000:g}万/日"
+        return f"限购{lim:g}元/日"
+    txt = (r.get("purchase_limit_text") or "").strip()
+    if txt and txt not in ("—", "-", "不限购"):
+        return "限购" + txt
+    return "不限购"
+
+def _fmt_push_scale(v):
+    return f"规模{v:.2f}亿" if isinstance(v, (int, float)) else ""
+
+def _fmt_push_turn(v):
+    """成交额原始单位为万元。"""
+    if not isinstance(v, (int, float)):
+        return ""
+    if v >= 10000:
+        return f"成交{v / 10000:.2f}亿"
+    return f"成交{v:.0f}万"
+
 def push_feishu(text):
     """推送文本到飞书自定义机器人。需 FEISHU_WEBHOOK_URL；设 FEISHU_WEBHOOK_SECRET 则自动签名。"""
     import os, json, time as _t, hmac, hashlib, base64, urllib.request, urllib.parse
@@ -5899,18 +5927,21 @@ def build_arb_push_text(target_date=None):
                 n_rank = len([r for r in compute_ranking(RANKING_WATCHLIST, target_date)["rows"] if not r.get("error")])
             except Exception:
                 pass
-            max_row = None; max_abs = -1.0
+            best_row = None; best_val = None
             for r in (r3_rows or []):
                 if exclude_limited and _is_limited_fund(r):
                     continue
                 e2 = _push_est(r)
-                if e2 is not None and abs(e2) > max_abs:
-                    max_abs = abs(e2); max_row = r
-            ref = (f"最大估算溢价 {max_abs:.2f}%（{max_row['code']} {max_row['name']}）"
-                   if max_row else "无扫描数据")
-            return (f"🔔 LOF 套利播报（{target_date} 14:45）\n"
-                    f"今日无 |估算溢价|>{threshold}% 的显著套利机会。\n"
-                    f"监控清单 {n_rank} 只 · 全市场 TOP 扫描 {len(r3_rows)} 只 · {ref}。")
+                if e2 is not None and (best_val is None or abs(e2) > abs(best_val)):
+                    best_val = e2; best_row = r
+            if best_row is not None:
+                ref = f"最接近：{best_row['code']} {best_row['name']} {best_val:+.2f}%（差 {threshold - abs(best_val):.2f}%）"
+            else:
+                ref = "无扫描数据"
+            return (f"🔔 LOF 套利播报 · {target_date} 14:45\n"
+                    f"今日无 |估算溢价|>{threshold}% 的机会，不动手。\n"
+                    f"监控池 {n_rank} 只 · 全市场扫 {len(r3_rows)} 只\n"
+                    f"{ref}")
         print(f"[Feishu] {target_date} 无 |溢价|>{threshold}% 的套利机会")
         return None
     # 去重（同一基金以网页2为准）
@@ -5930,18 +5961,34 @@ def build_arb_push_text(target_date=None):
         -abs(_push_est(it[0])),
     ))
     pick = uniq[:max_n]
-    exclude_note = "（已剔除暂停申购）" if exclude_limited else ""
-    lines = [f"🔔 LOF 套利机会播报（{target_date} 14:45）",
-             f"阈值 |估算溢价|>{threshold}%{exclude_note} · 命中 {len(uniq)} 只，推送前 {len(pick)} 只：", ""]
-    for i, (r, src) in enumerate(pick, 1):
-        est = _push_est(r)
-        typ = "溢价" if est >= 0 else "折价"
-        st = r.get("subscribe_status") or "开放申购"
-        lim = "限大额" if st == "限大额申购" else ("暂停申" if st == "暂停申购" else "开放")
-        scale = f"{r.get('scale'):.2f}亿" if isinstance(r.get('scale'), (int, float)) else "—"
-        turn = f"{r.get('turnover'):.0f}万" if isinstance(r.get('turnover'), (int, float)) else "—"
-        srcname = "网页2监控" if src == "ranking" else "网页3TOP"
-        lines.append(f"{i}. {r.get('code')} {r.get('name')}｜{typ}{est:+.2f}%｜{lim}｜场内{scale}｜成交{turn}｜{srcname}")
+    exclude_note = "，已剔暂停申购" if exclude_limited else ""
+    ups = [it for it in pick if _push_est(it[0]) >= 0]
+    downs = [it for it in pick if _push_est(it[0]) < 0]
+    more = f"，列前 {len(pick)}" if len(uniq) > len(pick) else ""
+    lines = [f"🔔 LOF 套利播报 · {target_date} 14:45",
+             f"阈值 |估算溢价|>{threshold}%｜命中 {len(uniq)} 只{more}{exclude_note}"]
+    n = 0
+    for label, group in (("📈 溢价", ups), ("📉 折价", downs)):
+        if not group:
+            continue
+        lines.append("")
+        lines.append(f"{label} {len(group)} 只")
+        for r, src in group:
+            n += 1
+            est = _push_est(r)
+            mark = "★ " if src == "ranking" else ""
+            lines.append(f"{n}. {mark}{r.get('code')} {r.get('name')} {est:+.2f}%")
+            meta = [x for x in (_fmt_push_limit(r), _fmt_push_scale(r.get("scale")),
+                                _fmt_push_turn(r.get("turnover"))) if x]
+            if est < 0 and "暂停赎回" in (r.get("redeem_status") or ""):
+                meta.append("⚠️暂停赎回，折价套利不可做")
+            if meta:
+                lines.append("    " + " · ".join(meta))
+    lines.append("")
+    lines.append("▸ 溢价 = 场外申购 → T+2 到场内卖出；折价 = 场内买入 → 赎回")
+    lines.append("⚠️ 净值取 14:45 估值，未计申赎费；扣费后 <1% 视为无肉")
+    if any(src == "ranking" for _, src in pick):
+        lines.append("★ 为自选监控池标的")
     return "\n".join(lines)
 
 def build_arb_push(target_date=None):
