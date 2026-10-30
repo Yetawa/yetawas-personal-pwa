@@ -3844,6 +3844,7 @@ CB_CFG = dict(
     min_arb_pct=-100.0,        # 套利收益率下限（仅作保险，正常取 >0 即折价）
     exclude_st=True,           # 排除 ST/*ST 正股（强赎/退市风险）
     fallback_if_empty=True,    # 无严格折价时降级显示"最接近折价"的前 N 只
+    min_universe=80,           # 单次扫描至少要有这么多只可用标的，否则判定数据源失效
 )
 CB_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_cache.json")
 CB_SNAP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb_snapshot.json")
@@ -3913,8 +3914,215 @@ def cb_fetch_list():
     return []
 
 
+# ---------------------------------------------------------------- 可转债多源取数
+# 背景（2026-10-30）：东财 push2delay 行情节点在云主机上已不可用（全部节点只回 "-"，
+# 无任何报价），cb_compute 因此拿到 universe=0 的空结果；而空结果按设计又不许覆盖
+# 磁盘快照，页面就一直冻结在最后一次成功扫描（2026-09-03）的数据上。
+# 现改为「多源归一」：push2 可用就用 push2；不可用则走
+#   东方财富数据中心 RPT_BOND_CB_LIST（拿转股价/转股起始日/上市退市日）
+# + 新浪财经 hq.sinajs.cn（拿债价、正股价）
+# 自行计算转股价值与折溢价，口径与 push2 一致。
+_CB_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+_CB_DQ_HOST = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+_CB_SINA_HOST = "https://hq.sinajs.cn/list="
+_CB_DQ_COLS = ("SECURITY_CODE,SECURITY_NAME_ABBR,CONVERT_STOCK_CODE,SECURITY_SHORT_NAME,"
+               "TRANSFER_VALUE,INITIAL_TRANSFER_PRICE,TRANSFER_START_DATE,"
+               "DELIST_DATE,BOND_START_DATE,EXPIRE_DATE")
+
+
+def _cb_http_text(url, referer="https://data.eastmoney.com/", timeout=20, encoding="utf-8"):
+    req = Request(url, headers={"User-Agent": _CB_UA, "Referer": referer})
+    return urlopen(req, timeout=timeout).read().decode(encoding, "ignore")
+
+
+def _cb_mkt_bond(code):
+    """可转债代码 → 交易所前缀：110/111/113/118 沪市，12x 深市。"""
+    return "sh" if str(code)[:3] in ("110", "111", "113", "118") else "sz"
+
+
+def _cb_mkt_stock(code):
+    """正股代码 → 交易所前缀（6 开头沪市，4/8 开头北交所，其余深市）。"""
+    c = str(code or "")
+    if not c.isdigit() or len(c) < 6:
+        return None
+    if c[0] == "6":
+        return "sh"
+    if c[0] in ("4", "8"):
+        return "bj"
+    return "sz"
+
+
+def _cb_sina_quotes(codes):
+    """新浪批量行情。codes 形如 sh113050 / sz123107，返回 {code: [字段列表]}。
+
+    字段位：0=名称 1=今开 2=昨收 3=现价 4=最高 5=最低 6=买一 7=卖一 8=成交量 30=日期 31=时间
+    """
+    out = {}
+    for i in range(0, len(codes), 60):
+        chunk = codes[i:i + 60]
+        txt = _cb_http_text(_CB_SINA_HOST + ",".join(chunk),
+                            referer="https://finance.sina.com.cn/", encoding="gbk")
+        for line in txt.splitlines():
+            m = re.search(r'hq_str_(\w+)="([^"]*)"', line)
+            if not m or not m.group(2):
+                continue
+            out[m.group(1)] = m.group(2).split(",")
+    return out
+
+
+def _cb_norm_from_push2(items):
+    """push2 clist 原始条目 → 归一化条目。"""
+    out = []
+    for it in items or []:
+        try:
+            code = str(it.get("f12") or "")
+            price = float(it.get("f2"))
+            cv = float(it.get("f236"))                 # 转股价值（push2 直接给）
+            stock_price = float(it.get("f240"))        # 正股实时价
+            volume = float(it.get("f5") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not code or price <= 0 or cv <= 0:
+            continue
+        out.append(dict(
+            code=code, market=("sh" if str(it.get("f13")) == "1" else "sz"),
+            name=it.get("f14") or "", price=price, volume=volume,
+            convert_value=cv, stock_price=stock_price,
+            convert_price=(100.0 * stock_price / cv) if stock_price > 0 else 0,
+            stock_code=str(it.get("f232") or ""),
+            stock_name=it.get("f234") or "",
+            convert_start=str(it.get("f243") or ""),
+        ))
+    return out
+
+
+_CB_META = dict(ts=0.0, data={})
+_CB_LAST_DATE = ""      # 最近一次成功取到的行情所属日期（YYYY-MM-DD）     # 基础信息缓存（6 小时内复用，避免每次扫描多打 3 个请求）
+_CB_DAILY_URL = ("%s?reportName=RPTA_WEB_KZZ_LS&columns=DATE,ZCODE,SECUCODE,SWAPVALUE,SWAPOR,"
+                 "FCLOSE,BOND_NAME_ABBR&source=WEB&client=WEB&pageSize=500&pageNumber={page}"
+                 "&filter=(DATE%%3D'{date}')" % _CB_DQ_HOST)
+
+
+def _cb_meta_map():
+    """可转债基础信息：code → dict(stock_code, stock_name, convert_start, linked)。
+
+    来源 RPT_BOND_CB_LIST（数据中心，云主机可达）。TTL 6 小时：
+    转股起始日/正股映射都属于低频变更字段，不必每次扫描都拉 3 页。
+    """
+    if _CB_META["data"] and time.time() - _CB_META["ts"] < 6 * 3600:
+        return _CB_META["data"]
+    out, page = {}, 1
+    while page <= 8:
+        url = ("%s?reportName=RPT_BOND_CB_LIST&columns=SECURITY_CODE,SECURITY_NAME_ABBR,"
+               "CONVERT_STOCK_CODE,SECURITY_SHORT_NAME,TRANSFER_START_DATE,DELIST_DATE,"
+               "BOND_START_DATE&pageNumber=%d&pageSize=500&sortColumns=SECURITY_CODE"
+               "&sortTypes=1&source=WEB&client=WEB" % (_CB_DQ_HOST, page))
+        res = (json.loads(_cb_http_text(url)).get("result") or {})
+        batch = res.get("data") or []
+        if not batch:
+            break
+        for r in batch:
+            code = str(r.get("SECURITY_CODE") or "")
+            if not code:
+                continue
+            out[code] = dict(
+                stock_code=str(r.get("CONVERT_STOCK_CODE") or ""),
+                stock_name=r.get("SECURITY_SHORT_NAME") or "",
+                convert_start=str(r.get("TRANSFER_START_DATE") or "")[:10].replace("-", ""),
+                delisted=bool(r.get("DELIST_DATE")),
+                bond_start=str(r.get("BOND_START_DATE") or "")[:10],
+            )
+        if page >= int(res.get("pages") or 1):
+            break
+        page += 1
+    if out:
+        _CB_META.update(ts=time.time(), data=out)
+    return out
+
+
+def _cb_daily_rows(target_date):
+    """东财可转债日报表指定日期的全市场折算数据。"""
+    rows, page = [], 1
+    while page <= 4:
+        res = (json.loads(_cb_http_text(_CB_DAILY_URL.format(page=page, date=target_date))).get("result") or {})
+        batch = res.get("data") or []
+        if not batch:
+            break
+        rows += batch
+        if page >= int(res.get("pages") or 1):
+            break
+        page += 1
+    return rows
+
+
+def cb_fetch_norm_em_daily():
+    """主链路：东财日报表（转股价值/溢价率由东财按当期转股价算好）+ 基础信息。
+
+    为什么不再自己算转股价值：RPT_BOND_CB_LIST 的 TRANSFER_VALUE 是**初始**转股价
+    （2026-10-30 实测 317 只全部与 INITIAL_TRANSFER_PRICE 相等），下修/分红调整过的
+    标的会算偏（实测广核转债偏差 2.5 个百分点），做折价套利这种精度不能接受。
+    日报表 SWAPVALUE 为当期口径，实测与 SWAPOR 自洽。
+    """
+    meta = _cb_meta_map()
+    now = bj_now()
+    today_s = now.strftime("%Y-%m-%d")
+    # 今日优先；今日无数据（节假日/数据未入库）则回退上一交易日
+    cands = [today_s] if _is_trading_day(now) else []
+    d = now - timedelta(days=1)
+    for _ in range(10):
+        if _is_trading_day(d):
+            cands.append(d.strftime("%Y-%m-%d"))
+            break
+        d -= timedelta(days=1)
+
+    rows, used = [], ""
+    for ds in cands:
+        rows = _cb_daily_rows(ds)
+        if rows:
+            used = ds
+            break
+    if not rows:
+        raise RuntimeError("可转债日报表无数据（%s）" % ",".join(cands))
+
+    out = []
+    for r in rows:
+        code = str(r.get("ZCODE") or "")
+        m = meta.get(code)
+        if not code or not m:
+            continue
+        if m["delisted"]:                                  # 已退市
+            continue
+        bs = m["bond_start"]
+        if bs and bs > today_s:                            # 尚未上市
+            continue
+        try:
+            price = float(r.get("FCLOSE") or 0)
+            cv = float(r.get("SWAPVALUE") or 0)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0 or cv <= 0:                          # 无报价/无转股价值 → 不可算
+            continue
+        out.append(dict(
+            code=code, market=_cb_mkt_bond(code),
+            name=r.get("BOND_NAME_ABBR") or "",
+            price=price, volume=1.0,                       # 日报表只含正常交易标的，不做停牌过滤
+            convert_value=cv,
+            stock_code=m["stock_code"], stock_name=m["stock_name"],
+            convert_start=m["convert_start"],
+        ))
+    global _CB_LAST_DATE
+    _CB_LAST_DATE = used
+    print("    [可转债] 日报表 %s：%d 行 → 可用 %d 只" % (used, len(rows), len(out)))
+    return out
+
+
 def cb_compute(items, progress=None):
-    """计算套利收益率、过滤、排序、取前 N。返回结果 dict。"""
+    """计算折溢价、过滤、排序、取前 N。
+
+    items 为**归一化条目**（_cb_norm_from_push2 / cb_fetch_norm_em_daily 产出），
+    统一口径后两种数据源走同一套计算，避免两套公式漂移。
+    """
     t0 = time.time()
     today = int(bj_now().strftime("%Y%m%d"))
     # best-effort：未来 2 个交易日内将停牌的可转债代码集合（接口不可用则空集）
@@ -3922,54 +4130,50 @@ def cb_compute(items, progress=None):
     suspended_already = 0
     suspended_soon = 0
     rows = []
-    for it in items:
+    total = len(items)
+    for idx, it in enumerate(items):
+        code = str(it.get("code") or "")
         try:
-            code = str(it.get("f12"))
-            name = it.get("f14")
-            price = float(it.get("f2"))
-            cv = float(it.get("f236"))
-            prem = float(it.get("f237"))            # 转股溢价率(%)：<0 即折价(套利空间)
-            stock_code = str(it.get("f232") or "")
-            stock_name = it.get("f234") or ""
-            stock_price = it.get("f240")           # 正股实时价（东财字段）
-            start = str(it.get("f243") or "")
-            dlow = it.get("f238")
-            volume = float(it.get("f5") or 0)       # 成交量(手)
+            price = float(it.get("price") or 0)
+            cv = float(it.get("convert_value") or 0)
+            K = float(it.get("convert_price") or 0)
+            S = float(it.get("stock_price") or 0)
+            volume = float(it.get("volume") or 0)
         except (TypeError, ValueError):
             continue
-        if price <= 0 or cv <= 0:
+        if not code or price <= 0:
             continue
-        # 可转债已停牌（无成交量）→ 不推送
+        if cv <= 0:                       # 源未直接给转股价值 → 用 100/转股价×正股价 兜底
+            if K <= 0 or S <= 0:
+                continue
+            cv = 100.0 / K * S
+        # 已停牌（无成交量）→ 不推送
         if volume <= 0:
             suspended_already += 1
             continue
-        # 可转债将于 2 交易日内停牌 → 不推送
+        # 将于 2 交易日内停牌 → 不推送
         if code in soon:
             suspended_soon += 1
             continue
-        arb = (cv - price) / price * 100.0          # 套利收益率(折价率)
-        # 转股价反推：转股价值 = 100 / 转股价 × 正股价 → 转股价 = 100 × 正股价 / 转股价值
-        convert_price = None
-        if stock_price not in (None, "", "-"):
-            try:
-                convert_price = round(100.0 * float(stock_price) / cv, 3)
-            except (TypeError, ValueError, ZeroDivisionError):
-                convert_price = None
+        prem = (price / cv - 1.0) * 100.0         # 转股溢价率(%)：<0 即折价
+        arb = (cv - price) / price * 100.0        # 折价率 = 套利收益率
+        start = re.sub(r"\D", "", str(it.get("convert_start") or ""))[:8]
         in_conv = len(start) >= 8 and int(start) <= today   # 已进入转股期
-        is_st = bool(stock_name) and ("ST" in stock_name)
-        market = "sh" if str(it.get("f13")) == "1" else "sz"
+        stock_name = it.get("stock_name") or ""
+        is_st = "ST" in stock_name
         rows.append(dict(
-            code=code, market=market, name=name,
+            code=code, market=it.get("market") or _cb_mkt_bond(code),
+            name=it.get("name") or "",
             price=round(price, 3), convert_value=round(cv, 3),
             premium=round(prem, 3), arb=round(arb, 3),
-            stock_code=stock_code, stock_name=stock_name,
-            stock_price=(round(float(stock_price), 3) if stock_price not in (None, "", "-") else None),
-            convert_price=convert_price,
+            stock_code=it.get("stock_code") or "", stock_name=stock_name,
+            stock_price=(round(S, 3) if S > 0 else None),
+            convert_price=(round(K, 3) if K > 0 else None),
             double_low=round(price + prem, 2),
             convert_start=start, in_conv=in_conv, is_st=is_st,
         ))
-        if progress:
-            progress(len(rows), len(items), "计算中")
+        if progress and idx and idx % 40 == 0:
+            progress(len(rows), total, "计算中")
     # 严格折价：套利收益率>0 且 转股期内 且 非ST
     strict = [r for r in rows if r["arb"] > 0 and r["in_conv"] and not r["is_st"]]
     strict.sort(key=lambda x: x["arb"], reverse=True)
@@ -3989,18 +4193,12 @@ def cb_compute(items, progress=None):
             r["is_discount"] = False
             picks.append(r)
         mode = "mixed" if picks else "fallback"
-        if mode == "fallback":
-            for r in picks:
-                r["is_discount"] = False
     for i, p in enumerate(picks):
         p["rank"] = i + 1
     elapsed = round(time.time() - t0, 1)
-    # trade_date 取数据实际对应的交易日，避免标签与真实涨跌幅对不上。
-    # 旧实现「今天是交易日就用今天」——周一 01:12 扫描时今天尚未开盘，
-    # 于是把 08-28 收盘价标成 08-31（实测：127067 真实末根 08-28 收 189.031，
-    # 页面却显示 trade_date=08-31）。必须用「最近已收盘交易日」口径。
+    # trade_date 取「最近已收盘交易日」，避免开盘前把上一交易日收盘价标成今天
     _now_bj = bj_now()
-    _real_td = _last_closed_trading_day(_now_bj)
+    _real_td = _CB_LAST_DATE or _last_closed_trading_day(_now_bj)
     return dict(
         trade_date=_real_td,
         kline_last_date=_real_td,
@@ -4079,13 +4277,36 @@ def _cb_suspended_soon_set():
 
 
 def cb_scan(progress=None):
-    items = cb_fetch_list()
-    # 东财 MK0354 全部节点失败时 cb_fetch_list 返回空列表。此处必须抛错而不是继续算，
-    # 否则 cb_compute([]) 产出的空结果会被 _cb_save_disk 落盘，覆盖上一交易日的良好快照
-    # （2026-10-29 20:55 就因此把 10-16 的缓存冲成了 0 只）。
-    if not items:
-        raise RuntimeError("可转债列表拉取失败（东财 MK0354 全部节点不可达），保留上一版快照不覆盖")
-    return cb_compute(items, progress=progress)
+    """多源扫描：push2 行情优先，失效则用「东财数据中心 + 新浪行情」自算。
+
+    任一数据源可用即出结果；全部失效时抛错，由调用方跳过落盘，
+    避免空结果覆盖上一交易日的良好快照（历史踩坑：10-29 被冲成 0 只）。
+    """
+    errs = []
+    norm, src = [], ""
+    # 源1：东财 push2 clist（含转股价值字段，最省事）
+    try:
+        raw = cb_fetch_list()
+        if raw:
+            norm = _cb_norm_from_push2(raw)
+            src = "eastmoney-push2"
+    except Exception as e:
+        errs.append("push2:%s" % e)
+    # 源2：数据中心元数据 + 新浪行情（云主机上 push2 被拒时的主链路）
+    if len(norm) < CB_CFG["min_universe"]:
+        try:
+            alt = cb_fetch_norm_em_daily()
+            if len(alt) > len(norm):
+                norm, src = alt, "eastmoney-daily"
+                print("    [可转债] 改用东财日报表链路（%d 只可用）" % len(alt))
+        except Exception as e:
+            errs.append("datacenter:%s" % e)
+    if len(norm) < CB_CFG["min_universe"]:
+        raise RuntimeError("可转债行情全部数据源不可用（%s），保留上一版快照"
+                           % ("; ".join(errs) or "有效条目 %d 只过少" % len(norm)))
+    res = cb_compute(norm, progress=progress)
+    res["source"] = src
+    return res
 
 
 def _cb_load_disk():
@@ -4121,6 +4342,10 @@ def _cb_save_disk(res):
         _uni, _npk = 0, 0
     if _uni <= 0 and _npk == 0:
         print("    [可转债] 扫描结果为空（universe=0），保留上一版磁盘快照不覆盖")
+        return
+    if _uni < CB_CFG["min_universe"]:
+        print("    [可转债] 扫描结果仅 %d 只（<%d），疑似数据源降级，保留上一版快照不覆盖"
+              % (_uni, CB_CFG["min_universe"]))
         return
     try:
         with open(CB_CACHE_FILE, "w", encoding="utf-8") as f:
@@ -4198,6 +4423,12 @@ def cb_api_payload(force=False):
     _ok, _warn = _date_integrity(res.get("trade_date"))
     out["date_ok"] = _ok
     out["date_warning"] = _warn
+    out["source"] = res.get("source", "")
+    try:
+        out["data_age_days"] = (bj_now().date() - datetime.strptime(
+            str(res.get("trade_date"))[:10], "%Y-%m-%d").date()).days
+    except Exception:
+        out["data_age_days"] = None
     return out
 
 
@@ -4586,7 +4817,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, PAGE4_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
         elif parsed.path in ("/cb", "/cb.html"):
-            self._send(200, PAGE5_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
+            # 与 / 一致：直接读 cb.html 文件，避免「内嵌模板」与「独立 HTML」长期分叉
+            # （历史问题：PAGE5_HTML 停留在旧版本，线上页面缺字段/文案过时）。
+            try:
+                _cbp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cb.html")
+                with open(_cbp, encoding="utf-8") as _cf:
+                    _cbhtml = _cf.read()
+            except Exception:
+                _cbhtml = PAGE5_HTML
+            self._send(200, _cbhtml.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
         if parsed.path in ("/", "/index.html", "/sector_dashboard.html", "/sector"):
             try:
@@ -5057,7 +5296,8 @@ def _date_integrity(trade_date):
     # 「今天是交易日就用今天」的写法在开盘前把昨天收盘价标成今天，且能通过本校验
     # （trade_date 与 kline_last_date 同源，等于自己验自己）。
     _lctd = _last_closed_trading_day()
-    if trade_date[:10] > _lctd:
+    _today_s = bj_now().strftime("%Y-%m-%d")
+    if trade_date[:10] > _lctd and not (trade_date[:10] == _today_s and _is_trading_day(bj_now())):
         warn = ("数据日期 %s 晚于最近已收盘交易日 %s（当日尚未收盘、数据不可能产生），"
                 "疑似把上一交易日收盘价误标为今天" % (trade_date[:10], _lctd))
         return False, warn
@@ -5065,7 +5305,11 @@ def _date_integrity(trade_date):
     if days_old < 0:
         warn = "数据日期 %s 晚于当前日期，疑似时区/抓取异常" % trade_date[:10]
         return False, warn
-    if days_old > 7:
+    if trade_date[:10] != _lctd and trade_date[:10] != _today_s:
+        warn = ("数据不是最近交易日：显示 %s，最近已收盘交易日为 %s（落后 %d 个自然日），"
+                "行情源可能异常，请以券商/东财实时数据为准"
+                % (trade_date[:10], _lctd, days_old))
+    elif days_old > 7:
         warn = "数据已 %d 天未更新（最新交易日 %s）" % (days_old, trade_date[:10])
     return (len(warn) == 0), warn
 
