@@ -4544,6 +4544,24 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send(404, "Not Found", "text/plain; charset=utf-8")
             return
+        if parsed.path in ("/mobile", "/mobile.html", "/fund_arb_mobile.html"):
+            # 手机版单文件（全站合并 + 离线缓存）：发独立响应头，不带 CSP，
+            # 避免 srcdoc 内嵌页受 frame/connect 策略影响；同一页面也可下载后离线打开
+            _fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_arb_mobile.html")
+            try:
+                with open(_fp, encoding="utf-8") as _mf:
+                    _mob = _mf.read()
+            except Exception:
+                self._send(404, "Not Found", "text/plain; charset=utf-8")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(_mob.encode("utf-8"))
+            return
         if parsed.path in ("/arb", "/arb.html"):
             self._send(200, PAGE_HTML.replace("</body>", EXPORT_BAR_HTML + "</body>"), "text/html; charset=utf-8")
             return
