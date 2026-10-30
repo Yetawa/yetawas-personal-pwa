@@ -19,6 +19,7 @@ import os
 import re
 import socket
 
+DEFAULT_CODE = "513310"   # 手机版首屏默认基金（无历史记录时）
 ONLINE = "https://fund-arb.onrender.com"
 ORIGIN = "https://fund-arb.onrender.com"  # 页面里硬编码的线上地址，构建时统一收敛到 FAB_BASE
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -73,9 +74,13 @@ SHIM = """<script>
   window.FAB_BASE=BASE;
   window.FAB_PAGE='__TAB__';
   window.__QS__=window.__QS__||'';   /* 保留外壳注入的 ?code=（注入脚本先于 shim 执行） */
-  /* 看板页：记住上次查询的基金，二次打开直接查它，跳过"先拉排行榜再查"的串行等待 */
+  /* 看板页：优先"上次查询的基金"，没有则用默认基金直查。
+     目的：跳过"先拉全市场排行榜(冷启动可达数十秒)→再查单只基金"的串行等待，首屏更快。
+     想看今日榜首可切「溢价表」标签。 */
   if(!window.__QS__&&window.FAB_PAGE==='arb'){
-    try{var lc=localStorage.getItem('arb_last_code')||'';if(/^\\d{6}$/.test(lc))window.__QS__='?code='+lc;}catch(e){}
+    var lc='';
+    try{lc=localStorage.getItem('arb_last_code')||'';}catch(e){}
+    window.__QS__='?code='+(/^\\d{6}$/.test(lc)?lc:'__DEFAULT_CODE__');
   }
   /* 各接口缓存 TTL（ms）：行情类短、快照/回测类长，兼顾新鲜度与请求量 */
   var TTL=[['/api/data',45000],['/api/validate',600000],['/api/ranking',90000],
@@ -162,7 +167,7 @@ SHIM = """<script>
 
 
 def build_shim():
-    return SHIM.replace("__ONLINE__", ONLINE).replace(
+    return SHIM.replace("__ONLINE__", ONLINE).replace("__DEFAULT_CODE__", DEFAULT_CODE).replace(
         "__NAVMAP__", json.dumps(NAV_MAP, ensure_ascii=False))
 
 
