@@ -4313,16 +4313,22 @@ def _cb_load_disk():
     """启动时回填磁盘缓存；若磁盘缓存缺失（如云平台重新部署后本地文件系统被重置），
     则回退到仓库内置的快照文件 cb_snapshot.json，保证页面打开即有数据，无需等待重扫。"""
     try:
-        data = None
-        src = ""
-        if os.path.exists(CB_CACHE_FILE):
-            with open(CB_CACHE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            src = "磁盘缓存"
-        if not (isinstance(data, dict) and data.get("picks") is not None) and os.path.exists(CB_SNAP_FILE):
-            with open(CB_SNAP_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            src = "内置快照"
+        # 两份文件都读，取「较新的一份」而不是固定优先磁盘缓存。
+        # 踩坑：cb_cache.json 也是随仓库提交的，云端重部署后它可能比 cb_snapshot.json
+        # 更旧，固定优先它会让页面长期显示过期数据（2026-10-30 线上仍显示 9 月/10-16 数据即此因）。
+        data, src = None, ""
+        for path, name in ((CB_CACHE_FILE, "磁盘缓存"), (CB_SNAP_FILE, "内置快照")):
+            cand = None
+            try:
+                if os.path.exists(path):
+                    with open(path, "r", encoding="utf-8") as f:
+                        cand = json.load(f)
+            except Exception:
+                cand = None
+            if not isinstance(cand, dict) or cand.get("picks") is None:
+                continue
+            if data is None or str(cand.get("updated") or "") > str(data.get("updated") or ""):
+                data, src = cand, name
         if isinstance(data, dict) and data.get("picks") is not None:
             with _CB_LOCK:
                 _CB["result"] = data
