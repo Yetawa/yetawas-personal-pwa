@@ -188,13 +188,13 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   </div>
   <button id="themeBtn" class="theme-mini" onclick="toggleTheme()" title="切换主题"><span id="themeIcon">🌙</span></button>
   <div class="topnav">
-    <a class="brand" href="sector_dashboard.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
-    <a class="navlink" href="sector_dashboard.html">行业轮动</a><a class="navlink" href="fish_basin.html">鱼盆模型</a>
-    <a class="navlink" href="fund_arb.html">套利看板</a>
-    <a class="navlink" href="fund_arb_ranking.html">溢价表</a>
-    <a class="navlink" href="fund_arb_top.html">LOF</a>
-    <a class="navlink" href="pivot_live.html">口袋支点</a>
-    <a class="navlink active" href="cb.html">可转债套利</a>
+    <a class="brand" href="/sector"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="17" r="9" fill="none" stroke="#1f6feb" stroke-width="2.4"/><path d="M7 11 L16 5 L25 11" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 23 L16 29 L25 23" fill="none" stroke="#22c55e" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>套利工具平台</a>
+    <a class="navlink" href="/sector">行业轮动</a><a class="navlink" href="/yupen">鱼盆模型</a>
+    <a class="navlink" href="/arb">套利看板</a>
+    <a class="navlink" href="/ranking">溢价表</a>
+    <a class="navlink" href="/top">LOF</a>
+    <a class="navlink" href="/pivot">口袋支点</a>
+    <a class="navlink active" href="/cb">可转债套利</a>
     <span class="navspacer"></span>
   </div>
 </div>
@@ -205,7 +205,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
   <div class="ops">
     <button class="btn" id="rescanBtn" onclick="rescan()">立即重扫</button>
     <span id="scanState" class="tzline"></span>
-    <span class="tzline" style="margin-left:auto">每交易日 14:45 自动更新</span>
+    <span class="tzline" style="margin-left:auto">每交易日 15:15 自动更新</span>
   </div>
 
   <div class="histbox" id="cbHist">
@@ -216,7 +216,7 @@ code{background:var(--code-bg);padding:2px 6px;border-radius:4px;color:var(--cod
     <b>套利逻辑</b>：转股溢价率 &lt; 0（折价）即具备"买入转债 + 融券卖空正股 + 转股"的折价套利条件，
     套利收益率(粗略，未扣费) = (转股价值 − 转债现价) / 转债现价。
     榜单按套利收益率降序取前 10；绿标为<b>严格折价</b>标的，灰标为<b>最接近折价的临界</b>标的（溢价率最低的正溢价）。
-    <br><b>风险提示</b>：折价套利需正股可融券且承担 T+1 转股锁定期价格波动；转股价值基于实时行情，尾盘数据以 14:45 快照为准。本页仅供研究，非投资建议。
+    <br><b>风险提示</b>：折价套利需正股可融券且承担 T+1 转股锁定期价格波动；转股价值基于实时行情，尾盘数据以 15:15 收盘快照为准。本页仅供研究，非投资建议。
   </div>
 </div>
 <script>
@@ -259,9 +259,10 @@ function renderSnap(d){
   d.stale=true; d.scanning=false;
   var el=document.getElementById("statusbar");
   if(el) el.innerHTML='<span class="sitem">数据日期：'+(d.updated||"-")+'</span><span class="sitem snap-tag">离线快照（服务未连接）</span>';
-  // 离线快照醒目提示：线上部署（美节点不可达东财）只能展示冻结快照，非实时
+  // 离线快照醒目提示：未能连上服务端（本地未启动 / 网络中断），展示的是内置快照
   var dw=document.getElementById("dateWarn");
-  if(dw){ dw.style.display="block"; dw.textContent="⚠ 当前为离线快照数据（"+(d.trade_date||"-")+"），非实时行情。如需最新数据请在本地启动 fund_arb.py（python fund_arb.py）后刷新。"; }
+  if(dw){ dw.style.display="block"; dw.textContent="⚠ 未能连接数据服务，当前展示内置快照（数据日期 "+(d.trade_date||"-")+"），非实时行情。";
+          d.date_warning = "内置快照 · 数据日期 " + (d.trade_date||"-"); }
   document.getElementById("rescanBtn").disabled=true;
   render(d);
 }
@@ -270,9 +271,14 @@ function render(d){
   var modeTxt = {"strict":"严格折价","mixed":"折价+临界补足","fallback":"无折价(临界参考)"}[d.mode] || d.mode || "-";
   var td = d.trade_date||"";
   var sb = document.getElementById("statusbar");
+  var srcTxt = {"eastmoney-daily":"东财日报表","eastmoney-push2":"东财行情"}[d.source] || "";
+  var ageTxt = (d.data_age_days!==null && d.data_age_days!==undefined && d.data_age_days>0)
+    ? '<span class="sitem" style="color:#faad14">滞后 '+d.data_age_days+' 天</span>' : '';
   sb.innerHTML = '<span class="sitem">更新：'+(d.updated||"-")+'</span>'
     + '<span class="sitem">数据日期：'+td+(isFri(td)?'（周五）':'')+'</span>'
     + '<span class="sitem">模式：'+modeTxt+'</span>'
+    + (srcTxt?'<span class="sitem">源：'+srcTxt+'</span>':'')
+    + ageTxt
     + (scanning ? '<span class="sitem stale-badge">扫描中…</span>' : '<span class="sitem">就绪</span>');
   // 数据日期异常明确标注
   var dw=document.getElementById("dateWarn");
