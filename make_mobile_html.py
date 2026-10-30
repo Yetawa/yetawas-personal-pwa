@@ -71,7 +71,12 @@ SHIM = """<script>
 (function(){
   var BASE='__ONLINE__';
   window.FAB_BASE=BASE;
+  window.FAB_PAGE='__TAB__';
   window.__QS__=window.__QS__||'';   /* 保留外壳注入的 ?code=（注入脚本先于 shim 执行） */
+  /* 看板页：记住上次查询的基金，二次打开直接查它，跳过"先拉排行榜再查"的串行等待 */
+  if(!window.__QS__&&window.FAB_PAGE==='arb'){
+    try{var lc=localStorage.getItem('arb_last_code')||'';if(/^\\d{6}$/.test(lc))window.__QS__='?code='+lc;}catch(e){}
+  }
   /* 各接口缓存 TTL（ms）：行情类短、快照/回测类长，兼顾新鲜度与请求量 */
   var TTL=[['/api/data',45000],['/api/validate',600000],['/api/ranking',90000],
            ['/api/top',90000],['/api/pivot',90000],['/api/history',600000],
@@ -118,6 +123,9 @@ SHIM = """<script>
             if(res.ok&&ct.indexOf('json')>=0){
               res.clone().text().then(function(t){try{putK(key,{t:Date.now(),d:JSON.parse(t)});}catch(e){}}).catch(function(){});
             }
+            /* 记录最近查询的基金代码（供下次秒开） */
+            var mc=url.match(/\\/api\\/data\\?(?:[^#]*&)?code=(\\d{6})/);
+            if(res.ok&&mc){try{localStorage.setItem('arb_last_code',mc[1]);}catch(e){}}
           }catch(e){}
           tell({fa:'live'});
           return res;
@@ -159,7 +167,7 @@ def build_shim():
 
 
 # ------------------------------------------------------------------ 页面改写
-def prep_page(html, shim):
+def prep_page(html, shim, tab=""):
     # 1) 去掉站点静态资源引用与 SW 注册（srcdoc/file 下无意义或 404）
     html = re.sub(r'<link rel="(?:manifest|apple-touch-icon|icon)"[^>]*>', "", html)
     html = re.sub(r"if\('serviceWorker' in navigator\)\{[\s\S]*?\}\s*\}\s*", "", html, count=1)
@@ -186,7 +194,7 @@ def prep_page(html, shim):
     # 6) ?code= 读取兼容：srcdoc 无 query，由外壳注入 window.__QS__
     html = html.replace("location.search", "(window.__QS__||location.search)")
     # 7) 头部注入 CSS + shim（必须在页面脚本前执行）
-    html = html.replace("<head>", "<head>" + HEAD_CSS + shim, 1)
+    html = html.replace("<head>", "<head>" + HEAD_CSS + shim.replace("__TAB__", tab), 1)
     return html
 
 
@@ -348,7 +356,7 @@ def main():
     pages, ok = {}, True
     print("改写页面：")
     for tab, fname in PAGE_FILES.items():
-        html = prep_page(load(fname), shim)
+        html = prep_page(load(fname), shim, tab)
         ok = check_page(fname, html) and ok
         pages[tab] = html
         print("  ✓ %-24s %6.1f KB" % (fname, len(html.encode("utf-8")) / 1024))
@@ -364,13 +372,13 @@ def main():
         + XLJ_CARD % {"base": ONLINE, "txt": "#c9d1d9", "bg": "#0d1117", "mut": "#8b949e"}
         + "</body></html>"
     )
-    pages["xlj"] = prep_page(xlj_html, shim)
+    pages["xlj"] = prep_page(xlj_html, shim, "xlj")
 
     pages_js = "{" + ",".join('"%s":%s' % (k, js_embed(v)) for k, v in pages.items()) + "}"
     shell = (
         "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n"
-        "<meta name=\"theme-color\" content=\"#0d1117\">\n"
+        "<meta name=\"theme-color\" content=\"#0d1117\">\n"        "<link rel=\"icon\" href=\"data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><circle cx=%2716%27 cy=%2717%27 r=%279%27 fill=%27none%27 stroke=%27%231f6feb%27 stroke-width=%273%27/><path d=%27M7 11L16 5l9 6%27 fill=%27none%27 stroke=%27%23ef4444%27 stroke-width=%273%27/><path d=%27M7 23l9 6 9-6%27 fill=%27none%27 stroke=%27%2322c55e%27 stroke-width=%273%27/></svg>\">\n"
         "<title>套利工具平台 · 手机版</title>\n<style>" + SHELL_CSS + "</style>\n</head>\n<body>\n"
         "<div id=\"hd\"><div class=\"t\">套利工具平台<small>数据源 fund-arb.onrender.com ｜ 断网自动用缓存</small></div>"
         "<button id=\"themeBtn\" onclick=\"toggleTheme()\">🌙</button>"
