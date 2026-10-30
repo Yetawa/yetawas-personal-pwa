@@ -4249,6 +4249,14 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, body, ctype)
 
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
+        # 客户端提前断开（手机锁屏 / 切 Tab / 超时取消 / 弱网重连）会让 write 抛
+        # ConnectionAborted/BrokenPipe/ConnectionReset，属正常现象，不应打印异常堆栈刷日志。
+        try:
+            self._send_raw(code, body, ctype)
+        except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _send_raw(self, code, body, ctype="application/json; charset=utf-8"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         # 跨域仅放行本地/同源（含 file:// 的独立 HTML/手机本地页）；其余来源用 *
