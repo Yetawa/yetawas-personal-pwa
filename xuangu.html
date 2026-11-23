@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2C3E50">
+<meta name="apple-mobile-web-app-title" content="选股">
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
+<title>自编公式选股</title>
+<style>
+:root{--ink:#2C3E50;--teal:#5F9E8F;--paper:#F7F4ED;--line:#E4DDD0;--text:#333;--dim:#8A8578;
+--red:#C0392B;--green:#1E8449}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;overflow-x:hidden}
+body{background:var(--paper);color:var(--text);font-size:15px;line-height:1.6;
+font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+-webkit-text-size-adjust:100%;padding-bottom:96px}
+.wrap{max-width:560px;margin:0 auto;padding:16px 14px 0}
+
+header{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:10px}
+h1{font-size:19px;color:var(--ink);font-weight:600;letter-spacing:.3px}
+h1 span{font-size:11px;color:var(--dim);font-weight:400;margin-left:7px}
+.meta{font-size:12px;color:var(--dim);margin-top:5px;line-height:1.7}
+.meta b{color:var(--ink);font-weight:600}
+#gear{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid var(--line);
+color:var(--dim);font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-top:2px}
+
+.bar{margin:2px 0 16px}
+.pb{height:3px;background:#E8E2D6;border-radius:2px;overflow:hidden}
+.pb i{display:block;height:100%;width:0;background:var(--teal);transition:width .4s ease}
+.msg{font-size:12px;color:var(--dim);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg.err{color:var(--red);white-space:normal}
+
+section{margin-bottom:20px}
+h2{font-size:15px;color:var(--ink);font-weight:600;border-left:3px solid var(--teal);
+padding-left:9px;display:flex;align-items:center;margin-bottom:8px;line-height:1.3}
+h2 em{font-style:normal;font-size:11.5px;color:var(--dim);font-weight:400;margin-left:8px}
+h2 small{font-size:11px;color:#A8A092;font-weight:400;margin-left:auto}
+.tb{background:#fff;border-radius:9px;box-shadow:0 1px 3px rgba(44,62,80,.06);overflow:hidden}
+.item{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-top:1px solid var(--line)}
+.item:first-child{border-top:none}
+.l{flex:1 1 auto;min-width:0;padding-right:10px}
+.nm{font-size:14.5px;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{font-size:11.5px;color:var(--dim);margin-top:3px;font-variant-numeric:tabular-nums;
+overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chg{flex:0 0 auto;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.up{color:var(--red)}.down{color:var(--green)}.flat{color:#666}
+.st{display:inline-block;font-style:normal;font-size:9.5px;line-height:1.4;color:#fff;
+background:#B0846A;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:1.5px}
+.multi{font-size:10px;color:var(--teal);border:1px solid #CBDCD7;border-radius:3px;
+padding:0 3px;margin-left:4px;vertical-align:1.5px;white-space:nowrap}
+
+.empty{background:#fff;border-radius:9px;padding:30px 18px;text-align:center;color:var(--dim);
+font-size:13px;box-shadow:0 1px 3px rgba(44,62,80,.06);line-height:1.75}
+.empty b{display:block;color:var(--ink);font-size:15px;font-weight:600;margin-bottom:6px}
+
+.hist{margin:2px 0 8px}
+.hist .t{font-size:11.5px;color:var(--dim);margin-bottom:7px}
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;font-size:12px;color:var(--ink);background:#fff;border:1px solid var(--line);
+border-radius:14px;padding:4px 11px;white-space:nowrap;cursor:pointer}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip u{text-decoration:none;color:var(--dim);margin-left:4px;font-size:11px}
+.chip.on u{color:rgba(255,255,255,.7)}
+
+/* 回测 */
+.btop{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.back{background:#fff;border:1px solid var(--line);color:var(--ink);font-size:12.5px;
+padding:6px 12px;border-radius:8px;font-weight:500}
+.btt{font-size:12px;color:var(--dim)}
+.bench{background:#fff;border-radius:9px;padding:11px 13px;font-size:12.5px;color:var(--dim);
+margin-bottom:14px;box-shadow:0 1px 3px rgba(44,62,80,.06);line-height:1.9}
+.bench b{font-weight:600;font-variant-numeric:tabular-nums}
+.kbox{background:#fff;border-radius:9px;box-shadow:0 1px 3px rgba(44,62,80,.06);
+display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
+.kbox.dim{padding:22px;text-align:center;font-size:13px;color:var(--dim);display:block}
+.k{padding:11px 13px;border-top:1px solid var(--line);border-right:1px solid var(--line)}
+.k:nth-child(1),.k:nth-child(2){border-top:none}
+.k:nth-child(2n){border-right:none}
+.k span{display:block;font-size:11.5px;color:var(--dim)}
+.k b{display:block;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+.note{font-size:11.5px;color:#A8A092;line-height:1.9;margin:6px 0 10px}
+
+/* 数据面板 */
+.panel{display:none;background:#fff;border-radius:9px;padding:15px;margin-bottom:16px;
+box-shadow:0 1px 3px rgba(44,62,80,.06)}
+.panel.on{display:block}
+.panel .pt{font-size:13px;color:var(--dim);line-height:2;margin-bottom:12px}
+.panel .pt b{color:var(--ink);font-weight:600}
+.panel .prow{display:flex;gap:9px}
+.panel button{flex:1;font-size:13px;padding:10px 0;border-radius:8px;border:1px solid var(--line);
+background:#FAF8F3;color:var(--ink);font-weight:500}
+.panel button.warn{color:#A33;border-color:#E8CBCB;background:#FDF7F7}
+
+.dock{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+background:linear-gradient(to top,var(--paper) 74%,rgba(247,244,237,0));
+display:flex;gap:8px;max-width:560px;margin:0 auto}
+button{font-family:inherit;cursor:pointer;transition:transform .1s}
+button:active{transform:scale(.985)}
+#cp{flex:0 0 62px;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:10px;
+font-size:13px;font-weight:500}
+#cp:disabled{color:#BFC4C8}
+#bt{flex:1;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:10px;
+font-size:15px;font-weight:500;letter-spacing:.3px}
+#go{flex:1.5;background:var(--ink);color:#fff;border:none;border-radius:10px;font-size:15px;
+font-weight:600;letter-spacing:.3px;box-shadow:0 2px 8px rgba(44,62,80,.22)}
+#go:disabled{background:#A8AFB5;box-shadow:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>自编公式选股<span>本地版</span></h1>
+      <div class="meta" id="meta">正在读取本地数据…</div>
+    </div>
+    <div id="gear">⋯</div>
+  </header>
+
+  <div class="bar">
+    <div class="pb"><i id="pbi"></i></div>
+    <div class="msg" id="msg">就绪</div>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="pt" id="ptxt">读取中…</div>
+    <div class="prow">
+      <button id="sync">同步日线</button>
+      <button id="wipe" class="warn">清空数据</button>
+    </div>
+  </div>
+
+  <main id="list"></main>
+
+  <div class="hist" id="histBox" style="display:none">
+    <div class="t">历史</div>
+    <div class="chips" id="chips"></div>
+  </div>
+</div>
+
+<div class="dock">
+  <button id="cp">复制</button>
+  <button id="bt">回测</button>
+  <button id="go">刷新选股</button>
+</div>
+
+<script>
+/* 策略引擎 · 通达信公式的 JS 实现
+ * 与 Python 版 engine.py 逐条对应，返回全序列信号（0/1）
+ */
+(function (root) {
+  'use strict';
+  var NAN = NaN;
+
+  function FA(n, v) { var a = new Float64Array(n); if (v !== undefined) a.fill(v); return a; }
+  function BA(n) { return new Uint8Array(n); }
+
+  /* ---------- 通达信函数 ---------- */
+  function REF(a, k) {
+    var n = a.length, o = FA(n, NAN);
+    if (k <= 0) { o.set(a); return o; }
+    for (var i = k; i < n; i++) o[i] = a[i - k];
+    return o;
+  }
+
+  function MA(a, n) {
+    var len = a.length, o = FA(len, NAN), s = 0;
+    for (var i = 0; i < len; i++) {
+      var x = a[i]; if (x !== x) x = 0;
+      s += x;
+      if (i >= n) { var y = a[i - n]; if (y !== y) y = 0; s -= y; }
+      if (i >= n - 1) o[i] = s / n;
+    }
+    return o;
+  }
+
+  function EMA(a, n) {
+    var len = a.length, o = FA(len, NAN), k = 2 / (n + 1), prev = NAN;
+    for (var i = 0; i < len; i++) {
+      var x = a[i];
+      if (x !== x) { o[i] = prev; continue; }
+      prev = (prev !== prev) ? x : x * k + prev * (1 - k);
+      o[i] = prev;
+    }
+    return o;
+  }
+
+  function HHV(a, n) {
+    var len = a.length, o = FA(len, NAN);
+    for (var i = 0; i < len; i++) {
+      var st = Math.max(0, i - n + 1), m = -Infinity;
+      for (var j = st; j <= i; j++) if (a[j] > m) m = a[j];
+      o[i] = m === -Infinity ? NAN : m;
+    }
+    return o;
+  }
+
+  function LLV(a, n) {
+    var len = a.length, o = FA(len, NAN);
+    for (var i = 0; i < len; i++) {
+      var st = Math.max(0, i - n + 1), m = Infinity;
+      for (var j = st; j <= i; j++) if (a[j] < m) m = a[j];
+      o[i] = m === Infinity ? NAN : m;
+    }
+    return o;
+  }
+
+  function COUNT(b, n) {
+    var len = b.length, o = FA(len), s = 0;
+    for (var i = 0; i < len; i++) {
+      s += b[i] ? 1 : 0;
+      if (i >= n) s -= b[i - n] ? 1 : 0;
+      o[i] = s;
+    }
+    return o;
+  }
+
+  function COUNT_DYN(b, ns) {
+    var len = b.length, o = FA(len), pre = FA(len + 1), s = 0;
+    pre[0] = 0;
+    for (var i = 0; i < len; i++) { s += b[i] ? 1 : 0; pre[i + 1] = s; }
+    for (var k = 0; k < len; k++) {
+      var n = ns[k]; if (n !== n) n = 0;
+      var left = Math.max(0, Math.floor(k + 1 - n));
+      o[k] = pre[k + 1] - pre[left];
+    }
+    return o;
+  }
+
+  function EVERY(b, n) { return COUNT(b, n).map(function (x) { return x >= n ? 1 : 0; }); }
+  function EVERY_DYN(b, ns) {
+    var cd = COUNT_DYN(b, ns), o = BA(b.length);
+    for (var i = 0; i < b.length; i++) o[i] = (cd[i] >= ns[i] && ns[i] > 0) ? 1 : 0;
+    return o;
+  }
+
+  function BARSLAST(b) {
+    var len = b.length, o = FA(len), last = -1;
+    for (var i = 0; i < len; i++) {
+      if (b[i]) last = i;
+      o[i] = last >= 0 ? i - last : 0;
+    }
+    return o;
+  }
+
+  function BARSLASTCOUNT(b) {
+    var len = b.length, o = FA(len), c = 0;
+    for (var i = 0; i < len; i++) { c = b[i] ? c + 1 : 0; o[i] = c; }
+    return o;
+  }
+
+  function REF_DYN(a, ks) {
+    var len = a.length, o = FA(len, NAN);
+    for (var i = 0; i < len; i++) {
+      var k = ks[i]; if (k !== k) k = 0;
+      var j = i - k;
+      if (j >= 0) o[i] = a[j | 0];
+    }
+    return o;
+  }
+
+  function r2(x) { return Math.floor(x * 100 + 0.5) / 100; }
+  function C1(n, v) { var a = BA(n); if (v) a.fill(1); return a; }
+
+  /* ---------- 工具 ---------- */
+  function band(a, b, f) {           // 两个数组/标量逐元素
+    var n = a.length, o = BA(n);
+    if (typeof b === 'number') { for (var i = 0; i < n; i++) o[i] = f(a[i], b) ? 1 : 0; return o; }
+    for (var j = 0; j < n; j++) o[j] = f(a[j], b[j]) ? 1 : 0;
+    return o;
+  }
+  function and() {
+    var n = arguments[0].length, o = BA(n);
+    for (var i = 0; i < n; i++) { var v = 1; for (var k = 0; k < arguments.length; k++) if (!arguments[k][i]) { v = 0; break; } o[i] = v; }
+    return o;
+  }
+  function or() {
+    var n = arguments[0].length, o = BA(n);
+    for (var i = 0; i < n; i++) { var v = 0; for (var k = 0; k < arguments.length; k++) if (arguments[k][i]) { v = 1; break; } o[i] = v; }
+    return o;
+  }
+  function not(a) { var n = a.length, o = BA(n); for (var i = 0; i < n; i++) o[i] = a[i] ? 0 : 1; return o; }
+  function gt(a, b) { return typeof b === 'number' ? band(a, b, function (x, y) { return x > y; }) : band(a, b, function (x, y) { return x > y; }); }
+  function ge(a, b) { return band(a, b, function (x, y) { return x >= y; }); }
+  function lt(a, b) { return band(a, b, function (x, y) { return x < y; }); }
+  function le(a, b) { return band(a, b, function (x, y) { return x <= y; }); }
+  function eq(a, b) { return band(a, b, function (x, y) { return Math.abs(x - y) < 1e-9; }); }
+  function add(a, b) { return arith(a, b, function (x, y) { return x + y; }); }
+  function sub(a, b) { return arith(a, b, function (x, y) { return x - y; }); }
+  function mul(a, b) { return arith(a, b, function (x, y) { return x * y; }); }
+  function div(a, b) { return arith(a, b, function (x, y) { return y === 0 ? NAN : x / y; }); }
+  function arith(a, b, f) {
+    var n = a.length, o = FA(n);
+    if (typeof b === 'number') { for (var i = 0; i < n; i++) o[i] = f(a[i], b); return o; }
+    for (var j = 0; j < n; j++) o[j] = f(a[j], b[j]);
+    return o;
+  }
+  function maxAB(a, b) { return arith(a, b, function (x, y) { return x > y ? x : y; }); }
+  function minAB(a, b) { return arith(a, b, function (x, y) { return x < y ? x : y; }); }
+  function absA(a) { var o = FA(a.length); for (var i = 0; i < a.length; i++) o[i] = Math.abs(a[i]); return o; }
+  function whereB(cond, x, y) {
+    var n = cond.length, o = FA(n);
+    for (var i = 0; i < n; i++) o[i] = cond[i] ? x : y;
+    return o;
+  }
+  function whereA(cond, x, y) {   // x/y 为数组
+    var n = cond.length, o = FA(n);
+    for (var i = 0; i < n; i++) o[i] = cond[i] ? x[i] : y[i];
+    return o;
+  }
+  function last(a) { return a.length ? a[a.length - 1] : NAN; }
+
+  /* ---------- 主评估 ---------- */
+  function evaluate(o, h, l, c, v, code, name, pe, fwan, nmc) {
+    var n = c.length;
+    var empty = { '高量Q': BA(n), '燕双飞': BA(n), '夜': BA(n), '仓鼠量化': BA(n), 'ZTDX': BA(n), '攻防': BA(n) };
+    if (n < 130) return empty;
+
+    var pre2 = code.slice(0, 2);
+    var only = (pre2 === '60' || pre2 === '00' || pre2 === '30');
+    if (!only) return empty;
+
+    var upName = String(name).toUpperCase();
+    var is_st = upName.indexOf('ST') >= 0;
+    var qst = !is_st;
+    var SH = (pre2 === '00' || pre2 === '60');
+    var SZ20 = (pre2 === '30');
+    var pre3 = code.slice(0, 3);
+    var SH_MAIN = ['600', '601', '603', '605', '000', '001', '002', '003'].indexOf(pre3) >= 0;
+    var CYB = (pre3 === '300' || pre3 === '301');
+    var KCB = (pre3 === '688');
+
+    var prev = REF(c, 1);
+    var lim = SH ? 0.10 : (SZ20 ? 0.20 : 0.30);
+    var ztp = FA(n), dtp = FA(n);
+    for (var i = 0; i < n; i++) {
+      var p = prev[i];
+      ztp[i] = p === p ? r2(p * (1 + lim)) : NAN;
+      dtp[i] = p === p ? r2(p * (1 - lim)) : NAN;
+    }
+    var ZT = BA(n), DT = BA(n), ZB = BA(n);
+    for (var i2 = 0; i2 < n; i2++) {
+      ZT[i2] = (c[i2] === h[i2]) && (c[i2] >= ztp[i2]) ? 1 : 0;
+      DT[i2] = (c[i2] === l[i2]) && (c[i2] <= dtp[i2]) ? 1 : 0;
+      ZB[i2] = (c[i2] < h[i2]) && (h[i2] >= ztp[i2]) ? 1 : 0;
+    }
+    var SB = and(ZT, eq(COUNT(ZT, 10), 1));
+    var LBTS = BARSLASTCOUNT(ZT);
+
+    var SYX = FA(n), ST_K = FA(n), XYX = FA(n), JZF = FA(n), ZF = FA(n);
+    for (var i3 = 0; i3 < n; i3++) {
+      var pv = prev[i3];
+      SYX[i3] = 100 * (h[i3] - Math.max(c[i3], o[i3])) / pv;
+      ST_K[i3] = 100 * Math.abs(c[i3] - o[i3]) / pv;
+      XYX[i3] = 100 * (Math.min(c[i3], o[i3]) - l[i3]) / pv;
+      JZF[i3] = 100 * (o[i3] - pv) / pv;
+      ZF[i3] = 100 * (c[i3] - pv) / pv;
+    }
+
+    var MA5 = MA(c, 5), MA20 = MA(c, 20), MA60 = MA(c, 60), MA120 = MA(c, 120);
+    var MA18 = MA(c, 18);
+    var MA60_UP = gt(MA60, REF(MA60, 1));
+    var MA120_UP = gt(MA120, REF(MA120, 1));
+    var V_MA5 = MA(v, 5), V_MA10 = MA(v, 10), V_LLV16 = LLV(v, 16);
+
+    /* 啦啦指标 */
+    var base = FA(n);
+    for (var i4 = 0; i4 < n; i4++) base[i4] = ((c[i4] + l[i4]) + o[i4] * 3 + h[i4]);
+    var x32 = div(REF(base, 1), 6);
+    var x33 = mul(x32, 20);
+    for (var k1 = 1; k1 < 10; k1++) { var t1 = mul(REF(x32, k1), 20 - k1); for (var m1 = 0; m1 < n; m1++) x33[m1] += t1[m1]; }
+    var x34 = FA(n, 0);
+    for (var k2 = 10; k2 < 20; k2++) { var t2 = mul(REF(x32, k2), 20 - k2); for (var m2 = 0; m2 < n; m2++) x34[m2] += t2[m2]; }
+    var x35 = div(add(x33, x34), 210);
+    var x36 = MA(x35, 6);
+    var x37 = mul(sub(x35, x36), 1.2);
+    var hl = add(h, l);
+    var x38 = mul(div(add(mul(o, 2), REF(hl, 1)), 4), 10);
+    var e6 = EMA(x38, 6), e55 = EMA(x38, 55);
+    var x39 = sub(e6, e55);
+    var x40 = EMA(x39, 6);
+    var x41 = mul(sub(x39, x40), 0.06);
+    var LALA = gt(add(x37, x41), 0);
+
+    var cr = div(c, REF(c, 1));
+    var SHM = C1(n, SH_MAIN), CYBB = C1(n, CYB), SZ20A = C1(n, SZ20), SHA = C1(n, SH);
+    var exMainZT = not(and(SHM, ge(cr, 1.095), eq(c, h)));
+    var exCybZT = not(and(CYBB, ge(cr, 1.19), eq(c, h)));
+
+    var fin_ok = (pe === pe) && pe > 0;
+    var nmc_yi = (nmc === nmc) ? nmc / 10000 : NAN;
+    var big_float = (nmc_yi === nmc_yi) && nmc_yi > 30;
+
+    /* ---------- 高量Q ---------- */
+    var c1 = le(v, mul(V_MA5, 1.2));
+    var condA = or(gt(REF(c1, 1), 0.5), gt(REF(c1, 2), 0.5), le(REF(v, 1), mul(REF(v, 2), 1.2)));
+    var condB = le(REF(c, 1), mul(REF(c, 2), 0.91));
+    var condC = lt(absA(sub(REF(c, 1), REF(l, 1))), 1e-9);
+    var up = gt(c, REF(c, 1));
+    var bl = BARSLAST(up);
+    var iDyn = FA(n);
+    var blRef = REF(bl, 1);
+    for (var i6 = 0; i6 < n; i6++) iDyn[i6] = (bl[i6] === 0) ? (blRef[i6] + 1) : bl[i6];
+    var condD = le(l, mul(REF_DYN(c, iDyn), 0.815));
+    var vEqHHV5 = lt(absA(sub(v, HHV(v, 5))), 1e-9);
+    var rng5 = ge(mul(div(sub(h, l), REF(c, 1)), 100), 5);
+    var gaoliang = and(condA, condB, condC, condD, gt(c, o), vEqHHV5, ge(v, mul(REF(v, 1), 2)), rng5);
+    if (is_st) { for (var i7 = 0; i7 < n; i7++) gaoliang[i7] = 0; }
+    var glC = BARSLAST(gaoliang);
+    var refPx = REF_DYN(c, glC);
+    var sig = and(gt(c, refPx), lt(glC, 5), gt(c, o));
+    var cdc = COUNT_DYN(sig, glC);
+    var glQ = and(sig, eq(cdc, 1), exMainZT, exCybZT);
+    if (!only) glQ.fill(0);
+
+    /* ---------- 燕双飞 ---------- */
+    var T2_20 = REF(HHV(h, 20), 1);
+    var T3 = REF(LLV(l, 10), 1);
+    var T4 = gt(l, T3);
+    var T5 = lt(h, T2_20);
+    var T6 = n > 30;
+    var T7 = FA(n);
+    var pc1 = REF(c, 1);
+    for (var i8 = 0; i8 < n; i8++) {
+      T7[i8] = Math.max(Math.max(h[i8] - l[i8], Math.abs(pc1[i8] - h[i8])), Math.abs(pc1[i8] - l[i8]));
+    }
+    var T8 = MA(T7, 14);
+    var T9 = div(add(h, l), 2);
+    var T10 = MA(T7, 2);
+    var T11 = add(T9, T10);
+    var T12 = sub(T9, T10);
+    var T13 = lt(c, HHV(T12, 3));
+    var T14 = and(lt(c, REF(c, 1)), lt(c, o), gt(absA(sub(c, l)), 1e-9), gt(c, MA18));
+    var T15 = gt(MA20, REF(MA20, 1));
+    var T16 = lt(c, REF(LLV(l, 3), 1));
+    var T17 = and(gt(T8, REF(T8, 1)), gt(T7, REF(T7, 1)));
+    var T18 = div(sub(c, l), sub(h, l));
+    var T19 = lt(T18, 0.3);
+    var SYa = FA(n), ST1 = FA(n);
+    for (var i9 = 0; i9 < n; i9++) {
+      SYa[i9] = c[i9] > o[i9] ? (h[i9] - c[i9]) : (h[i9] - o[i9]);
+      ST1[i9] = Math.abs(c[i9] - o[i9]);
+    }
+    var X1 = div(add(add(c, h), o), 3);
+    var X2 = EMA(X1, 112);
+    var YX = mul(div(sub(c, X2), c), 100);
+    var VOL1 = lt(v, mul(V_MA5, 0.95));
+    var syOk = lt(SYa, mul(ST1, 1.5));
+    var c60 = lt(c, 60);
+    var zfOk = and(gt(ZF, -6), lt(ZF, 3));
+    var yinPrev = lt(REF(c, 1), REF(o, 1));
+    var filt = fin_ok && big_float;
+    var ysf = and(T14, gt(YX, 7), T15, T16, T17, T19, T13, T4, T5, syOk, LALA, c60, zfOk, yinPrev, VOL1);
+    if (!filt || !qst) ysf.fill(0);
+
+    /* ---------- 夜 ---------- */
+    var attack = EMA(c, 5);
+    var HSL = FA(n);
+    for (var i10 = 0; i10 < n; i10++) HSL[i10] = (fwan && fwan > 0) ? v[i10] / fwan : 0;
+    var z1 = and(gt(cr, 1.093), eq(c, h));
+    var z2 = and(gt(cr, 1.193), eq(c, h));
+    var ZT_N = (CYB || KCB) ? z2 : z1;
+    var hlPrev = lt(h, REF(l, 1));
+    var QK1 = eq(COUNT(hlPrev, 5), 0);
+    var QK2 = not(and(gt(c, REF(c, 1)), gt(h, REF(h, 1))));
+    var QK = and(QK1, QK2);
+    var minCO = minAB(c, o);
+    var redSmall = ge(mul(div(absA(sub(c, o)), minCO), 100), 2);
+    var co = sub(c, o), hc = sub(h, c), ol = sub(o, l);
+    var mini = and(
+      gt(c, o),
+      gt(div(h, REF(c, 1)), 1.005),
+      gt(co, hc), gt(co, ol),
+      lt(div(h, l), 1.12),
+      gt(div(h, o), 1.036)
+    );
+    var mini2 = gt(REF(and(lt(c, o), ge(div(h, c), 1.02)), 1), 0.5);
+    var mini3 = gt(REF(and(gt(c, o), gt(h, REF(c, 1))), 2), 0.5);
+    var mini4 = le(REF(div(h, o), 3), 1.053);
+    var mini5 = le(v, REF(v, 2));
+    var mini6 = lt(v, V_MA10);
+    var mini7 = le(v, mul(REF(LLV(v, 20), 1), 3.5));
+    var redPrev = gt(REF(redSmall, 1), 0.5);
+    var night = and(MA120_UP, exMainZT, exCybZT, mini, mini2, mini3, mini4, mini5, mini6, mini7,
+      gt(h, attack), gt(HSL, 3), not(ZT_N), redPrev, QK);
+    night = and(night, LALA);
+    if (!big_float || !qst) night.fill(0);
+    if (root.TDXEngine && root.TDXEngine._dbg) {
+      root.TDXEngine._mid = { MA120_UP: MA120_UP, exMainZT: exMainZT, exCybZT: exCybZT, mini: mini, mini2: mini2,
+        mini3: mini3, mini4: mini4, mini5: mini5, mini6: mini6, mini7: mini7,
+        atk: gt(h, attack), hsl: gt(HSL, 3), nzt: not(ZT_N), red: gt(REF(redSmall, 1), 0.5), QK: QK, LALA: LALA };
+    }
+
+    /* ---------- 仓鼠量化 ---------- */
+    var G2 = gt(o, c);
+    var G3 = ge(div(REF(c, 1), c), 1.03);
+    var G4 = lt(div(c, l), 1.03);
+    var G5 = and(lt(v, mul(REF(v, 3), 1.2)), gt(v, mul(REF(v, 3), 0.9)));
+    var G6 = lt(h, REF(h, 1));
+    var G7 = gt(EMA(c, 5), mul(MA(c, 14), 1.017));
+    var G8 = and(lt(REF(o, 3), REF(c, 3)), lt(REF(o, 2), REF(c, 2)), gt(REF(o, 1), REF(c, 1)));
+    var G9 = lt(REF(c, 2), mul(REF(c, 1), 1.01));
+    var G10 = lt(v, mul(V_LLV16, 9.5));
+    var G11 = lt(sub(c, l), mul(sub(o, c), 0.6));
+    var G12 = lt(div(REF(c, 1), REF(c, 2)), 1.0995);
+    var G13 = lt(div(REF(h, 1), c), 1.07);
+    var G14 = gt(sub(h, o), sub(c, l));
+    var G15 = gt(REF(div(h, minAB(o, c)), 3), 1.011);
+    var G1 = and(gt(REF(o, 3), REF(c, 3)), gt(REF(o, 2), REF(c, 2)), lt(REF(o, 1), REF(c, 1)));
+    var X15 = FA(n);
+    for (var i11 = 0; i11 < n; i11++) X15[i11] = c[i11] < o[i11] ? (h[i11] === l[i11] ? NAN : (c[i11] - l[i11]) / (h[i11] - l[i11])) : 0;
+    var XG1 = and(G8, G2, lt(cr, 1.098), G3, G4, G6, G11, G12, G10, G13, G14, G15, G9,
+      gt(X15, 0.03), lt(X15, 0.3));
+    var XG2 = and(G1, G2, G3, G4, G5, G6, G7);
+    var hamster = or(XG1, XG2);
+    for (var ih = 0; ih < n; ih++) if (!LALA[ih] || !qst || SZ20) hamster[ih] = 0;
+
+    /* ---------- ZTDX ---------- */
+    var ZT1 = and(gt(cr, 1.095), eq(c, h));
+    var ZT2 = not(gt(REF(ZT1, 4), 0.5));
+    var ZT3 = and(gt(REF(ZT1, 3), 0.5), ZT2);
+    var V1 = and(
+      lt(v, REF(v, 1)), lt(REF(v, 1), REF(v, 2)), ge(REF(v, 2), REF(v, 3)),
+      ge(REF(v, 3), REF(v, 4)), lt(REF(v, 2), mul(REF(v, 3), 3))
+    );
+    var HM = le(REF(c, 3), REF(HHV(h, 30), 4));
+    var l3 = REF(l, 3), h3 = REF(h, 3);
+    var GJ = and(ge(c, l3), ge(REF(c, 1), l3), ge(REF(c, 2), l3),
+      le(c, div(add(l3, h3), 2)), gt(REF(lt(c, o), 2), 0.5));
+    var GK = gt(REF(lt(sub(div(o, REF(c, 1)), 1), 0.03), 3), 0.5);
+    var ZF3 = mul(sub(div(c, REF(c, 1)), 1), 100);
+    var A_ = and(gt(ZF3, -9.5), ZT3, V1, HM, GJ, GK);
+    var ztdx = and(A_, ge(c, 3), LALA);
+    if (CYB || KCB) ztdx.fill(0);
+
+    /* ---------- 丰华 / 攻防 ---------- */
+    var VJ = lt(v, REF(v, 1));
+    var T1_3 = gt(COUNT(ZT, 2), 0);
+    var T2A = and(gt(SYX, 5), gt(c, o), lt(XYX, 3), gt(SYX, ST_K));
+    var t2bC = gt(REF(and(ZT, gt(JZF, 5), gt(ST_K, 3), gt(div(l, REF(h, 1)), 1.03)), 1), 0.5);
+    var T2B = BA(n);
+    var refZT2 = REF(ZT, 2);
+    var lh = div(l, REF(h, 1));
+    for (var i12 = 0; i12 < n; i12++) {
+      T2B[i12] = t2bC[i12] ? ((!ZB[i12] && SZ20 && refZT2[i12]) && lh[i12] < 1.03 ? 1 : 0) : 1;
+    }
+    var t2cC = gt(REF(and(ZT, eq(COUNT(ZT, 20), 1), gt(div(l, REF(h, 1)), 1.01)), 2), 0.5);
+    var t2cV = eq(REF(or(and(gt(JZF, 0), lt(JZF, 5), lt(ZF, 0)), and(gt(XYX, 4), gt(c, o))), 1), 0);
+    var T2C = BA(n);
+    for (var i13 = 0; i13 < n; i13++) T2C[i13] = t2cC[i13] ? t2cV[i13] : 1;
+    var T2 = and(gt(REF(T1_3, 1), 0.5), T2A, T2B, T2C);
+
+    var maxCO = maxAB(c, o), minCO2 = minAB(c, o);
+    var P1 = and(le(maxCO, REF(maxCO, 1)), ge(minCO2, REF(minCO2, 1)),
+      gt(REF(ZT, 2), 0.5), gt(REF(and(lt(c, o), gt(c, REF(c, 1))), 1), 0.5));
+    var P2 = and(gt(SYX, 5), gt(ST_K, 5), lt(JZF, -2), gt(REF(SB, 1), 0.5));
+    var P3 = and(gt(REF(SB, 2), 0.5),
+      EVERY(and(gt(c, o), gt(SYX, 3), gt(c, REF(c, 1)), gt(h, REF(h, 1)), lt(ST_K, 2)), 2));
+    var P4 = and(gt(ST_K, 3), lt(ST_K, 4), gt(div(h, REF(c, 1)), 1.09), lt(XYX, 1.3),
+      gt(REF(and(SB, eq(COUNT(ZT, 20), 1), lt(JZF, 3)), 1), 0.5));
+    var P5 = and(gt(ST_K, 3), lt(ST_K, 4), gt(div(h, REF(c, 1)), 1.09), lt(XYX, 1.3),
+      gt(REF(and(ZT, gt(ST_K, 10), SZ20A), 1), 0.5));
+    var P6 = and(gt(SYX, 2), gt(XYX, 2), gt(SYX, XYX));
+    var P7 = and(le(maxCO, REF(maxCO, 1)), ge(minCO2, REF(minCO2, 1)),
+      gt(REF(ZT, 2), 0.5), gt(v, REF(v, 1)), lt(COUNT(ZT, 10), 2));
+    var P8 = and(EVERY(VJ, 2), gt(REF(ZT, 2), 0.5));
+    var P9 = and(gt(REF(SB, 1), 0.5), gt(JZF, 0), lt(JZF, 2), lt(ST_K, 2), gt(ST_K, 1), not(ZB));
+    var P10 = and(gt(ST_K, 4), lt(JZF, -2), gt(REF(and(SB, gt(JZF, 2)), 1), 0.5));
+    var P11 = and(gt(COUNT(T2, 10), 1), gt(REF(ZT, 1), 0.5));
+    var P12A = and(lt(JZF, -4.1), lt(o, REF(o, 1)),
+      gt(REF(and(ZB, gt(c, o), gt(div(o, REF(c, 1)), 1.01)), 1), 0.5));
+    var P12 = and(P12A, gt(REF(and(ZT, gt(div(o, REF(c, 1)), 1.01)), 2), 0.5), gt(REF(gt(c, o), 3), 0.5));
+    var P13 = and(gt(REF(and(gt(ST_K, 10), eq(COUNT(ZT, 20), 1)), 2), 0.5), gt(REF(SYX, 1), 9), SHA);
+    var P14 = gt(REF(and(lt(c, REF(c, 1)), gt(o, REF(o, 1)), gt(ST_K, 2), gt(REF(ST_K, 1), 11)), 1), 0.5);
+    var P15 = and(gt(HHV(LBTS, 20), 5), not(EVERY(lt(JZF, -9), 2)));
+    var P16 = and(gt(REF(and(ZT, gt(ST_K, 9)), 2), 0.5),
+      gt(REF(and(lt(JZF, -2), gt(c, o), gt(c, REF(c, 1))), 1), 0.5), lt(JZF, -8));
+    var P17 = and(gt(REF(and(gt(JZF, 7), gt(ST_K, 2), gt(XYX, 5)), 2), 0.5),
+      gt(REF(and(ZB, lt(c, o), gt(JZF, 7)), 3), 0.5), gt(REF(SB, 4), 0.5));
+    var bt = and(ge(JZF, -3.1), le(JZF, 0));
+    var P18A = and(gt(REF(and(SB, gt(ST_K, 9), gt(v, mul(REF(v, 1), 2))), 2), 0.5),
+      gt(REF(and(gt(SYX, 6), not(ZB), bt), 1), 0.5));
+    var p18R = or(and(SZ20A, lt(REF(ST_K, 1), 6)),
+      and(SHM, not(and(gt(XYX, 1), lt(SYX, 7)))));
+    var P18 = and(P18A, p18R);
+
+    var FH1 = BA(n), FH2 = BA(n), FH3 = BA(n);
+    for (var i14 = 0; i14 < n; i14++) {
+      FH1[i14] = (ZB[i14] ? (JZF[i14] >= 0) : true) && ST_K[i14] > 0.4 ? 1 : 0;
+      FH2[i14] = (Math.abs(XYX[i14]) < 1e-9 ? (ST_K[i14] > 6) : (XYX[i14] > 0)) ? 1 : 0;
+    }
+    var everyZB2 = EVERY(ZB, 2);
+    var cntEveryZB = COUNT(everyZB2, 5);
+    for (var i15 = 0; i15 < n; i15++) {
+      var a1 = ZB[i15] ? (JZF[i15] > 9.5) : true;
+      FH3[i15] = (a1 && cntEveryZB[i15] === 0 && !(ZT[i15] && c[i15] === o[i15])) ? 1 : 0;
+    }
+    var zeroAll = BA(n); zeroAll.fill(1);
+    [P1, P2, P3, P4, P5, P7, P8, P9, P10, P11, P15].forEach(function (P) {
+      for (var i = 0; i < n; i++) if (P[i]) zeroAll[i] = 0;
+    });
+    var TA = gt(REF(and(FH1, FH2, zeroAll), 1), 0.5);
+    var TB = gt(REF(and(FH3, not(P6)), 2), 0.5);
+    var fhP1 = and(not(P12), not(P13), not(P14), not(P16), not(P17), not(P18));
+    var FH_DK = and(lt(JZF, 0), lt(COUNT(eq(LBTS, 5), 60), 2), fhP1, TA, TB);
+
+    var FH_MA = gt(REF(and(gt(JZF, 5), lt(c, REF(c, 1)), gt(SYX, 3), gt(ST_K, 5), gt(ZF, -3)), 1), 0.5);
+    var lbSafe = FA(n);
+    for (var i16 = 0; i16 < n; i16++) lbSafe[i16] = LBTS[i16] > 0 ? LBTS[i16] : 1;
+    var hlEq = eq(h, l);
+    var FH_MM1 = and(gt(JZF, 0), lt(JZF, 5), lt(o, REF(o, 1)), FH_MA,
+      gt(REF(EVERY_DYN(hlEq, lbSafe), 2), 0.5));
+    var FH_MB = and(ZB, gt(c, o), gt(ST_K, 4), gt(SYX, 4), lt(XYX, 1),
+      lt(absA(sub(SYX, HHV(SYX, 20))), 1e-9), gt(v, mul(REF(HHV(v, 20), 1), 2)));
+    var FH_MC = and(eq(COUNT(ZT, 20), 0), eq(COUNT(ZB, 20), 1), eq(COUNT(DT, 20), 1));
+    var FH_MM2 = and(lt(JZF, 0), gt(o, mul(REF(o, 1), 1.01)), gt(REF(and(FH_MB, FH_MC), 1), 0.5));
+
+    var GX1A = and(gt(c, o), gt(ST_K, 0.5), lt(ST_K, 1.5),
+      gt(REF(and(ZT, gt(ST_K, 8), eq(COUNT(ZT, 5), 1), eq(XYX, 0)), 1), 0.5));
+    var gxInner = and(eq(COUNT(ZT, 10), 1), or(ZB, and(lt(JZF, 0), gt(c, REF(c, 1)))));
+    var GX1 = BA(n);
+    for (var i17 = 0; i17 < n; i17++) GX1[i17] = GX1A[i17] ? gxInner[i17] : (GX1A[i17] ? 0 : 1);
+
+    var FH_X = or(and(gt(REF(T2, 1), 0.5), FH_DK), FH_MM1, FH_MM2);
+    var GX_BAD = and(lt(ST_K, 1), gt(c, o), lt(c, REF(l, 1)),
+      gt(REF(and(gt(ST_K, 5), gt(JZF, 3)), 1), 0.5));
+    var gx_ok = and(GX1, not(GX_BAD));
+    var GFP = and(FH_X, LALA, gt(REF(gx_ok, 1), 0.5));
+    if (!qst || !only) GFP.fill(0);
+
+    return {
+      '高量Q': glQ, '燕双飞': ysf, '夜': night,
+      '仓鼠量化': hamster, 'ZTDX': ztdx, '攻防': GFP
+    };
+  }
+
+  root.TDXEngine = { evaluate: evaluate };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 数据层：腾讯行情（列表 + 批量快照 + 日线） + 手机本地库(IndexedDB)
+ * 不依赖新浪：新浪对高频请求会限流，浏览器端不可靠。
+ */
+(function (global) {
+  'use strict';
+
+  var N_KEEP = 210;
+  var DB_NAME = 'tdx_picker';
+  var DB_VER = 1;
+  var BATCH = 60;          // 每次批量快照的股票数
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function pool(items, worker, concurrency, onTick) {
+    var i = 0, done = 0, total = items.length;
+    function run() {
+      return new Promise(function (resolve) {
+        function step() {
+          if (i >= total) return resolve();
+          var k = i++;
+          worker(items[k], k).catch(function () { }).then(function () {
+            done++;
+            if (onTick && done % 10 === 0) onTick(done, total);
+            step();
+          });
+        }
+        step();
+      });
+    }
+    var arr = [];
+    for (var c = 0; c < concurrency; c++) arr.push(run());
+    return Promise.all(arr).then(function () { if (onTick) onTick(total, total); });
+  }
+
+  function retry(fn, times) {
+    times = times || 3;
+    var p = Promise.resolve();
+    for (var i = 0; i < times; i++) {
+      (function (t) {
+        p = p.then(function () { return fn(); }).catch(function (e) {
+          if (t === times - 1) throw e;
+          return sleep(250 * (t + 1)).then(function () { return fn(); });
+        });
+      })(i);
+    }
+    return p;
+  }
+
+  /* ---------- IndexedDB ---------- */
+  var _db = null;
+  function db() {
+    if (_db) return _db;
+    _db = new Promise(function (res, rej) {
+      var q = indexedDB.open(DB_NAME, DB_VER);
+      q.onupgradeneeded = function () {
+        var d = q.result;
+        if (!d.objectStoreNames.contains('k')) d.createObjectStore('k');
+        if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta');
+      };
+      q.onsuccess = function () { res(q.result); };
+      q.onerror = function () { rej(q.error); };
+    });
+    return _db;
+  }
+
+  function putKlines(entries) {
+    return db().then(function (d) {
+      return new Promise(function (res, rej) {
+        var tx = d.transaction('k', 'readwrite'), os = tx.objectStore('k');
+        entries.forEach(function (e) { os.put(e.v, e.code); });
+        tx.oncomplete = function () { res(); };
+        tx.onerror = function () { rej(tx.error); };
+      });
+    });
+  }
+
+  function loadAllKlines() {
+    return db().then(function (d) {
+      return new Promise(function (res, rej) {
+        var tx = d.transaction('k', 'readonly'), os = tx.objectStore('k');
+        var kq = os.getAllKeys(), vq = os.getAll();
+        tx.oncomplete = function () {
+          var m = new Map();
+          for (var i = 0; i < kq.result.length; i++) m.set(kq.result[i], vq.result[i]);
+          res(m);
+        };
+        tx.onerror = function () { rej(tx.error); };
+      });
+    });
+  }
+
+  function getMeta() {
+    return db().then(function (d) {
+      return new Promise(function (res) {
+        var tx = d.transaction('meta', 'readonly');
+        var q = tx.objectStore('meta').get('info');
+        tx.oncomplete = function () { res(q.result || null); };
+        tx.onerror = function () { res(null); };
+      });
+    });
+  }
+
+  function putMeta(v) {
+    return db().then(function (d) {
+      return new Promise(function (res) {
+        var tx = d.transaction('meta', 'readwrite');
+        tx.objectStore('meta').put(v, 'info');
+        tx.oncomplete = function () { res(); };
+      });
+    });
+  }
+
+  function clearAll() {
+    return db().then(function (d) {
+      return new Promise(function (res) {
+        var tx = d.transaction(['k', 'meta'], 'readwrite');
+        tx.objectStore('k').clear();
+        tx.objectStore('meta').clear();
+        tx.oncomplete = function () { res(); };
+      });
+    });
+  }
+
+  /* ---------- 股票列表（腾讯排行） ---------- */
+  function listUrl(p, n) {
+    return 'https://proxy.finance.qq.com/ifzqgtimg/appstock/app/mktHs/rank?l=' + n + '&p=' + p + '&t=ranka/chr&o=0';
+  }
+
+  function fetchStockList(onTick) {
+    var codes = [], p = 1, empty = 0;
+    function next() {
+      if (p > 40 || empty >= 2) return Promise.resolve(codes);
+      return retry(function () {
+        return fetch(listUrl(p, 200), { cache: 'no-store' }).then(function (r) { return r.json(); });
+      }).then(function (j) {
+        var arr = (j && j.data) || [];
+        if (!arr.length) { empty++; p++; return next(); }
+        var added = 0;
+        arr.forEach(function (x) {
+          var c = String(x.code || '');
+          var num = c.slice(2);
+          if (!/^\d{6}$/.test(num)) return;
+          if (!/^(60|00|30)/.test(num)) return;
+          if (codes.indexOf(num) < 0) { codes.push(num); added++; }
+        });
+        if (onTick) onTick(p);
+        p++;
+        return added ? next() : next();
+      }).catch(function () { empty++; p++; return next(); });
+    }
+    return next();
+  }
+
+  /* ---------- 批量快照 ---------- */
+  function fetchSnapChunk(chunk) {
+    var q = chunk.map(function (c) { return (c[0] === '6' ? 'sh' : 'sz') + c; }).join(',');
+    return retry(function () {
+      return fetch('https://qt.gtimg.cn/q=' + q, { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.arrayBuffer();
+      });
+    }).then(function (b) {
+      var txt = new TextDecoder('gbk').decode(b);
+      var out = [];
+      txt.split(';').forEach(function (seg) {
+        var m = seg.match(/v_(sh|sz)(\d{6})="([^"]*)"/);
+        if (!m) return;
+        var f = m[3].split('~');
+        if (f.length < 46) return;
+        var price = +f[3], prev = +f[4];
+        if (!(price > 0) || !(prev > 0)) return;
+        out.push({
+          code: m[2], name: f[1],
+          open: +f[5], high: +f[33], low: +f[34],
+          close: price, prev: prev,
+          vol: +f[6], turnover: +f[38],
+          pe: +f[39] || 0, nmc: (+f[44] || 0) * 10000
+        });
+      });
+      return out;
+    });
+  }
+
+  function fetchSnapshot(codes, onTick) {
+    return Promise.resolve(codes).then(function (cs) {
+      if (cs && cs.length) return cs;
+      return fetchStockList();
+    }).then(function (list) {
+      var chunks = [];
+      for (var i = 0; i < list.length; i += BATCH) chunks.push(list.slice(i, i + BATCH));
+      var out = [];
+      return pool(chunks, function (ch) {
+        return fetchSnapChunk(ch).then(function (arr) { for (var i = 0; i < arr.length; i++) out.push(arr[i]); });
+      }, 6, function (d, t) { if (onTick) onTick(d, t); }).then(function () {
+        return out;
+      });
+    });
+  }
+
+  /* ---------- 日线 ---------- */
+  function fetchKline(code) {
+    var sym = (code[0] === '6' ? 'sh' : 'sz') + code;
+    var url = 'https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param=' + sym + ',day,,,' + (N_KEEP + 20);
+    return retry(function () {
+      return fetch(url, { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+    }).then(function (j) {
+      var node = j.data && j.data[sym];
+      if (!node) throw new Error('no data');
+      var arr = node.day || node.qfqday;
+      if (!arr || !arr.length) throw new Error('empty');
+      var st = Math.max(0, arr.length - N_KEEP);
+      var n = arr.length - st;
+      var o = new Int32Array(n), h = new Int32Array(n), l = new Int32Array(n),
+        c = new Int32Array(n), v = new Int32Array(n);
+      for (var i = 0; i < n; i++) {
+        var r0 = arr[st + i];
+        o[i] = Math.round(+r0[1] * 1000);
+        c[i] = Math.round(+r0[2] * 1000);
+        h[i] = Math.round(+r0[3] * 1000);
+        l[i] = Math.round(+r0[4] * 1000);
+        v[i] = Math.round(+r0[5]);
+      }
+      return { n: n, o: o, h: h, l: l, c: c, v: v };
+    });
+  }
+
+  function fetchLatestDate() {
+    var url = 'https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param=sh600000,day,,,3';
+    return retry(function () {
+      return fetch(url, { cache: 'no-store' }).then(function (r) { return r.json(); });
+    }).then(function (j) {
+      var arr = j.data.sh600000.day;
+      return arr[arr.length - 1][0];
+    });
+  }
+
+  function downloadAll(codes, have, onProgress) {
+    var todo = codes.filter(function (c) { return !have.has(c); });
+    var buf = [], failed = 0;
+    return pool(todo, function (code) {
+      return fetchKline(code).then(function (k) {
+        buf.push({ code: code, v: k });
+        if (buf.length >= 120) {
+          var batch = buf; buf = [];
+          return putKlines(batch);
+        }
+      }).catch(function () { failed++; });
+    }, 6, function (d, t) { if (onProgress) onProgress(d, t, failed); })
+      .then(function () { return buf.length ? putKlines(buf) : null; })
+      .then(function () { return { ok: todo.length - failed, failed: failed, total: todo.length }; });
+  }
+
+  global.TDXData = {
+    N_KEEP: N_KEEP,
+    fetchStockList: fetchStockList,
+    fetchSnapshot: fetchSnapshot,
+    fetchKline: fetchKline,
+    fetchLatestDate: fetchLatestDate,
+    downloadAll: downloadAll,
+    loadAllKlines: loadAllKlines,
+    putKlines: putKlines,
+    getMeta: getMeta,
+    putMeta: putMeta,
+    clearAll: clearAll
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* 工作台界面逻辑 */
+(function () {
+  'use strict';
+
+  var STRATS = ['攻防', '高量Q', '燕双飞', '夜', '仓鼠量化', 'ZTDX'];
+  var HINT = { '攻防': '9:25 竞价', '高量Q': '尾盘', '燕双飞': '尾盘', '夜': '尾盘', '仓鼠量化': '尾盘', 'ZTDX': '尾盘' };
+  var LS_HIST = 'tdx_hist_v1';
+
+  var S = { K: null, meta: null, rows: [], hist: [], busy: false, view: 'pick', bt: null };
+
+  function $(id) { return document.getElementById(id); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function f64(a) { var o = new Float64Array(a.length); for (var i = 0; i < a.length; i++) o[i] = a[i]; return o; }
+  function p64(a) { var o = new Float64Array(a.length); for (var i = 0; i < a.length; i++) o[i] = a[i] / 1000; return o; }
+
+  function stage(msg, pct, cls) {
+    $('msg').textContent = msg;
+    $('msg').className = 'msg ' + (cls || '');
+    if (pct !== undefined && pct !== null) $('pbi').style.width = Math.max(0, Math.min(100, pct)) + '%';
+  }
+
+  function busy(on) {
+    S.busy = on;
+    $('go').disabled = on;
+    $('bt').disabled = on;
+    $('go').textContent = on ? '运行中…' : '刷新选股';
+  }
+
+  /* ---------- 渲染 ---------- */
+  function card(r) {
+    var cls = r.chg > 0 ? 'up' : (r.chg < 0 ? 'down' : 'flat');
+    var st = /ST/i.test(r.name) ? '<i class="st">ST</i>' : '';
+    var more = r.tags.length > 1 ? '<i class="multi">' + r.tags.slice(1).join('/') + '</i>' : '';
+    var sign = r.chg > 0 ? '+' : '';
+    return '<div class="item"><div class="l"><div class="nm">' + esc(r.name) + st + more + '</div>'
+      + '<div class="sub">' + r.code + ' · ' + r.price.toFixed(2) + ' · 市值' + Math.round(r.nmc) + '亿 · 换手' + (r.turnover || 0) + '%</div>'
+      + '</div><div class="chg ' + cls + '">' + sign + r.chg.toFixed(2) + '%</div></div>';
+  }
+
+  function renderRows(rows, subtitle) {
+    var list = $('list');
+    if (!rows || !rows.length) {
+      var m0 = S.meta || {};
+      var cold = !((m0.count || 0) > 100 || (S.K && S.K.size > 500));
+      list.innerHTML = cold
+        ? '<div class="empty"><b>第一次使用</b>点右下角「刷新选股」，'
+          + '会下载全市场约 4600 只股票的日线。<br>约 3–5 分钟、40MB 流量，只做一次。'
+          + '<br><br>之后每天点一下，10–30 秒出结果。</div>'
+        : '<div class="empty"><b>今日无命中</b>公式条件较严，弱势行情下空仓是常态。</div>';
+      return;
+    }
+    var html = '';
+    STRATS.forEach(function (s) {
+      var sub = rows.filter(function (r) { return r.tags.indexOf(s) >= 0; });
+      if (!sub.length) return;
+      html += '<section><h2>' + s + '<em>' + sub.length + ' 只</em><small>' + (HINT[s] || '') + '</small></h2>'
+        + '<div class="tb">' + sub.map(card).join('') + '</div></section>';
+    });
+    list.innerHTML = html;
+    if (subtitle) $('meta').innerHTML = subtitle;
+  }
+
+  function renderChips() {
+    var box = $('histBox'), chips = $('chips');
+    if (!S.hist.length) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    chips.innerHTML = S.hist.slice(0, 12).map(function (h, i) {
+      return '<div class="chip' + (i === 0 ? ' on' : '') + '" data-i="' + i + '">' + h.date.slice(5) + '<u>' + h.rows.length + '</u></div>';
+    }).join('');
+    Array.prototype.forEach.call(chips.querySelectorAll('.chip'), function (el) {
+      el.onclick = function () {
+        var i = +el.dataset.i;
+        Array.prototype.forEach.call(chips.querySelectorAll('.chip'), function (x) { x.classList.remove('on'); });
+        el.classList.add('on');
+        renderRows(S.hist[i].rows, '历史 <b>' + S.hist[i].date + '</b> ｜ 命中 <b>' + S.hist[i].rows.length + '</b> 只 ｜ ' + S.hist[i].ts);
+      };
+    });
+  }
+
+  function saveHist(date, rows, ts) {
+    S.hist = S.hist.filter(function (h) { return h.date !== date; });
+    S.hist.unshift({ date: date, ts: ts, rows: rows });
+    S.hist = S.hist.slice(0, 20);
+    try { localStorage.setItem(LS_HIST, JSON.stringify(S.hist)); } catch (e) { }
+  }
+
+  function updateMeta() {
+    var m = S.meta || {};
+    var n = S.K ? S.K.size : (m.count || 0);
+    $('meta').innerHTML = '本地日线 <b>' + n + '</b> 只 ｜ 数据截止 <b>' + (m.lastDate || '—') + '</b>';
+  }
+
+  /* ---------- 选股 ---------- */
+  async function ensureK() {
+    if (S.K) return S.K;
+    stage('读取本地日线', 3);
+    S.K = await TDXData.loadAllKlines();
+    return S.K;
+  }
+
+  async function runPicker() {
+    if (S.busy) return;
+    busy(true);
+    try {
+      var latest = await TDXData.fetchLatestDate();
+      S.meta = (await TDXData.getMeta()) || {};
+      var K = await ensureK();
+
+      stage('拉取全市场行情', 8);
+      var cached = K.size > 500 ? Array.from(K.keys()) : null;
+      var snap = await TDXData.fetchSnapshot(cached, function (d, t) { stage('行情 ' + d + '/' + t, 8 + 4 * d / t); });
+      if (snap.length < 500) throw new Error('只取到 ' + snap.length + ' 只行情，可能未开盘或被限流，稍后再试');
+
+      if (K.size < 500) {
+        // 首次：下载全市场日线
+        stage('首次使用，下载全市场日线（约 3-5 分钟）', 12);
+        await TDXData.downloadAll(snap.map(function (s) { return s.code; }), new Set(K.keys()), function (d, t, f) {
+          stage('下载日线 ' + d + '/' + t + (f ? '（失败 ' + f + '）' : ''), 12 + 72 * d / t);
+        });
+        K = S.K = await TDXData.loadAllKlines();
+      } else if (S.meta.lastDate && S.meta.lastDate !== latest) {
+        var gap = (new Date(latest) - new Date(S.meta.lastDate)) / 86400000;
+        if (gap > 6) stage('本地数据落后 ' + Math.round(gap) + ' 天，建议先「同步日线」', 12);
+        else {
+          var entries = [];
+          snap.forEach(function (s) {
+            var k = K.get(s.code);
+            if (!k) return;
+            var n = k.n + 1;
+            var o = new Int32Array(n), h = new Int32Array(n), l = new Int32Array(n), c = new Int32Array(n), v = new Int32Array(n);
+            o.set(k.o); h.set(k.h); l.set(k.l); c.set(k.c); v.set(k.v);
+            o[n - 1] = Math.round(s.open * 1000); h[n - 1] = Math.round(s.high * 1000);
+            l[n - 1] = Math.round(s.low * 1000); c[n - 1] = Math.round(s.close * 1000);
+            v[n - 1] = Math.round(s.vol);
+            var nk = { n: n, o: o, h: h, l: l, c: c, v: v };
+            K.set(s.code, nk);
+            entries.push({ code: s.code, v: nk });
+          });
+          if (entries.length) await TDXData.putKlines(entries);
+        }
+      }
+
+      var stk = {};
+      snap.forEach(function (s) { stk[s.code] = [s.name, s.nmc, s.pe]; });
+      S.meta = { lastDate: latest, updatedAt: Date.now(), stocks: stk, count: snap.length };
+      await TDXData.putMeta(S.meta);
+
+      stage('计算六大策略', 86);
+      var rows = await compute(K, snap, latest);
+      var ts = fmtTs();
+      S.rows = rows;
+      renderRows(rows, '数据 <b>' + latest + '</b> ｜ 命中 <b>' + rows.length + '</b> 只 ｜ ' + ts);
+      saveHist(latest, rows, ts);
+      renderChips();
+      updateMeta();
+      stage('完成，命中 ' + rows.length + ' 只', 100);
+      $('cp').disabled = !rows.length;
+    } catch (e) {
+      stage('出错：' + e.message, 100, 'err');
+      console.error(e);
+    } finally {
+      busy(false);
+    }
+  }
+
+  async function compute(K, snap, date) {
+    var mm = new Map();
+    snap.forEach(function (s) { mm.set(s.code, s); });
+    var codes = [];
+    K.forEach(function (v, k) { if (mm.has(k)) codes.push(k); });
+    var rows = [];
+    var CH = 250;
+    for (var i = 0; i < codes.length; i += CH) {
+      var end = Math.min(i + CH, codes.length);
+      for (var j = i; j < end; j++) {
+        var code = codes[j], k = K.get(code), m = mm.get(code);
+        if (!k || k.n < 130) continue;
+        var o = p64(k.o), h = p64(k.h), l = p64(k.l), c = p64(k.c), v = f64(k.v);
+        var r = TDXEngine.evaluate(o, h, l, c, v, code, m.name, m.pe, m.nmc / m.close, m.nmc);
+        var tags = [];
+        for (var s = 0; s < STRATS.length; s++) if (r[STRATS[s]][k.n - 1]) tags.push(STRATS[s]);
+        if (tags.length) {
+          rows.push({
+            code: code, name: m.name, price: m.close,
+            chg: (m.close / m.prev - 1) * 100, nmc: m.nmc / 10000,
+            turnover: m.turnover, tags: tags
+          });
+        }
+      }
+      stage('计算中 ' + end + '/' + codes.length, 86 + 12 * end / codes.length);
+      await sleep(0);
+    }
+    rows.sort(function (a, b) { return STRATS.indexOf(a.tags[0]) - STRATS.indexOf(b.tags[0]); });
+    return rows;
+  }
+
+  /* ---------- 回测 ---------- */
+  async function runBacktest() {
+    if (S.busy) return;
+    busy(true);
+    S.view = 'bt';
+    try {
+      var K = await ensureK();
+      if (K.size < 500) throw new Error('本地还没有日线数据，先点「刷新选股」完成首次下载');
+      S.meta = (await TDXData.getMeta()) || {};
+      var stk = S.meta.stocks || {};
+      var DAYS = 60;
+      var pool = {}, bench = { 1: [], 3: [], 5: [] }, sig = {};
+      STRATS.forEach(function (s) { pool[s] = { 1: [], 3: [], 5: [] }; sig[s] = 0; });
+      var codes = Array.from(K.keys());
+      var CH = 200;
+      for (var i = 0; i < codes.length; i += CH) {
+        var end = Math.min(i + CH, codes.length);
+        for (var j = i; j < end; j++) {
+          var code = codes[j], k = K.get(code);
+          if (!k || k.n < 135) continue;
+          var o = p64(k.o), h = p64(k.h), l = p64(k.l), c = p64(k.c), v = f64(k.v);
+          var n = k.n, from = Math.max(0, n - DAYS), to = n - 6;
+          var info = stk[code] || ['X', 500000, 10];
+          var nmcv = info[1] || 500000;
+          var r = TDXEngine.evaluate(o, h, l, c, v, code, info[0], info[2] || 10, nmcv / c[n - 1], nmcv);
+          // 基准
+          for (var b = from; b <= to; b++) {
+            var buy0 = o[b + 1];
+            if (!(buy0 > 0)) continue;
+            [1, 3, 5].forEach(function (d) {
+              var px = c[b + d];
+              if (px > 0) bench[d].push(px / buy0 - 1);
+            });
+          }
+          for (var s = 0; s < STRATS.length; s++) {
+            var arr = r[STRATS[s]];
+            for (var b2 = from; b2 <= to; b2++) {
+              if (!arr[b2]) continue;
+              var buy = o[b2 + 1];
+              if (!(buy > 0)) continue;
+              sig[STRATS[s]]++;
+              [1, 3, 5].forEach(function (d) {
+                var px = c[b2 + d];
+                if (px > 0) pool[STRATS[s]][d].push(px / buy - 1);
+              });
+            }
+          }
+        }
+        stage('回测中 ' + end + '/' + codes.length, 100 * end / codes.length);
+        await sleep(0);
+      }
+
+      function st(a) {
+        if (!a.length) return null;
+        var s = 0, w = 0, mx = -9, mn = 9;
+        for (var i = 0; i < a.length; i++) { s += a[i]; if (a[i] > 0) w++; if (a[i] > mx) mx = a[i]; if (a[i] < mn) mn = a[i]; }
+        return { n: a.length, win: w / a.length * 100, avg: s / a.length * 100, best: mx * 100, worst: mn * 100 };
+      }
+      var out = { rows: [], bench: {}, days: DAYS, ts: fmtTs() };
+      [1, 3, 5].forEach(function (d) { out.bench[d] = st(bench[d]); });
+      var all = { 1: [], 3: [], 5: [] };
+      STRATS.forEach(function (s) {
+        [1, 3, 5].forEach(function (d) { all[d] = all[d].concat(pool[s][d]); });
+        out.rows.push({ name: s, sig: sig[s], d1: st(pool[s][1]), d3: st(pool[s][3]), d5: st(pool[s][5]) });
+      });
+      out.overall = { d1: st(all[1]), d3: st(all[3]), d5: st(all[5]) };
+      S.bt = out;
+      renderBT(out);
+      stage('回测完成', 100);
+    } catch (e) {
+      stage('出错：' + e.message, 100, 'err');
+    } finally {
+      busy(false);
+    }
+  }
+
+  function pct(x, d) { if (x === null) return '—'; return (x > 0 ? '+' : '') + x.toFixed(d || 2) + '%'; }
+
+  function renderBT(o) {
+    var h = '<div class="btop"><button class="back" id="back">‹ 返回选股</button>'
+      + '<div class="btt">近 ' + o.days + ' 个交易日 ｜ 次日开盘买入</div></div>';
+    if (o.bench[5]) {
+      h += '<div class="bench">全市场基准（等权）　1日 <b class="' + cls(o.bench[1].avg) + '">' + pct(o.bench[1].avg) + '</b>'
+        + '　5日 <b class="' + cls(o.bench[5].avg) + '">' + pct(o.bench[5].avg) + '</b></div>';
+    }
+    if (o.overall.d5) {
+      h += '<div class="bench">全部信号 ' + o.overall.d5.n + ' 笔　1日胜率 <b>' + o.overall.d1.win.toFixed(0) + '%</b>'
+        + '　5日均值 <b class="' + cls(o.overall.d5.avg) + '">' + pct(o.overall.d5.avg) + '</b></div>';
+    }
+    o.rows.forEach(function (r) {
+      if (!r.d1) {
+        h += '<section><h2>' + r.name + '<em>0 笔</em></h2><div class="kbox dim">样本不足</div></section>';
+        return;
+      }
+      h += '<section><h2>' + r.name + '<em>' + r.sig + ' 笔</em></h2><div class="kbox">'
+        + kpi('1日胜率', r.d1.win.toFixed(0) + '%', '')
+        + kpi('1日均值', pct(r.d1.avg), cls(r.d1.avg))
+        + kpi('5日胜率', r.d5.win.toFixed(0) + '%', '')
+        + kpi('5日均值', pct(r.d5.avg), cls(r.d5.avg))
+        + kpi('最好一笔', pct(r.d5.best, 1), 'up')
+        + kpi('最差一笔', pct(r.d5.worst, 1), 'down')
+        + '</div></section>';
+    });
+    h += '<div class="note">口径：信号日次日开盘买入，持有至第 N 个交易日收盘。不含手续费与滑点，日线不复权，除权日会有跳空误差。样本少于一二十笔的策略，统计意义有限。</div>';
+    $('list').innerHTML = h;
+    $('back').onclick = function () { S.view = 'pick'; renderRows(S.rows, null); };
+  }
+
+  function kpi(label, val, c) {
+    return '<div class="k"><span>' + label + '</span><b class="' + (c || '') + '">' + val + '</b></div>';
+  }
+  function cls(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : ''); }
+
+  /* ---------- 数据面板 ---------- */
+  function togglePanel() {
+    var p = $('panel');
+    p.classList.toggle('on');
+    if (p.classList.contains('on')) refreshPanel();
+  }
+
+  async function refreshPanel() {
+    var m = (await TDXData.getMeta()) || {};
+    var n = S.K ? S.K.size : 0;
+    if (!n) { S.K = await TDXData.loadAllKlines(); n = S.K.size; }
+    $('ptxt').innerHTML = '本地股票 <b>' + n + '</b> 只<br>数据截止 <b>' + (m.lastDate || '—') + '</b>'
+      + '<br>上次同步 ' + (m.updatedAt ? new Date(m.updatedAt).toLocaleString('zh-CN') : '—');
+  }
+
+  async function syncDaily() {
+    if (S.busy) return;
+    busy(true);
+    try {
+      var snap = await TDXData.fetchSnapshot(null, function (d, t) { stage('行情 ' + d + '/' + t, 100 * d / t / 4); });
+      var K = await ensureK();
+      var have = new Set(K.keys());
+      stage('同步日线 ' + have.size + '/' + snap.length, 25);
+      var r = await TDXData.downloadAll(snap.map(function (s) { return s.code; }), have, function (d, t, f) {
+        stage('同步日线 ' + d + '/' + t + (f ? '（失败 ' + f + '）' : ''), 25 + 70 * d / t);
+      });
+      var latest = await TDXData.fetchLatestDate();
+      S.meta = { lastDate: latest, updatedAt: Date.now() };
+      await TDXData.putMeta(S.meta);
+      S.K = await TDXData.loadAllKlines();
+      stage('同步完成，新增 ' + r.ok + ' 只，失败 ' + r.failed + ' 只', 100);
+      updateMeta();
+      refreshPanel();
+    } catch (e) {
+      stage('同步失败：' + e.message, 100, 'err');
+    } finally { busy(false); }
+  }
+
+  async function wipe() {
+    if (!confirm('清空本地日线数据？下次需要重新下载（3-5 分钟）')) return;
+    await TDXData.clearAll();
+    S.K = null; S.meta = null;
+    stage('本地数据已清空', 0);
+    updateMeta(); refreshPanel();
+  }
+
+  function fmtTs() {
+    var d = new Date(), p = function (x) { return (x < 10 ? '0' : '') + x; };
+    return (d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /* ---------- 启动 ---------- */
+  async function boot() {
+    try { S.hist = JSON.parse(localStorage.getItem(LS_HIST) || '[]'); } catch (e) { S.hist = []; }
+    try {
+      await TDXData.getMeta();
+    } catch (e) {
+      stage('这台浏览器不允许本地存储，无法保存日线。请把本文件放到任意网页空间（如 GitHub Pages）后用链接打开。', 0, 'err');
+      return;
+    }
+    S.meta = (await TDXData.getMeta()) || {};
+    updateMeta();
+    if (S.hist.length) {
+      S.rows = S.hist[0].rows;
+      renderRows(S.rows, '数据 <b>' + S.hist[0].date + '</b> ｜ 命中 <b>' + S.rows.length + '</b> 只 ｜ ' + S.hist[0].ts);
+      renderChips();
+      $('cp').disabled = !S.rows.length;
+    } else {
+      renderRows(null, null);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    $('go').onclick = runPicker;
+    $('bt').onclick = function () { if (S.view === 'bt' && S.bt) { S.view = 'pick'; renderRows(S.rows, null); } else runBacktest(); };
+    $('gear').onclick = togglePanel;
+    $('sync').onclick = syncDaily;
+    $('wipe').onclick = wipe;
+    $('cp').onclick = async function () {
+      if (!S.rows.length) return;
+      var txt = S.rows.map(function (r) { return r.code + ',' + r.name; }).join('\n');
+      try { await navigator.clipboard.writeText(txt); }
+      catch (e) {
+        var ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      var b = $('cp'); b.textContent = '已复制';
+      setTimeout(function () { b.textContent = '复制'; }, 1500);
+    };
+    boot();
+  });
+})();
+
+</script>
+</body>
+</html>
